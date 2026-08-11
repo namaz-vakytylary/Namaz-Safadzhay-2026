@@ -15,17 +15,17 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Grant execute permission for gradlew
-        run: |
-          find . -name "gradlew" -exec chmod +x {} \;
-
       - name: Build APK
         run: |
-          if [ -f "./gradlew" ]; then
-            ./gradlew assembleDebug
-          else
-            cd Namaz_Safadzhay_2026 && ./gradlew assembleDebug
+          GRADLEW_PATH=$(find . -name "gradlew" | head -n 1)
+          if [ -z "$GRADLEW_PATH" ]; then
+            echo "Файл gradlew не найден! Проверьте, загружен ли проект."
+            exit 1
           fi
+          BUILD_DIR=$(dirname "$GRADLEW_PATH")
+          cd "$BUILD_DIR"
+          chmod +x gradlew
+          ./gradlew assembleDebug --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
