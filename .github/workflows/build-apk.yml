@@ -1,46 +1,23 @@
-name: Build APK from ZIP
-
-on:
-  workflow_dispatch:
-
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Extract zip and fix app folder structure
+- name: Extract zip and fix app folder structure
         run: |
           mkdir -p temp_extracted
           unzip -o app.zip -d temp_extracted/
 
-          # Находим, где лежат исходники (src или build.gradle*)
+          # Ищем папку, где лежит src
           SRC_DIR=$(find temp_extracted -type d -name "src" | head -n 1 | xargs dirname)
 
           if [ -z "$SRC_DIR" ]; then
-            echo "ОШИБКА: Исходные файлы Android не найдены в архиве!"
+            echo "ОШИБКА: Исходные файлы Android (папка src) не найдены в архиве!"
             exit 1
           fi
 
-          echo "Исходники найдены в: $SRC_DIR. Переносим в папку app..."
+          echo "Исходники найдены в: $SRC_DIR"
           mkdir -p app
+
+          # Копируем абсолютно ВСЕ файлы (включая скрытые) из найденной директории в app/
+          shopt -s dotglob
           cp -r "$SRC_DIR"/* app/
+          shopt -u dotglob
 
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-
-      - name: Make gradlew executable
-        run: chmod +x gradlew || true
-
-      - name: Build APK
-        run: ./gradlew assembleDebug --stacktrace
-
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: app-debug
-          path: '**/build/outputs/apk/debug/*.apk'
+          # Если build.gradle.kts случайно скопировался в корень app, проверяем структуру
+          ls -la app/
