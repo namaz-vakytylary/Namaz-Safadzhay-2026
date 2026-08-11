@@ -10,15 +10,22 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Unzip project archive
+      - name: Extract zip and fix app folder structure
         run: |
-          ZIP_FILE=$(find . -maxdepth 2 -name "*.zip" | head -n 1)
-          if [ -z "$ZIP_FILE" ]; then
-            echo "ОШИБКА: ZIP-архив не найден в репозитории!"
+          mkdir -p temp_extracted
+          unzip -o app.zip -d temp_extracted/
+
+          # Находим, где лежат исходники (src или build.gradle*)
+          SRC_DIR=$(find temp_extracted -type d -name "src" | head -n 1 | xargs dirname)
+
+          if [ -z "$SRC_DIR" ]; then
+            echo "ОШИБКА: Исходные файлы Android не найдены в архиве!"
             exit 1
           fi
-          echo "Найден архив: $ZIP_FILE. Распаковываем..."
-          unzip -o "$ZIP_FILE" -d extracted_project
+
+          echo "Исходники найдены в: $SRC_DIR. Переносим в папку app..."
+          mkdir -p app
+          cp -r "$SRC_DIR"/* app/
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -26,17 +33,11 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
+      - name: Make gradlew executable
+        run: chmod +x gradlew || true
+
       - name: Build APK
-        run: |
-          GRADLEW_PATH=$(find extracted_project -name "gradlew" | head -n 1)
-          if [ -z "$GRADLEW_PATH" ]; then
-            echo "ОШИБКА: Файл gradlew не найден внутри архива!"
-            exit 1
-          fi
-          BUILD_DIR=$(dirname "$GRADLEW_PATH")
-          cd "$BUILD_DIR"
-          chmod +x gradlew
-          ./gradlew assembleDebug --stacktrace
+        run: ./gradlew assembleDebug --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
