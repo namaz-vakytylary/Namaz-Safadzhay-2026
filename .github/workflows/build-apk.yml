@@ -1,23 +1,57 @@
-- name: Extract zip and fix app folder structure
+name: Build APK from ZIP
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Extract zip and fix app folder structure
         run: |
           mkdir -p temp_extracted
           unzip -o app.zip -d temp_extracted/
 
-          # Ищем папку, где лежит src
-          SRC_DIR=$(find temp_extracted -type d -name "src" | head -n 1 | xargs dirname)
+          # Ищем папку, в которой лежит файл build.gradle.kts или build.gradle модуля app
+          TARGET_DIR=$(find temp_extracted -name "build.gradle*" -exec dirname {} \; | head -n 1)
 
-          if [ -z "$SRC_DIR" ]; then
-            echo "ОШИБКА: Исходные файлы Android (папка src) не найдены в архиве!"
+          if [ -z "$TARGET_DIR" ]; then
+            echo "ОШИБКА: Файлы сборки Gradle не найдены в архиве!"
             exit 1
           fi
 
-          echo "Исходники найдены в: $SRC_DIR"
-          mkdir -p app
+          echo "Найдены исходники в: $TARGET_DIR"
 
-          # Копируем абсолютно ВСЕ файлы (включая скрытые) из найденной директории в app/
+          # Если исходники уже лежат в корне архива или в app — переносим аккуратно
+          mkdir -p app
+          
+          # Настраиваем копирование включая скрытые файлы
           shopt -s dotglob
-          cp -r "$SRC_DIR"/* app/
+          if [ "$TARGET_DIR" != "app" ]; then
+            cp -r "$TARGET_DIR"/* app/ 2>/dev/null || true
+          fi
           shopt -u dotglob
 
-          # Если build.gradle.kts случайно скопировался в корень app, проверяем структуру
+          echo "Содержимое папки app после распаковки:"
           ls -la app/
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Make gradlew executable
+        run: chmod +x gradlew || true
+
+      - name: Build APK
+        run: ./gradlew assembleDebug --stacktrace
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-debug
+          path: '**/build/outputs/apk/debug/*.apk'
