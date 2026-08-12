@@ -1,21 +1,26 @@
-      - name: Inspect app.zip structure
+name: Unpack app.zip
+
+on:
+  push:
+    branches: [ "main" ] # Укажите ветку (main или master)
+
+jobs:
+  unpack:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # Дает боту права на запись изменений в репозиторий
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Extract app.zip
         run: |
-          echo "=== 1. Проверка наличия архива ==="
-          if [ ! -f "app.zip" ]; then
-            echo "ОШИБКА: Файл app.zip не найден в корне репозитория!"
-            exit 1
-          fi
+          unzip app.zip -d ./extracted_files
 
-          echo "=== 2. Распаковка архива ==="
-          mkdir -p temp_inspect
-          unzip -o app.zip -d temp_inspect/
-
-          echo "=== 3. Полное дерево файлов внутри app.zip ==="
-          find temp_inspect -maxdepth 5 | sort
-
-          echo "=== 4. Поиск ключевых файлов Android ==="
-          echo "Поиск MainActivity:"
-          find temp_inspect -name "MainActivity.kt" -o -name "MainActivity.java"
-
-          echo "Поиск файлов build.gradle / build.gradle.kts:"
-          find temp_inspect -name "build.gradle*"
+      - name: Commit and push unzipped files
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add extracted_files/
+          git commit -m "Автоматическая распаковка app.zip" || exit 0
+          git push
