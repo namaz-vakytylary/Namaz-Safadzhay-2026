@@ -1,57 +1,21 @@
-name: Build APK from ZIP
-
-on:
-  workflow_dispatch:
-
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Extract zip and fix app folder structure
+      - name: Inspect app.zip structure
         run: |
-          mkdir -p temp_extracted
-          unzip -o app.zip -d temp_extracted/
-
-          # Ищем папку, в которой лежит файл build.gradle.kts или build.gradle модуля app
-          TARGET_DIR=$(find temp_extracted -name "build.gradle*" -exec dirname {} \; | head -n 1)
-
-          if [ -z "$TARGET_DIR" ]; then
-            echo "ОШИБКА: Файлы сборки Gradle не найдены в архиве!"
+          echo "=== 1. Проверка наличия архива ==="
+          if [ ! -f "app.zip" ]; then
+            echo "ОШИБКА: Файл app.zip не найден в корне репозитория!"
             exit 1
           fi
 
-          echo "Найдены исходники в: $TARGET_DIR"
+          echo "=== 2. Распаковка архива ==="
+          mkdir -p temp_inspect
+          unzip -o app.zip -d temp_inspect/
 
-          # Если исходники уже лежат в корне архива или в app — переносим аккуратно
-          mkdir -p app
-          
-          # Настраиваем копирование включая скрытые файлы
-          shopt -s dotglob
-          if [ "$TARGET_DIR" != "app" ]; then
-            cp -r "$TARGET_DIR"/* app/ 2>/dev/null || true
-          fi
-          shopt -u dotglob
+          echo "=== 3. Полное дерево файлов внутри app.zip ==="
+          find temp_inspect -maxdepth 5 | sort
 
-          echo "Содержимое папки app после распаковки:"
-          ls -la app/
+          echo "=== 4. Поиск ключевых файлов Android ==="
+          echo "Поиск MainActivity:"
+          find temp_inspect -name "MainActivity.kt" -o -name "MainActivity.java"
 
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-
-      - name: Make gradlew executable
-        run: chmod +x gradlew || true
-
-      - name: Build APK
-        run: ./gradlew assembleDebug --stacktrace
-
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: app-debug
-          path: '**/build/outputs/apk/debug/*.apk'
+          echo "Поиск файлов build.gradle / build.gradle.kts:"
+          find temp_inspect -name "build.gradle*"
