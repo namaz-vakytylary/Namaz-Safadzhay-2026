@@ -14,7 +14,6 @@ jobs:
         run: |
           echo "=== Распаковка архивов ==="
           if [ -f "app.zip" ]; then unzip -o app.zip; fi
-          if [ -f "gradle.zip" ]; then unzip -o gradle.zip; fi
           if [ -f "github.zip" ]; then unzip -o github.zip; fi
 
       - name: Set up JDK 17
