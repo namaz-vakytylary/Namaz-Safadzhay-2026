@@ -1,4 +1,4 @@
-name: Build Namaz APK
+name: Build Namaz APK from ZIPs
 
 on:
   workflow_dispatch:
@@ -10,6 +10,13 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Extract ZIP archives
+        run: |
+          echo "=== Распаковка архивов ==="
+          if [ -f "app.zip" ]; then unzip -o app.zip; fi
+          if [ -f "gradle.zip" ]; then unzip -o gradle.zip; fi
+          if [ -f "github.zip" ]; then unzip -o github.zip; fi
+
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
@@ -17,7 +24,7 @@ jobs:
           distribution: 'temurin'
 
       - name: Make gradlew executable
-        run: chmod +x gradlew
+        run: chmod +x gradlew || true
 
       - name: Build APK
         run: ./gradlew assembleDebug --stacktrace
