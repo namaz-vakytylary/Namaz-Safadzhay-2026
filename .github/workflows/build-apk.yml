@@ -1,4 +1,4 @@
-name: Build Namaz APK from ZIP
+name: Build Namaz APK
 
 on:
   workflow_dispatch:
@@ -10,29 +10,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Extract app.zip into app folder
-        run: |
-          echo "=== Очистка и подготовка папки app ==="
-          rm -rf app
-          mkdir -p app
-
-          echo "=== Распаковка app.zip ==="
-          unzip -o app.zip -d app/
-
-          # Если файлы распаковались с лишней вложенной папкой, вытаскиваем их в корень app/
-          if [ ! -d "app/src" ]; then
-            INNER_DIR=$(find app -type d -name "src" | head -n 1 | xargs dirname)
-            if [ -n "$INNER_DIR" ] && [ "$INNER_DIR" != "app" ]; then
-              echo "Найдена вложенная папка: $INNER_DIR. Переносим файлы..."
-              shopt -s dotglob
-              mv "$INNER_DIR"/* app/ 2>/dev/null || true
-              shopt -u dotglob
-            fi
-          fi
-
-          echo "=== Содержимое папки app ==="
-          ls -la app/
-
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
@@ -40,7 +17,7 @@ jobs:
           distribution: 'temurin'
 
       - name: Make gradlew executable
-        run: chmod +x gradlew || true
+        run: chmod +x gradlew
 
       - name: Build APK
         run: ./gradlew assembleDebug --stacktrace
@@ -49,4 +26,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Namaz-Safadzhay-2026-APK
-          path: '**/build/outputs/apk/debug/*.apk'
+          path: 'app/build/outputs/apk/debug/*.apk'
