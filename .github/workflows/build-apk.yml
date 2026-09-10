@@ -1,4 +1,17 @@
-- name: Extract ALL ZIP archives
+name: Build Namaz Vakytylary RELEASE from ZIP
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Extract ALL ZIP archives
         shell: bash
         run: |
           set -e
@@ -16,13 +29,14 @@
           done
 
           if [ "$FOUND" -eq 0 ]; then
-            echo "ZIP-архивы не найдены — продолжаю без распаковки"
+            echo "ZIP-архивы не найдены"
+            echo "Продолжаю без распаковки"
           fi
 
-          echo "=== Содержимое после распаковки ==="
+          echo "=== Содержимое корня после распаковки ==="
           ls -la
 
-          echo "=== Проверка Android-проекта ==="
+          echo "=== Проверка структуры проекта ==="
 
           if [ ! -d "app" ]; then
             echo "ERROR: папка app не найдена"
@@ -34,9 +48,148 @@
             exit 1
           fi
 
+          if [ ! -f "build.gradle.kts" ]; then
+            echo "ERROR: build.gradle.kts не найден"
+            exit 1
+          fi
+
           if [ ! -f "gradlew" ]; then
             echo "ERROR: gradlew не найден"
             exit 1
           fi
 
-          echo "OK: Android-проект найден"
+          echo "OK: структура Android-проекта найдена"
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Make Gradle executable
+        shell: bash
+        run: |
+          chmod +x ./gradlew
+
+      - name: Show project version
+        shell: bash
+        run: |
+          echo "=== Версия приложения ==="
+
+          grep -n "versionCode" app/build.gradle.kts || true
+          grep -n "versionName" app/build.gradle.kts || true
+          grep -n "applicationId" app/build.gradle.kts || true
+
+      - name: Build signed RELEASE APK
+        shell: bash
+        run: |
+          set -e
+
+          echo "=== Сборка RELEASE APK ==="
+
+          ./gradlew --no-daemon --stacktrace assembleRelease
+
+      - name: Verify RELEASE APK exists
+        shell: bash
+        run: |
+          set -e
+
+          APK="app/build/outputs/apk/release/app-release.apk"
+
+          if [ ! -s "$APK" ]; then
+            echo "ERROR: app-release.apk не найден"
+            echo "Найденные APK:"
+            find . -type f -name "*.apk" -print
+            exit 1
+          fi
+
+          echo "OK: RELEASE APK найден"
+          ls -lh "$APK"
+
+      - name: Check APK is not DEBUG
+        shell: bash
+        run: |
+          set -e
+
+          APK="app/build/outputs/apk/release/app-release.apk"
+
+          BUILD_TOOLS="$(find "$ANDROID_HOME/build-tools" \
+            -mindepth 1 \
+            -maxdepth 1 \
+            -type d \
+            | sort -V \
+            | tail -n 1)"
+
+          AAPT="$BUILD_TOOLS/aapt"
+
+          if [ ! -f "$AAPT" ]; then
+            echo "ERROR: aapt не найден"
+            exit 1
+          fi
+
+          "$AAPT" dump badging "$APK" > apk-info.txt
+
+          echo "=== Информация об APK ==="
+          cat apk-info.txt
+
+          if grep -q "application-debuggable" apk-info.txt; then
+            echo "ERROR: APK является DEBUG-сборкой"
+            exit 1
+          fi
+
+          echo "OK: APK не является DEBUG"
+
+      - name: Show APK package and version
+        shell: bash
+        run: |
+          set -e
+
+          APK="app/build/outputs/apk/release/app-release.apk"
+
+          BUILD_TOOLS="$(find "$ANDROID_HOME/build-tools" \
+            -mindepth 1 \
+            -maxdepth 1 \
+            -type d \
+            | sort -V \
+            | tail -n 1)"
+
+          AAPT="$BUILD_TOOLS/aapt"
+
+          echo "=== Package / Version ==="
+          "$AAPT" dump badging "$APK" | grep "^package:"
+
+      - name: Verify APK signature
+        shell: bash
+        run: |
+          set -e
+
+          APK="app/build/outputs/apk/release/app-release.apk"
+
+          BUILD_TOOLS="$(find "$ANDROID_HOME/build-tools" \
+            -mindepth 1 \
+            -maxdepth 1 \
+            -type d \
+            | sort -V \
+            | tail -n 1)"
+
+          APKSIGNER="$BUILD_TOOLS/apksigner"
+
+          if [ ! -f "$APKSIGNER" ]; then
+            echo "ERROR: apksigner не найден"
+            exit 1
+          fi
+
+          echo "=== Проверка подписи ==="
+
+          "$APKSIGNER" verify \
+            --verbose \
+            --print-certs \
+            "$APK"
+
+      - name: Upload RELEASE APK
+        uses: actions/upload-artifact@v5
+        with:
+          name: Namaz-Vakytylary-v1.2-RELEASE-RuStore
+          path: app/build/outputs/apk/release/app-release.apk
+          if-no-files-found: error
+          retention-days: 30
