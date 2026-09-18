@@ -1,0 +1,19 @@
+{
+  "app/namaz-release.jks": "4a16ebcba6a05ecc9fe89af62fa3a3a7081429ec8cb54d9b96b9cfb46e3389d7",
+  "app/src/main/res/mipmap-xhdpi/ic_launcher_round.png": "0db9eceeba781dc2704a075cc294a347cef8d91766e505d60cb9cf189e529a29",
+  "app/src/main/res/mipmap-xhdpi/ic_launcher.png": "0db9eceeba781dc2704a075cc294a347cef8d91766e505d60cb9cf189e529a29",
+  "app/src/main/res/mipmap-xxhdpi/ic_launcher_round.png": "635ba0553235cb5ce02187a2e63eee578cac69c1ecdd66437e217db182ff22e2",
+  "app/src/main/res/mipmap-xxhdpi/ic_launcher.png": "635ba0553235cb5ce02187a2e63eee578cac69c1ecdd66437e217db182ff22e2",
+  "app/src/main/res/values/strings.xml": "c446228839a401b64e44c613092ff45923006b0d5393965e31fe5055b36441ee",
+  "app/src/main/res/mipmap-mdpi/ic_launcher_round.png": "b70f8203a21fcd1d9695326007498e4c2020fee7a86c96b99f7f3dcf21c7f0d4",
+  "app/src/main/res/mipmap-mdpi/ic_launcher.png": "b70f8203a21fcd1d9695326007498e4c2020fee7a86c96b99f7f3dcf21c7f0d4",
+  "app/src/main/res/mipmap-hdpi/ic_launcher_round.png": "d4a759eb4c28a0bb4973f724a9523721b2efeda321074191431c8389a5c07741",
+  "app/src/main/res/mipmap-hdpi/ic_launcher.png": "d4a759eb4c28a0bb4973f724a9523721b2efeda321074191431c8389a5c07741",
+  "app/src/main/res/drawable/ic_notification.xml": "0df81b846d689b85bfd0d8e0f5c787289447824934e445dbf1ab1f6f86a876d9",
+  "app/src/main/res/drawable/ic_location.xml": "33693e2a07e46c1ac4194b22d44fdd5881a3ad591bb51485ea94646ed4117f65",
+  "app/src/main/res/drawable/ic_qibla.xml": "94ba7a0e72d5106781940bb3c73da99e73684bba84eb09db629a05fd4652b183",
+  "app/src/main/res/drawable/ic_launcher_source.png": "5e702eacc01c56a8ba7a1afe8513e3cf93e6cf88e858f222647a65ced8bd3992",
+  "app/src/main/res/drawable/ic_settings.xml": "e194ec19ca1ca8b0ab3b3dba01f729037f7eab64e8968d7e4e189405162082c0",
+  "app/src/main/res/mipmap-xxxhdpi/ic_launcher_round.png": "c4e1f2569e9077a44ee05bb898a63d1fe39198755d95ad2ee5c6231ab107029d",
+  "app/src/main/res/mipmap-xxxhdpi/ic_launcher.png": "c4e1f2569e9077a44ee05bb898a63d1fe39198755d95ad2ee5c6231ab107029d"
+}

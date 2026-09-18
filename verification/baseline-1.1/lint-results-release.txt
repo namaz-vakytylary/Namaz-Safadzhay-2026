@@ -1,0 +1,272 @@
+/workspace/scratch/4a9d5ced4c65/stable-work/Namaz_Vakytylary/app/src/main/java/ru/namaz/safadzhay/MainActivity.kt:1367: Warning: Implicitly using the default locale is a common source of bugs: Use String.format(Locale, ...) instead [DefaultLocale]
+            countdown.text = String.format("%02d:%02d:%02d", left / 3600, (left % 3600) / 60, left % 60)
+                             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/scratch/4a9d5ced4c65/stable-work/Namaz_Vakytylary/app/src/main/java/ru/namaz/safadzhay/MainActivity.kt:1367: Warning: Implicitly using the default locale is a common source of bugs: Use String.format(Locale, ...) instead [DefaultLocale]
+            countdown.text = String.format("%02d:%02d:%02d", left / 3600, (left % 3600) / 60, left % 60)
+                             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/scratch/4a9d5ced4c65/stable-work/Namaz_Vakytylary/app/src/main/java/ru/namaz/safadzhay/MainActivity.kt:1380: Warning: Implicitly using the default locale is a common source of bugs: Use String.format(Locale, ...) instead [DefaultLocale]
+                countdown.text = String.format("%02d:%02d:%02d", left / 3600, (left % 3600) / 60, left % 60)
+                                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/scratch/4a9d5ced4c65/stable-work/Namaz_Vakytylary/app/src/main/java/ru/namaz/safadzhay/MainActivity.kt:1380: Warning: Implicitly using the default locale is a common source of bugs: Use String.format(Locale, ...) instead [DefaultLocale]
+                countdown.text = String.format("%02d:%02d:%02d", left / 3600, (left % 3600) / 60, left % 60)
+                                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+   Explanation for issues of type "DefaultLocale":
+   Calling String#toLowerCase() or #toUpperCase() without specifying an
+   explicit locale is a common source of bugs. The reason for that is that
+   those methods will use the current locale on the user's device, and even
+   though the code appears to work correctly when you are developing the app,
+   it will fail in some locales. For example, in the Turkish locale, the
+   uppercase replacement for i is not I.
+
+   If you want the methods to just perform ASCII replacement, for example to
+   convert an enum name, call String#toUpperCase(Locale.ROOT) instead. If you
+   really want to use the current locale, call
+   String#toUpperCase(Locale.getDefault()) instead.
+
+   https://developer.android.com/reference/java/util/Locale.html#default_locale
+
+/workspace/scratch/4a9d5ced4c65/stable-work/Namaz_Vakytylary/app/src/main/AndroidManifest.xml:31: Warning: Expecting android:screenOrientation="unspecified" or "fullSensor" for this activity so the user can use the application in any orientation and provide a great experience on Chrome OS devices [LockedOrientationActivity]
+            android:screenOrientation="portrait"
+            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+   Explanation for issues of type "LockedOrientationActivity":
+   The <activity> element should not be locked to any orientation so that
+   users can take advantage of the multi-window environments and larger
+   screens available on Android. To fix the issue, consider declaring the
+   corresponding activity element with `screenOrientation="unspecified"`or
+   fullSensor attribute.
+
+   https://developer.android.com/topic/arc/window-management
+
+/workspace/scratch/4a9d5ced4c65/stable-work/Namaz_Vakytylary/app/src/main/AndroidManifest.xml:31: Warning: Should not restrict activity to fixed orientation. This may not be suitable for different form factors, causing the app to be letterboxed. [DiscouragedApi]
+            android:screenOrientation="portrait"
+            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+   Explanation for issues of type "DiscouragedApi":
+   Discouraged APIs are allowed and are not deprecated, but they may be unfit
+   for common use (e.g. due to slow performance or subtle behavior).
+
+/workspace/scratch/4a9d5ced4c65/stable-work/Namaz_Vakytylary/app/src/main/AndroidManifest.xml:14: Warning: The attribute android:allowBackup is deprecated from Android 12 and higher and may be removed in future versions. Consider adding the attribute android:dataExtractionRules specifying an @xml resource which configures cloud backups and device transfers on Android 12 and higher. [DataExtractionRules]
+        android:allowBackup="false"
+                             ~~~~~
+
+   Explanation for issues of type "DataExtractionRules":
+   Before Android 12, the attributes android:allowBackup and
+   android:fullBackupContent were used to configure all forms of backup,
+   including cloud backups, device-to-device transfers and adb backup.
+
+   In Android 12 and higher, these attributes have been deprecated and will
+   only apply to cloud backups. You should instead use the attribute
+   android:dataExtractionRules, specifying an @xml resource that configures
+   which files to back up, for cloud backups and for device-to-device
+   transfers, separately. If your minSdkVersion supports older versions,
+   you'll still want to specify an android:fullBackupContent resource if the
+   default behavior is not right for your app.
+
+   https://developer.android.com/about/versions/12/backup-restore#xml-changes
+   https://goo.gle/DataExtractionRules
+
+/workspace/scratch/4a9d5ced4c65/stable-work/Namaz_Vakytylary/app/src/main/java/ru/namaz/safadzhay/DesignViews.kt:60: Warning: Avoid object allocations during draw/layout operations (preallocate and reuse instead) [DrawAllocation]
+            val p = Path()
+                    ~~~~~~
+/workspace/scratch/4a9d5ced4c65/stable-work/Namaz_Vakytylary/app/src/main/java/ru/namaz/safadzhay/DesignViews.kt:70: Warning: Avoid object allocations during draw/layout operations (preallocate and reuse instead) [DrawAllocation]
+                canvas.drawArc(RectF(cx-r, horizon-r, cx+r, horizon+r), 180f, 180f, false, paint)
+                               ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/scratch/4a9d5ced4c65/stable-work/Namaz_Vakytylary/app/src/main/java/ru/namaz/safadzhay/DesignViews.kt:193: Warning: Avoid object allocations during draw/layout operations (preallocate and reuse instead) [DrawAllocation]
+            val tail = Path().apply { moveTo(cx-radius*.045f, cy); lineTo(cx, cy+radius*.40f); lineTo(cx+radius*.045f, cy); close() }
+                       ~~~~~~
+/workspace/scratch/4a9d5ced4c65/stable-work/Namaz_Vakytylary/app/src/main/java/ru/namaz/safadzhay/DesignViews.kt:196: Warning: Avoid object allocations during draw/layout operations (preallocate and reuse instead) [DrawAllocation]
+            val needle = Path().apply { moveTo(cx, cy-radius*.54f); lineTo(cx-radius*.065f, cy-radius*.05f); lineTo(cx, cy+radius*.035f); lineTo(cx+radius*.065f, cy-radius*.05f); close() }
+                         ~~~~~~
+/workspace/scratch/4a9d5ced4c65/stable-work/Namaz_Vakytylary/app/src/main/java/ru/namaz/safadzhay/DesignViews.kt:203: Warning: Avoid object allocations during draw/layout operations (preallocate and reuse instead) [DrawAllocation]
+            val cube = Path().apply { moveTo(kx-k, ky-k*.55f); lineTo(kx, ky-k); lineTo(kx+k, ky-k*.55f); lineTo(kx+k, ky+k*.8f); lineTo(kx, ky+k*1.15f); lineTo(kx-k, ky+k*.8f); close() }
+                       ~~~~~~
+/workspace/scratch/4a9d5ced4c65/stable-work/Namaz_Vakytylary/app/src/main/java/ru/namaz/safadzhay/DesignViews.kt:206: Warning: Avoid object allocations during draw/layout operations (preallocate and reuse instead) [DrawAllocation]
+            val lid = Path().apply { moveTo(kx-k, ky-k*.55f); lineTo(kx, ky-k); lineTo(kx+k, ky-k*.55f); lineTo(kx, ky-k*.15f); close() }
+                      ~~~~~~
+/workspace/scratch/4a9d5ced4c65/stable-work/Namaz_Vakytylary/app/src/main/java/ru/namaz/safadzhay/DesignViews.kt:209: Warning: Avoid object allocations during draw/layout operations (preallocate and reuse instead) [DrawAllocation]
+            val band = Path().apply { moveTo(kx-k, ky-k*.25f); lineTo(kx, ky+k*.10f); lineTo(kx+k, ky-k*.25f) }
+                       ~~~~~~
+
+   Explanation for issues of type "DrawAllocation":
+   You should avoid allocating objects during a drawing or layout operation.
+   These are called frequently, so a smooth UI can be interrupted by garbage
+   collection pauses caused by the object allocations.
+
+   The way this is generally handled is to allocate the needed objects up
+   front and to reuse them for each drawing operation.
+
+   Some methods allocate memory on your behalf (such as Bitmap.create), and
+   these should be handled in the same way.
+
+/workspace/scratch/4a9d5ced4c65/stable-work/Namaz_Vakytylary/app/src/main/java/ru/namaz/safadzhay/MainActivity.kt:1104: Warning: Unnecessary; SDK_INT is always >= 23 [ObsoleteSdkInt]
+                    (if (Build.VERSION.SDK_INT >= 23) PendingIntent.FLAG_IMMUTABLE else 0)
+                         ~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/scratch/4a9d5ced4c65/stable-work/Namaz_Vakytylary/app/src/main/java/ru/namaz/safadzhay/MainActivity.kt:1151: Warning: Unnecessary; SDK_INT is always >= 23 [ObsoleteSdkInt]
+            (if (Build.VERSION.SDK_INT >= 23) PendingIntent.FLAG_IMMUTABLE else 0)
+                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/scratch/4a9d5ced4c65/stable-work/Namaz_Vakytylary/app/src/main/java/ru/namaz/safadzhay/MainActivity.kt:1158: Warning: Unnecessary; SDK_INT is always >= 23 [ObsoleteSdkInt]
+        } else if (Build.VERSION.SDK_INT >= 23) {
+                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/scratch/4a9d5ced4c65/stable-work/Namaz_Vakytylary/app/src/main/java/ru/namaz/safadzhay/MainActivity.kt:1611: Warning: Unnecessary; SDK_INT is always >= 23 [ObsoleteSdkInt]
+        (if (Build.VERSION.SDK_INT >= 23) PendingIntent.FLAG_IMMUTABLE else 0)
+             ~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/scratch/4a9d5ced4c65/stable-work/Namaz_Vakytylary/app/src/main/java/ru/namaz/safadzhay/MainActivity.kt:1615: Warning: Unnecessary; SDK_INT is always >= 23 [ObsoleteSdkInt]
+    } else if (Build.VERSION.SDK_INT >= 23) {
+               ~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/scratch/4a9d5ced4c65/stable-work/Namaz_Vakytylary/app/src/main/java/ru/namaz/safadzhay/MainActivity.kt:1648: Warning: Unnecessary; SDK_INT is always >= 23 [ObsoleteSdkInt]
+                val flags = PendingIntent.FLAG_UPDATE_CURRENT or (if (Build.VERSION.SDK_INT >= 23) PendingIntent.FLAG_IMMUTABLE else 0)
+                                                                      ~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/scratch/4a9d5ced4c65/stable-work/Namaz_Vakytylary/app/src/main/java/ru/namaz/safadzhay/MainActivity.kt:1652: Warning: Unnecessary; SDK_INT is always >= 23 [ObsoleteSdkInt]
+                } else if (Build.VERSION.SDK_INT >= 23) {
+                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+   Explanation for issues of type "ObsoleteSdkInt":
+   This check flags version checks that are not necessary, because the
+   minSdkVersion (or surrounding known API level) is already at least as high
+   as the version checked for.
+
+   Similarly, it also looks for resources in -vNN folders, such as values-v14
+   where the version qualifier is less than or equal to the minSdkVersion,
+   where the contents should be merged into the best folder.
+
+/workspace/scratch/4a9d5ced4c65/stable-work/Namaz_Vakytylary/app/src/main/res/drawable/ic_settings.xml:2: Warning: Very long vector path (806 characters), which is bad for performance. Considering reducing precision, removing minor details or rasterizing vector. [VectorPath]
+    <path android:fillColor="#B4D3C6" android:pathData="M19.43,12.98c0.04,-0.32 0.07,-0.65 0.07,-0.98s-0.02,-0.66 -0.07,-0.98l2.11,-1.65c0.19,-0.15 0.24,-0.42 0.12,-0.64l-2,-3.46c-0.12,-0.22 -0.37,-0.31 -0.6,-0.22l-2.49,1c-0.52,-0.4 -1.08,-0.73 -1.69,-0.98L14.5,2.42C14.47,2.18 14.25,2 14,2h-4c-0.25,0 -0.46,0.18 -0.5,0.42L9.12,5.07c-0.61,0.25 -1.18,0.59 -1.69,0.98l-2.49,-1c-0.23,-0.08 -0.48,0 -0.6,0.22l-2,3.46c-0.13,0.22 -0.07,0.49 0.12,0.64l2.11,1.65c-0.04,0.32 -0.08,0.65 -0.08,0.98s0.03,0.66 0.08,0.98l-2.11,1.65c-0.19,0.15 -0.24,0.42 -0.12,0.64l2,3.46c0.12,0.22 0.37,0.31 0.6,0.22l2.49,-1c0.52,0.4 1.08,0.73 1.69,0.98l0.38,2.65c0.04,0.24 0.25,0.42 0.5,0.42h4c0.25,0 0.46,-0.18 0.5,-0.42l0.38,-2.65c0.61,-0.25 1.18,-0.58 1.69,-0.98l2.49,1c0.23,0.08 0.48,0 0.6,-0.22l2,-3.46c0.12,-0.22 0.07,-0.49 -0.12,-0.64zM12,15.5A3.5,3.5 0,1 1,12,8a3.5,3.5 0,0 1,0,7.5z"/>
+                                                        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+   Explanation for issues of type "VectorPath":
+   Using long vector paths is bad for performance. There are several ways to
+   make the pathData shorter:
+   * Using less precision
+   * Removing some minor details
+   * Using the Android Studio vector conversion tool
+   * Rasterizing the image (converting to PNG)
+
+/workspace/scratch/4a9d5ced4c65/stable-work/Namaz_Vakytylary/app/src/main/res/values/colors.xml:3: Warning: The resource R.color.green appears to be unused [UnusedResources]
+    <color name="green">#0E6B4B</color>
+           ~~~~~~~~~~~~
+/workspace/scratch/4a9d5ced4c65/stable-work/Namaz_Vakytylary/app/src/main/res/values/colors.xml:5: Warning: The resource R.color.white appears to be unused [UnusedResources]
+    <color name="white">#FFFFFF</color>
+           ~~~~~~~~~~~~
+/workspace/scratch/4a9d5ced4c65/stable-work/Namaz_Vakytylary/app/src/main/res/values/colors.xml:6: Warning: The resource R.color.muted appears to be unused [UnusedResources]
+    <color name="muted">#A8C8BB</color>
+           ~~~~~~~~~~~~
+/workspace/scratch/4a9d5ced4c65/stable-work/Namaz_Vakytylary/app/src/main/res/drawable/qibla_background.jpg: Warning: The resource R.drawable.qibla_background appears to be unused [UnusedResources]
+
+   Explanation for issues of type "UnusedResources":
+   Unused resources make applications larger and slow down builds.
+
+
+   The unused resource check can ignore tests. If you want to include
+   resources that are only referenced from tests, consider packaging them in a
+   test source set instead.
+
+   You can include test sources in the unused resource check by setting the
+   system property lint.unused-resources.include-tests =true, and to exclude
+   them (usually for performance reasons), use
+   lint.unused-resources.exclude-tests =true.
+   ,
+
+/workspace/scratch/4a9d5ced4c65/stable-work/Namaz_Vakytylary/app/src/main/res/mipmap-hdpi/ic_launcher.png: Warning: Launcher icons should not fill every pixel of their square region; see the design guide for details [IconLauncherShape]
+/workspace/scratch/4a9d5ced4c65/stable-work/Namaz_Vakytylary/app/src/main/res/mipmap-mdpi/ic_launcher.png: Warning: Launcher icons should not fill every pixel of their square region; see the design guide for details [IconLauncherShape]
+/workspace/scratch/4a9d5ced4c65/stable-work/Namaz_Vakytylary/app/src/main/res/mipmap-xhdpi/ic_launcher.png: Warning: Launcher icons should not fill every pixel of their square region; see the design guide for details [IconLauncherShape]
+/workspace/scratch/4a9d5ced4c65/stable-work/Namaz_Vakytylary/app/src/main/res/mipmap-xxhdpi/ic_launcher.png: Warning: Launcher icons should not fill every pixel of their square region; see the design guide for details [IconLauncherShape]
+/workspace/scratch/4a9d5ced4c65/stable-work/Namaz_Vakytylary/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png: Warning: Launcher icons should not fill every pixel of their square region; see the design guide for details [IconLauncherShape]
+/workspace/scratch/4a9d5ced4c65/stable-work/Namaz_Vakytylary/app/src/main/res/mipmap-hdpi/ic_launcher_round.png: Warning: Launcher icon used as round icon did not have a circular shape [IconLauncherShape]
+/workspace/scratch/4a9d5ced4c65/stable-work/Namaz_Vakytylary/app/src/main/res/mipmap-mdpi/ic_launcher_round.png: Warning: Launcher icon used as round icon did not have a circular shape [IconLauncherShape]
+/workspace/scratch/4a9d5ced4c65/stable-work/Namaz_Vakytylary/app/src/main/res/mipmap-xhdpi/ic_launcher_round.png: Warning: Launcher icon used as round icon did not have a circular shape [IconLauncherShape]
+/workspace/scratch/4a9d5ced4c65/stable-work/Namaz_Vakytylary/app/src/main/res/mipmap-xxhdpi/ic_launcher_round.png: Warning: Launcher icon used as round icon did not have a circular shape [IconLauncherShape]
+/workspace/scratch/4a9d5ced4c65/stable-work/Namaz_Vakytylary/app/src/main/res/mipmap-xxxhdpi/ic_launcher_round.png: Warning: Launcher icon used as round icon did not have a circular shape [IconLauncherShape]
+/workspace/scratch/4a9d5ced4c65/stable-work/Namaz_Vakytylary/app/src/main/res/drawable/ic_launcher_source.png: Warning: Launcher icons should not fill every pixel of their square region; see the design guide for details [IconLauncherShape]
+
+   Explanation for issues of type "IconLauncherShape":
+   According to the Android Design Guide
+   (https://d.android.com/r/studio-ui/designer/material/iconography) your
+   launcher icons should "use a distinct silhouette", a "three-dimensional,
+   front view, with a slight perspective as if viewed from above, so that
+   users perceive some depth."
+
+   The unique silhouette implies that your launcher icon should not be a
+   filled square.
+
+/workspace/scratch/4a9d5ced4c65/stable-work/Namaz_Vakytylary/app/src/main/res/drawable/ic_launcher_source.png: Warning: Found bitmap drawable res/drawable/ic_launcher_source.png in densityless folder [IconLocation]
+/workspace/scratch/4a9d5ced4c65/stable-work/Namaz_Vakytylary/app/src/main/res/drawable/qibla_background.jpg: Warning: Found bitmap drawable res/drawable/qibla_background.jpg in densityless folder [IconLocation]
+
+   Explanation for issues of type "IconLocation":
+   The res/drawable folder is intended for density-independent graphics such
+   as shapes defined in XML. For bitmaps, move it to drawable-mdpi and
+   consider providing higher and lower resolution versions in drawable-ldpi,
+   drawable-hdpi and drawable-xhdpi. If the icon really is density independent
+   (for example a solid color) you can place it in drawable-nodpi.
+
+   https://developer.android.com/guide/practices/screens_support.html
+
+/workspace/scratch/4a9d5ced4c65/stable-work/Namaz_Vakytylary/app/src/main/res/mipmap-hdpi/ic_launcher_round.png: Warning: The following unrelated icon files have identical contents: ic_launcher.png, ic_launcher_round.png [IconDuplicates]
+/workspace/scratch/4a9d5ced4c65/stable-work/Namaz_Vakytylary/app/src/main/res/mipmap-mdpi/ic_launcher_round.png: Warning: The following unrelated icon files have identical contents: ic_launcher.png, ic_launcher_round.png [IconDuplicates]
+/workspace/scratch/4a9d5ced4c65/stable-work/Namaz_Vakytylary/app/src/main/res/mipmap-xhdpi/ic_launcher_round.png: Warning: The following unrelated icon files have identical contents: ic_launcher.png, ic_launcher_round.png [IconDuplicates]
+/workspace/scratch/4a9d5ced4c65/stable-work/Namaz_Vakytylary/app/src/main/res/mipmap-xxhdpi/ic_launcher_round.png: Warning: The following unrelated icon files have identical contents: ic_launcher.png, ic_launcher_round.png [IconDuplicates]
+/workspace/scratch/4a9d5ced4c65/stable-work/Namaz_Vakytylary/app/src/main/res/mipmap-xxxhdpi/ic_launcher_round.png: Warning: The following unrelated icon files have identical contents: ic_launcher.png, ic_launcher_round.png [IconDuplicates]
+
+   Explanation for issues of type "IconDuplicates":
+   If an icon is repeated under different names, you can consolidate and just
+   use one of the icons and delete the others to make your application
+   smaller. However, duplicated icons usually are not intentional and can
+   sometimes point to icons that were accidentally overwritten or accidentally
+   not updated.
+
+/workspace/scratch/4a9d5ced4c65/stable-work/Namaz_Vakytylary/app/src/main/java/ru/namaz/safadzhay/DesignViews.kt:54: Warning: Custom view PrayerIconView is missing constructor used by tools: (Context) or (Context,AttributeSet) or (Context,AttributeSet,int) [ViewConstructor]
+internal class PrayerIconView(context: Context, private val name: String, private val tint: Int) : View(context) {
+               ~~~~~~~~~~~~~~
+
+   Explanation for issues of type "ViewConstructor":
+   Some layout tools (such as the Android layout editor) need to find a
+   constructor with one of the following signatures:
+   * View(Context context)
+   * View(Context context, AttributeSet attrs)
+   * View(Context context, AttributeSet attrs, int defStyle)
+
+   If your custom view needs to perform initialization which does not apply
+   when used in a layout editor, you can surround the given code with a check
+   to see if View#isInEditMode() is false, since that method will return false
+   at runtime but true within a user interface editor.
+
+/workspace/scratch/4a9d5ced4c65/stable-work/Namaz_Vakytylary/app/src/main/java/ru/namaz/safadzhay/MainActivity.kt:1189: Warning: Do not concatenate text displayed with setText. Use resource string with placeholders. [SetTextI18n]
+        calendarTitle.text = "${monthNames[calendarMonth.monthValue - 1]} ${calendarMonth.year}"
+                             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/scratch/4a9d5ced4c65/stable-work/Namaz_Vakytylary/app/src/main/java/ru/namaz/safadzhay/MainActivity.kt:1310: Warning: Do not concatenate text displayed with setText. Use resource string with placeholders. [SetTextI18n]
+        dateText.text = "${formatRussianDate(selected)}\n${hijriText(selected)}"
+                        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/scratch/4a9d5ced4c65/stable-work/Namaz_Vakytylary/app/src/main/java/ru/namaz/safadzhay/MainActivity.kt:1311: Warning: Do not concatenate text displayed with setText. Use resource string with placeholders. [SetTextI18n]
+        currentTimeText.text = "Сейчас " + now.format(DateTimeFormatter.ofPattern("HH:mm"))
+                               ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/scratch/4a9d5ced4c65/stable-work/Namaz_Vakytylary/app/src/main/java/ru/namaz/safadzhay/MainActivity.kt:1327: Warning: String literal in setText can not be translated. Use Android resources instead. [SetTextI18n]
+            countdownLabel.text = "Доступно: август–декабрь 2026"
+                                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/scratch/4a9d5ced4c65/stable-work/Namaz_Vakytylary/app/src/main/java/ru/namaz/safadzhay/MainActivity.kt:1344: Warning: Do not concatenate text displayed with setText. Use resource string with placeholders. [SetTextI18n]
+            countdownLabel.text = "Намазы на ${formatRussianDate(selected)}"
+                                  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/scratch/4a9d5ced4c65/stable-work/Namaz_Vakytylary/app/src/main/java/ru/namaz/safadzhay/MainActivity.kt:1368: Warning: Do not concatenate text displayed with setText. Use resource string with placeholders. [SetTextI18n]
+            nextName.text = "${nextEvent.prayer.name} (${nextEvent.prayer.tatar})"
+                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/scratch/4a9d5ced4c65/stable-work/Namaz_Vakytylary/app/src/main/java/ru/namaz/safadzhay/MainActivity.kt:1370: Warning: Do not concatenate text displayed with setText. Use resource string with placeholders. [SetTextI18n]
+            countdownStart.text = "До начала намаза · ${nextEvent.prayer.time}"
+                                  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/scratch/4a9d5ced4c65/stable-work/Namaz_Vakytylary/app/src/main/java/ru/namaz/safadzhay/MainActivity.kt:1383: Warning: Do not concatenate text displayed with setText. Use resource string with placeholders. [SetTextI18n]
+                countdownStart.text = "Завтра · ${tomorrowDay.fajr}"
+                                      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+   Explanation for issues of type "SetTextI18n":
+   When calling TextView#setText
+   * Never call Number#toString() to format numbers; it will not handle
+   fraction separators and locale-specific digits properly. Consider using
+   String#format with proper format specifications (%d or %f) instead.
+   * Do not pass a string literal (e.g. "Hello") to display text. Hardcoded
+   text can not be properly translated to other languages. Consider using
+   Android resource strings instead.
+   * Do not build messages by concatenating text chunks. Such messages can not
+   be properly translated.
+
+   https://developer.android.com/guide/topics/resources/localization.html
+
+0 errors, 53 warnings
