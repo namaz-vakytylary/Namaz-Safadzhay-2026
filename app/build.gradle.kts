@@ -11,8 +11,8 @@ android {
         applicationId = "ru.namaz.safadzhay.test"
         minSdk = 23
         targetSdk = 35
-        versionCode = 35
-        versionName = "1.2-test3"
+        versionCode = 36
+        versionName = "1.2-test3.1"
     }
 
     signingConfigs {
