@@ -113,16 +113,13 @@ private fun ensurePrayerNotificationChannel(context: Context): String {
 
 // Process-wide queues let a completed download rebuild alarms even if its screen was closed.
 private val prayerAlarmWorker = java.util.concurrent.Executors.newSingleThreadExecutor()
-private val scheduleWorker = java.util.concurrent.Executors.newSingleThreadExecutor()
 
 class MainActivity : Activity() {
     private val zone = ZoneId.of("Europe/Moscow")
     private val handler = Handler(Looper.getMainLooper())
     private val alarmExecutor = prayerAlarmWorker
     private lateinit var scheduleRepository: ScheduleRepository
-    private var checkingSchedules = false
-    private var scheduleStatusText: TextView? = null
-    private var scheduleCheckButton: TextView? = null
+    private lateinit var scheduleUpdateChecker: ScheduleUpdateChecker
     private var panelRoute = ""
     private var activeCompass: QiblaCompassView? = null
     private var activeQiblaLocation: QiblaLocationController? = null
@@ -511,6 +508,8 @@ class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         scheduleRepository = ScheduleRepository.get(applicationContext)
+        scheduleUpdateChecker = (lastNonConfigurationInstance as? ScheduleUpdateChecker)
+            ?: ScheduleUpdateChecker(applicationContext)
         WindowCompat.setDecorFitsSystemWindows(window, false)
         val openedFromReminder = intent?.action == OPEN_PRAYER_ACTION
         selectedDate = savedInstanceState?.getString("selected_date")?.let { runCatching { LocalDate.parse(it) }.getOrNull() } ?: LocalDate.now(zone)
@@ -523,7 +522,7 @@ class MainActivity : Activity() {
         buildUi()
         update()
         schedulePrayerNotifications()
-        if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(this@MainActivity, "android.permission.POST_NOTIFICATIONS") != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+        if (prefs.getBoolean(NOTIFICATIONS_ENABLED_KEY, false) && Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(this@MainActivity, "android.permission.POST_NOTIFICATIONS") != android.content.pm.PackageManager.PERMISSION_GRANTED) {
             requestPermissions(arrayOf("android.permission.POST_NOTIFICATIONS"), 7001)
         }
         maybeRequestExactAlarmPermission()
@@ -531,9 +530,8 @@ class MainActivity : Activity() {
             "notifications" -> showNotificationsScreen { showSettingsDialog() }
             "settings" -> showSettingsDialog()
             "qibla" -> showQiblaCompass()
-            "schedules" -> showScheduleUpdates()
         }
-        checkScheduleUpdates(false)
+        scheduleUpdateChecker.checkOnce { onScheduleUpdated() }
         if (openedFromReminder) intent.action = Intent.ACTION_MAIN
         handler.post(object : Runnable {
             override fun run() {
@@ -605,7 +603,7 @@ class MainActivity : Activity() {
         headerBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         root.addView(headerBox, LinearLayout.LayoutParams(-1, -2))
         val top = android.widget.FrameLayout(this)
-        top.addView(label("Намаз", 28f, ink, true).apply { gravity = Gravity.CENTER }, android.widget.FrameLayout.LayoutParams(-1, dp(44)))
+        top.addView(label("Намаз", 28f, ink, true).apply { gravity = Gravity.CENTER; minHeight = dp(44) }, android.widget.FrameLayout.LayoutParams(-1, -2))
         fun shortcut(res: Int, desc: String, side: Int, action: () -> Unit) {
             top.addView(ImageView(this).apply {
                 setImageResource(res); setPadding(dp(11), dp(11), dp(11), dp(11))
@@ -618,7 +616,7 @@ class MainActivity : Activity() {
         placeText = label(selectedCity, 19f, mint, true).apply { gravity = Gravity.CENTER }
         headerBox.addView(placeText.apply { minHeight = dp(29) }, LinearLayout.LayoutParams(-1, -2))
         dateText = label("", 15f, muted).apply {
-            gravity = Gravity.CENTER; maxLines = 3; setPadding(0, dp(3), 0, dp(3))
+            gravity = Gravity.CENTER; maxLines = Int.MAX_VALUE; setPadding(0, dp(3), 0, dp(3))
             contentDescription = "Дата и календарь"; isFocusable = true
             setOnClickListener { scheduleTabSelected = true; update() }
         }
@@ -646,8 +644,8 @@ class MainActivity : Activity() {
             orientation = LinearLayout.VERTICAL; background = surface(); setPadding(dp(8), dp(5), dp(8), dp(7)); visibility = View.GONE
         }
         val months = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
-        val prev = label("‹", 27f).apply { gravity = Gravity.CENTER; contentDescription = "Предыдущий месяц"; setOnClickListener { if (calendarMonth > calendarMinMonth()) { calendarMonth = calendarMonth.minusMonths(1); renderInlineCalendar() } } }
-        val next = label("›", 27f).apply { gravity = Gravity.CENTER; contentDescription = "Следующий месяц"; setOnClickListener { if (calendarMonth < calendarMaxMonth()) { calendarMonth = calendarMonth.plusMonths(1); renderInlineCalendar() } } }
+        val prev = label("‹", 27f).apply { setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, 27f); gravity = Gravity.CENTER; contentDescription = "Предыдущий месяц"; setOnClickListener { if (calendarMonth > calendarMinMonth()) { calendarMonth = calendarMonth.minusMonths(1); renderInlineCalendar() } } }
+        val next = label("›", 27f).apply { setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, 27f); gravity = Gravity.CENTER; contentDescription = "Следующий месяц"; setOnClickListener { if (calendarMonth < calendarMaxMonth()) { calendarMonth = calendarMonth.plusMonths(1); renderInlineCalendar() } } }
         months.addView(prev, LinearLayout.LayoutParams(dp(44), dp(40)))
         calendarTitle = label("", 16f, ink, true).apply { gravity = Gravity.CENTER }
         months.addView(calendarTitle, LinearLayout.LayoutParams(0, dp(40), 1f))
@@ -667,7 +665,7 @@ class MainActivity : Activity() {
             fontFeatureSettings = "tnum"; includeFontPadding = false
             androidx.core.widget.TextViewCompat.setAutoSizeTextTypeUniformWithConfiguration(this, 24, 48, 1, android.util.TypedValue.COMPLEX_UNIT_SP)
         }
-        countdownStart = label("", 14f, muted).apply { gravity = Gravity.CENTER; maxLines = 2 }
+        countdownStart = label("", 14f, muted).apply { gravity = Gravity.CENTER; maxLines = Int.MAX_VALUE }
         heroCopy.addView(countdownLabel, LinearLayout.LayoutParams(-1, -2))
         heroCopy.addView(nextName, LinearLayout.LayoutParams(-1, -2))
         val timerHeight = maxOf(dp(60), (58 * resources.displayMetrics.scaledDensity).toInt())
@@ -683,6 +681,11 @@ class MainActivity : Activity() {
             if (countdownCard.visibility == View.VISIBLE && scroll.height > 0) {
                 // Fit five readable rows; allow scrolling if larger text or events need more room.
                 val occupied = root.paddingTop + root.paddingBottom + headerBox.height - countdownCard.height + prayerList.height
+                // Measure the full text, not the height already clipped by the current card.
+                heroCopy.measure(
+                    View.MeasureSpec.makeMeasureSpec((countdownCard.width - dp(40)).coerceAtLeast(1), View.MeasureSpec.EXACTLY),
+                    View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
+                )
                 val minimum = heroCopy.measuredHeight + dp(32)
                 val target = maxOf(minimum, minOf(dp(200), scroll.height - occupied))
                 if (countdownCard.layoutParams.height != target) {
@@ -711,18 +714,18 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun screenRow(icon: String, title: String, value: String = "", onClick: () -> Unit): LinearLayout = makeScreenRow(label(icon, 22f, muted).apply { gravity = Gravity.CENTER }, title, value, onClick)
+    private fun screenRow(icon: String, title: String, value: String = "", onClick: () -> Unit): LinearLayout = makeScreenRow(label(icon, 22f, muted).apply { setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, 22f); gravity = Gravity.CENTER; importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO }, title, value, onClick)
     private fun screenRow(iconRes: Int, title: String, value: String = "", onClick: () -> Unit): LinearLayout = makeScreenRow(ImageView(this).apply { setImageResource(iconRes); setPadding(dp(7), dp(7), dp(7), dp(7)) }, title, value, onClick)
     private fun makeScreenRow(icon: View, title: String, value: String, onClick: () -> Unit): LinearLayout {
         return LinearLayout(this).apply {
-            gravity = Gravity.CENTER_VERTICAL; background = surface(); setPadding(dp(10), dp(5), dp(9), dp(5))
+            gravity = Gravity.CENTER_VERTICAL; background = surface(); minimumHeight = dp(64); setPadding(dp(10), dp(5), dp(9), dp(5))
             isFocusable = true; setOnClickListener { onClick() }
             addView(icon, LinearLayout.LayoutParams(dp(34), dp(40)))
             val copy = LinearLayout(this@MainActivity).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_VERTICAL }
             copy.addView(label(title, 15f, ink).apply { maxLines = 2 })
             if (value.isNotBlank()) copy.addView(label(value, 12f, muted).apply { maxLines = 2 })
-            addView(copy, LinearLayout.LayoutParams(0, -1, 1f))
-            addView(label("›", 25f, muted).apply { gravity = Gravity.CENTER }, LinearLayout.LayoutParams(dp(22), -1))
+            addView(copy, LinearLayout.LayoutParams(0, -2, 1f))
+            addView(label("›", 25f, muted).apply { setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, 25f); gravity = Gravity.CENTER; importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO }, LinearLayout.LayoutParams(dp(22), -1))
         }
     }
 
@@ -756,10 +759,10 @@ class MainActivity : Activity() {
             root.setPadding(dp(18), bars.top + dp(10), dp(18), bars.bottom + dp(24)); insets
         }
         val bar = android.widget.FrameLayout(this)
-        val back = text("‹", 38f, Color.WHITE, false).apply { gravity = Gravity.CENTER; setOnClickListener { onBack() } }
-        bar.addView(label(titleText, 20f, ink, true).apply { gravity = Gravity.CENTER; setPadding(dp(46), 0, dp(46), 0) }, android.widget.FrameLayout.LayoutParams(-1, dp(58), Gravity.CENTER))
+        val back = text("‹", 38f, Color.WHITE, false).apply { setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, 38f); contentDescription = "Назад"; isFocusable = true; gravity = Gravity.CENTER; setOnClickListener { onBack() } }
+        bar.addView(label(titleText, 20f, ink, true).apply { gravity = Gravity.CENTER; minHeight = dp(58); maxLines = Int.MAX_VALUE; setPadding(dp(46), 0, dp(46), 0) }, android.widget.FrameLayout.LayoutParams(-1, -2, Gravity.CENTER))
         bar.addView(back, android.widget.FrameLayout.LayoutParams(dp(48), dp(52), Gravity.START or Gravity.CENTER_VERTICAL))
-        root.addView(bar, LinearLayout.LayoutParams(-1, dp(58)))
+        root.addView(bar, LinearLayout.LayoutParams(-1, -2))
         dialog.setContentView(scroll)
         ViewCompat.requestApplyInsets(scroll)
         return dialog to root
@@ -838,7 +841,7 @@ class MainActivity : Activity() {
     private fun maybeRequestExactAlarmPermission(force: Boolean = false) {
         if (Build.VERSION.SDK_INT < 31) return
         val prefs = getSharedPreferences(SETTINGS_PREFS, Context.MODE_PRIVATE)
-        if (!prefs.getBoolean(NOTIFICATIONS_ENABLED_KEY, true)) return
+        if (!prefs.getBoolean(NOTIFICATIONS_ENABLED_KEY, false)) return
         val am = getSystemService(Context.ALARM_SERVICE) as AlarmManager
         if (am.canScheduleExactAlarms()) return
         if (!force && prefs.getBoolean(EXACT_ALARM_PROMPTED_KEY, false)) return
@@ -859,7 +862,7 @@ class MainActivity : Activity() {
                     update(); schedulePrayerNotifications(); refreshSettings()
                 }
             }
-            pair.second.addView(choice, LinearLayout.LayoutParams(-1, dp(64)).apply { bottomMargin = dp(10) })
+            pair.second.addView(choice, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(10) })
         }
         pair.second.addView(label("Время намазов зависит от выбранного города. Направление киблы определяется по местоположению телефона.", 14f, muted).apply { setPadding(0, dp(12), 0, 0) })
         pair.first.show()
@@ -880,23 +883,25 @@ class MainActivity : Activity() {
             setPadding(dp(7), dp(16), dp(7), dp(16))
             contentDescription = "Уведомления"
         }, LinearLayout.LayoutParams(dp(36), dp(58)))
-        master.addView(text("Уведомления", 16f, Color.WHITE, true).apply { gravity = Gravity.CENTER_VERTICAL }, LinearLayout.LayoutParams(0, dp(58), 1f))
+        master.addView(text("Уведомления", 16f, Color.WHITE, true).apply { gravity = Gravity.CENTER_VERTICAL; minHeight = dp(58) }, LinearLayout.LayoutParams(0, -2, 1f))
         master.addView(Switch(this).apply {
-            isChecked = prefs.getBoolean(NOTIFICATIONS_ENABLED_KEY, true)
+            contentDescription = "Уведомления"
+            isChecked = prefs.getBoolean(NOTIFICATIONS_ENABLED_KEY, false)
             setOnCheckedChangeListener { _, checked -> prefs.edit().putBoolean(NOTIFICATIONS_ENABLED_KEY, checked).apply(); schedulePrayerNotifications(); if (checked) {
                 if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(this@MainActivity, "android.permission.POST_NOTIFICATIONS") != android.content.pm.PackageManager.PERMISSION_GRANTED) requestPermissions(arrayOf("android.permission.POST_NOTIFICATIONS"), 7001)
                 else maybeRequestExactAlarmPermission(true)
             } }
         }, LinearLayout.LayoutParams(dp(60), dp(58)))
-        root.addView(master, LinearLayout.LayoutParams(-1, dp(66)).apply { topMargin = dp(12) })
-        root.addView(text("Приложение будет напоминать о выбранных намазах в указанное вами время.", 13f, Color.rgb(170, 198, 186), false).apply { setPadding(dp(8), dp(12), dp(8), dp(12)) })
-        root.addView(screenRow("◷", "Когда напоминать", notifyBeforeLabel(prefs.getInt(NOTIFY_BEFORE_MIN_KEY, 5))) { showNotifyBeforeDialog { showNotificationsScreen(onBack) } }, LinearLayout.LayoutParams(-1, dp(64)).apply { topMargin = dp(6) })
-        root.addView(screenRow("✓", "Намазы для уведомлений", selectedPrayerSummary(prefs)) { showPrayerSelectionDialog { showNotificationsScreen(onBack) } }, LinearLayout.LayoutParams(-1, dp(64)).apply { topMargin = dp(8) })
+        master.minimumHeight = dp(66)
+        root.addView(master, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(12) })
+        root.addView(text("Приложение будет напоминать о выбранных намазах в указанное вами время.", 13f, Color.rgb(170, 198, 186), false).apply { maxLines = Int.MAX_VALUE; setPadding(dp(8), dp(12), dp(8), dp(12)) })
+        root.addView(screenRow("◷", "Когда напоминать", notifyBeforeLabel(prefs.getInt(NOTIFY_BEFORE_MIN_KEY, 5))) { showNotifyBeforeDialog { showNotificationsScreen(onBack) } }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(6) })
+        root.addView(screenRow("✓", "Намазы для уведомлений", selectedPrayerSummary(prefs)) { showPrayerSelectionDialog { showNotificationsScreen(onBack) } }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
         val sound = runCatching { RingtoneManager.getRingtone(this, selectedNotificationSound(this))?.getTitle(this) }.getOrNull() ?: "Системный звук"
-        root.addView(screenRow("♪", "Звук уведомления", sound) { showSoundScreen() }, LinearLayout.LayoutParams(-1, dp(64)).apply { topMargin = dp(8) })
+        root.addView(screenRow("♪", "Звук уведомления", sound) { showSoundScreen() }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
         if (Build.VERSION.SDK_INT >= 31) {
             val am = getSystemService(Context.ALARM_SERVICE) as AlarmManager
-            root.addView(screenRow("◉", "Точные уведомления", if (am.canScheduleExactAlarms()) "Разрешены" else "Нужно разрешить") { maybeRequestExactAlarmPermission(true) }, LinearLayout.LayoutParams(-1, dp(64)).apply { topMargin = dp(8) })
+            root.addView(screenRow("◉", "Точные уведомления", if (am.canScheduleExactAlarms()) "Разрешены" else "Нужно разрешить") { maybeRequestExactAlarmPermission(true) }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
         }
         root.addView(label("Со звуком и вибрацией", 13f, muted).apply { gravity = Gravity.CENTER; background = surface(); setPadding(dp(10), dp(16), dp(10), dp(16)) }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(20) })
         dialog.show()
@@ -909,8 +914,8 @@ class MainActivity : Activity() {
         fun create(): Pair<android.app.Dialog, LinearLayout> = fullScreenPanel("Настройки") { dialog.dismiss() }
         val pair = create(); dialog = pair.first; val root = pair.second
 
-        root.addView(screenRow(R.drawable.ic_notification, "Уведомления", if (prefs.getBoolean(NOTIFICATIONS_ENABLED_KEY, true)) "Включены" else "Выключены") { showNotificationsScreen { showSettingsDialog() } }, LinearLayout.LayoutParams(-1, dp(64)).apply { topMargin = dp(12) })
-        root.addView(screenRow(R.drawable.ic_location, "Город", selectedCity) { showCityChoice { showSettingsDialog() } }, LinearLayout.LayoutParams(-1, dp(64)).apply { topMargin = dp(8) })
+        root.addView(screenRow(R.drawable.ic_notification, "Уведомления", if (prefs.getBoolean(NOTIFICATIONS_ENABLED_KEY, false)) "Включены" else "Выключены") { showNotificationsScreen { showSettingsDialog() } }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(12) })
+        root.addView(screenRow(R.drawable.ic_location, "Город", selectedCity) { showCityChoice { showSettingsDialog() } }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
 
         val languageRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
@@ -931,73 +936,30 @@ class MainActivity : Activity() {
         languageRow.addView(languageSwitch, LinearLayout.LayoutParams(dp(56), dp(52)))
         languageRow.setOnClickListener { languageSwitch.isChecked = !languageSwitch.isChecked }
         root.addView(languageRow, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
-        root.addView(screenRow("↻", "Обновление расписания", "Сохранение для работы без интернета") {
-            showScheduleUpdates()
-        }, LinearLayout.LayoutParams(-1, -2).apply { height = dp(76); topMargin = dp(8) })
 
         root.addView(screenRow("ⓘ", "О приложении", "Версия ${packageManager.getPackageInfo(packageName, 0).versionName}") {
             showAboutDialog()
-        }, LinearLayout.LayoutParams(-1, dp(64)).apply { topMargin = dp(8) })
+        }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
         dialog.show()
     }
 
-    private fun scheduleStorageStatus(): String {
-        val days = currentData()
-        val period = "${formatRussianDate(LocalDate.parse(days.first().date))} — ${formatRussianDate(LocalDate.parse(days.last().date))}"
-        val saved = if (scheduleRepository.hasDownloads()) "Расписание сохранено на телефоне" else "Используется встроенное расписание"
-        val checked = scheduleRepository.lastSuccess().takeIf { it > 0 }?.let {
-            java.time.Instant.ofEpochMilli(it).atZone(zone).format(DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm"))
-        } ?: "ещё не проверялось"
-        return "$saved\n$selectedCity: $period\nДней: ${days.size}\nПоследняя проверка: $checked"
-    }
+    override fun onRetainNonConfigurationInstance(): Any = scheduleUpdateChecker
 
-    private fun showScheduleUpdates() {
-        val pair = fullScreenPanel("Расписание") { showSettingsDialog() }
-        panelRoute = "schedules"
-        scheduleStatusText = label(scheduleStorageStatus(), 16f, ink).apply {
-            setPadding(dp(16), dp(16), dp(16), dp(16)); background = surface()
+    private fun onScheduleUpdated() {
+        // A completed download must update alarms even if the activity has closed.
+        alarmExecutor.execute {
+            val prefs = getSharedPreferences(SETTINGS_PREFS, Context.MODE_PRIVATE)
+            val city = prefs.getString("city", "Сафаджай") ?: "Сафаджай"
+            runCatching { rebuildPrayerNotifications(dataForCity(city), city,
+                prefs.getBoolean(NOTIFICATIONS_ENABLED_KEY, false),
+                prefs.getInt(NOTIFY_BEFORE_MIN_KEY, 5).coerceIn(0, 180),
+                prayerKeys.filter { prefs.getBoolean("notify_$it", true) }.toSet()) }
+                .onFailure { android.util.Log.w("ScheduleUpdate", "Alarm refresh failed: ${it.javaClass.simpleName}") }
         }
-        pair.second.addView(scheduleStatusText, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(12) })
-        scheduleCheckButton = button(if (checkingSchedules) "Проверяем…" else "Проверить обновления") {
-            checkScheduleUpdates(true)
-        }.apply { isEnabled = !checkingSchedules }
-        pair.second.addView(scheduleCheckButton, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(16) })
-        pair.second.addView(label("При открытии приложение проверяет обновления не чаще раза в неделю. Здесь можно проверить вручную.\n\nРасписание скачивается целиком для обоих городов и работает без интернета. Если появится новый год, он будет добавлен после скачивания.", 14f, muted).apply {
-            setPadding(dp(8), dp(16), dp(8), dp(8))
-        })
-        pair.first.show()
-    }
-
-    private fun checkScheduleUpdates(manual: Boolean) {
-        if (checkingSchedules) return
-        val manager = getSystemService(Context.CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
-        val network = manager.activeNetwork
-        val online = network != null && manager.getNetworkCapabilities(network)
-            ?.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET) == true
-        if (!manual && !online) return
-        checkingSchedules = true
-        scheduleCheckButton?.apply { isEnabled = false; text = "Проверяем…" }
-        scheduleWorker.execute {
-            val result = scheduleRepository.sync(manual, online)
-            if (result.changed) {
-                // Read the latest settings and serialize with any pending city/alarm changes.
-                alarmExecutor.execute {
-                    val prefs = getSharedPreferences(SETTINGS_PREFS, Context.MODE_PRIVATE)
-                    val city = prefs.getString("city", "Сафаджай") ?: "Сафаджай"
-                    runCatching { rebuildPrayerNotifications(dataForCity(city), city,
-                        prefs.getBoolean(NOTIFICATIONS_ENABLED_KEY, true),
-                        prefs.getInt(NOTIFY_BEFORE_MIN_KEY, 5).coerceIn(0, 180),
-                        prayerKeys.filter { prefs.getBoolean("notify_$it", true) }.toSet()) }
-                }
-            }
-            handler.post {
-                checkingSchedules = false
-                if (!isDestroyed && !isFinishing) {
-                    if (result.changed) { lastAlarmSignature = ""; lastCalendarRender = ""; lastPrayerRender = ""; update() }
-                    scheduleStatusText?.text = scheduleStorageStatus() + if (manual) "\n\n${result.message}" else ""
-                    scheduleCheckButton?.apply { isEnabled = true; text = "Проверить обновления" }
-                    if (manual) Toast.makeText(this, result.message, Toast.LENGTH_LONG).show()
-                }
+        handler.post {
+            if (!isDestroyed && !isFinishing) {
+                lastAlarmSignature = ""; lastCalendarRender = ""; lastPrayerRender = ""
+                update()
             }
         }
     }
@@ -1157,12 +1119,12 @@ class MainActivity : Activity() {
 
     private fun schedulePrayerNotifications() {
         val prefs = getSharedPreferences(SETTINGS_PREFS, Context.MODE_PRIVATE)
-        val signature = listOf(selectedCity, LocalDate.now(zone), scheduleRepository.revision(), prefs.getBoolean(NOTIFICATIONS_ENABLED_KEY, true), prefs.getInt(NOTIFY_BEFORE_MIN_KEY, 5), prefs.getString(SOUND_URI_KEY, ""), prayerKeys.map { prefs.getBoolean("notify_$it", true) }, if (Build.VERSION.SDK_INT >= 31) (getSystemService(Context.ALARM_SERVICE) as AlarmManager).canScheduleExactAlarms() else true).joinToString("|")
+        val signature = listOf(selectedCity, LocalDate.now(zone), scheduleRepository.revision(), prefs.getBoolean(NOTIFICATIONS_ENABLED_KEY, false), prefs.getInt(NOTIFY_BEFORE_MIN_KEY, 5), prefs.getString(SOUND_URI_KEY, ""), prayerKeys.map { prefs.getBoolean("notify_$it", true) }, if (Build.VERSION.SDK_INT >= 31) (getSystemService(Context.ALARM_SERVICE) as AlarmManager).canScheduleExactAlarms() else true).joinToString("|")
         if (signature == lastAlarmSignature) return
         lastAlarmSignature = signature
         val days = currentData().toList()
         val city = selectedCity
-        val enabled = prefs.getBoolean(NOTIFICATIONS_ENABLED_KEY, true)
+        val enabled = prefs.getBoolean(NOTIFICATIONS_ENABLED_KEY, false)
         val before = prefs.getInt(NOTIFY_BEFORE_MIN_KEY, 5).coerceIn(0, 180)
         val selectedKeys = prayerKeys.filter { prefs.getBoolean("notify_$it", true) }.toSet()
         alarmExecutor.execute { runCatching { rebuildPrayerNotifications(days, city, enabled, before, selectedKeys) }.onFailure {
@@ -1327,6 +1289,8 @@ class MainActivity : Activity() {
                 gravity = Gravity.CENTER
                 isClickable = inMonth
                 isFocusable = isClickable
+                contentDescription = formatRussianDate(d) + eventsFor(d).joinToString("; ", prefix = if (hasEvent) "; " else "")
+                this.isSelected = isSelected
                 if (isClickable) {
                     setOnClickListener {
                         selectedDate = d
@@ -1353,12 +1317,16 @@ class MainActivity : Activity() {
                     }
                 }
             }
-            cell.addView(dayNumber, LinearLayout.LayoutParams(dp(29), dp(27)))
+            dayNumber.maxLines = 1
+            val numberHeight = maxOf(dp(27), kotlin.math.ceil(dayNumber.paint.fontSpacing).toInt())
+            val numberWidth = maxOf(dp(29), kotlin.math.ceil(dayNumber.paint.measureText("31")).toInt() + dp(4))
+            cell.addView(dayNumber, LinearLayout.LayoutParams(numberWidth, numberHeight))
 
             val dot = TextView(this).apply {
                 gravity = Gravity.CENTER
                 text = if (hasEvent && inMonth) "•" else ""
-                textSize = 12f
+                setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, 12f)
+                importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
                 setTextColor(if (isToday) Color.rgb(48, 228, 161) else Color.rgb(100, 190, 150))
                 setIncludeFontPadding(false)
             }
@@ -1366,7 +1334,7 @@ class MainActivity : Activity() {
 
             val lp = android.widget.GridLayout.LayoutParams().apply {
                 width = 0
-                height = dp(35)
+                height = maxOf(dp(35), numberHeight + dp(8))
                 columnSpec = android.widget.GridLayout.spec(android.widget.GridLayout.UNDEFINED, 1f)
             }
             calendarGrid.addView(cell, lp)
@@ -1413,6 +1381,7 @@ class MainActivity : Activity() {
         updateTabStyles()
         placeText.text = selectedCity
         dateText.text = "${formatRussianDate(selected)}\n${hijriText(selected)}"
+        dateText.contentDescription = "${dateText.text}. Открыть календарь"
         currentTimeText.text = "Сейчас " + now.format(DateTimeFormatter.ofPattern("HH:mm"))
         updateTodayEventBanner(if (scheduleTabSelected) selected else todayDate)
         if (scheduleTabSelected) {
@@ -1429,14 +1398,14 @@ class MainActivity : Activity() {
             nextName.text = "Расписание"
             countdownLabel.visibility = View.VISIBLE
             countdown.text = "—"
-            countdownLabel.text = "Нужно загрузить расписание"
+            countdownLabel.text = "Нет расписания на эту дату"
             progress.progress = 0f
             countdownStart.text = ""
             val missingKey = "missing|$selected|$selectedCity"
             if (lastPrayerRender != missingKey) {
                 lastPrayerRender = missingKey
                 prayerList.removeAllViews()
-                prayerList.addView(label("На эту дату расписание не загружено.\nОткройте настройки → Обновление расписания.", 14f, muted).apply { gravity = Gravity.CENTER; setPadding(dp(16), dp(16), dp(16), dp(16)) })
+                prayerList.addView(label("На эту дату расписание отсутствует.", 14f, muted).apply { gravity = Gravity.CENTER; setPadding(dp(16), dp(16), dp(16), dp(16)) })
             }
             return
         }
@@ -1566,7 +1535,7 @@ class MainActivity : Activity() {
                 visibility = if (showTatar) View.VISIBLE else View.GONE
                 gravity = Gravity.START
                 setIncludeFontPadding(false)
-                maxLines = 2
+                maxLines = Int.MAX_VALUE
             }
             nameBox.addView(ru, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
             nameBox.addView(tt, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(3) })
@@ -1609,7 +1578,6 @@ class MainActivity : Activity() {
         if (::placeText.isInitialized) {
             schedulePrayerNotifications()
             update()
-            checkScheduleUpdates(false)
             if (panelRoute == "notifications") showNotificationsScreen { showSettingsDialog() }
         }
         activeCompass?.start()
@@ -1648,7 +1616,7 @@ class PrayerNotificationReceiver : BroadcastReceiver() {
         val date = intent.getStringExtra("date") ?: return
 
         val prefs = context.getSharedPreferences(SETTINGS_PREFS, Context.MODE_PRIVATE)
-        if (!prefs.getBoolean(NOTIFICATIONS_ENABLED_KEY, true) || !prefs.getBoolean("notify_$key", true)) {
+        if (!prefs.getBoolean(NOTIFICATIONS_ENABLED_KEY, false) || !prefs.getBoolean("notify_$key", true)) {
             scheduleNextStoredPrayer(context, date, key)
             return
         }
@@ -1690,7 +1658,7 @@ class PrayerNotificationReceiver : BroadcastReceiver() {
 
 private fun scheduleNextStoredPrayer(context: Context, firedDate: String, key: String) {
     val prefs = context.getSharedPreferences(SETTINGS_PREFS, Context.MODE_PRIVATE)
-    if (!prefs.getBoolean(NOTIFICATIONS_ENABLED_KEY, true) || !prefs.getBoolean("notify_$key", true)) return
+    if (!prefs.getBoolean(NOTIFICATIONS_ENABLED_KEY, false) || !prefs.getBoolean("notify_$key", true)) return
     val notifyBeforeMinutes = prefs.getInt(NOTIFY_BEFORE_MIN_KEY, 5).coerceIn(0, 180)
     val lines = prefs.getString("scheduled_prayers", "")
         .orEmpty().lineSequence().filter { it.isNotBlank() }.toList()
@@ -1735,7 +1703,7 @@ class PrayerBootReceiver : BroadcastReceiver() {
         val pending = goAsync()
         try {
             val prefs = context.getSharedPreferences(SETTINGS_PREFS, Context.MODE_PRIVATE)
-            if (!prefs.getBoolean(NOTIFICATIONS_ENABLED_KEY, true)) return
+            if (!prefs.getBoolean(NOTIFICATIONS_ENABLED_KEY, false)) return
             val notifyBeforeMinutes = prefs.getInt(NOTIFY_BEFORE_MIN_KEY, 5).coerceIn(0, 180)
             val lines = prefs.getString("scheduled_prayers", "")
                 .orEmpty().lineSequence().filter { it.isNotBlank() }.toList()
