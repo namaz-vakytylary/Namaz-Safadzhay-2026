@@ -37,9 +37,7 @@ class NotificationTest {
 
     @Before fun setup() {
         app = RuntimeEnvironment.getApplication()
-        // UI tests must not contact the public update service.
-        app.getSharedPreferences("schedule_updates", Context.MODE_PRIVATE).edit()
-            .putLong("last_attempt", System.currentTimeMillis()).commit()
+        TestNetwork.offline(app)
         prefs = app.getSharedPreferences("settings", Context.MODE_PRIVATE)
         prefs.edit().clear().putBoolean("notifications_enabled", true).putInt("notify_before_min", 5).apply()
         nm = app.getSystemService(NotificationManager::class.java)
@@ -132,6 +130,16 @@ class NotificationTest {
         val i = shadowOf(alarm.operation).savedIntent
         assertEquals(tomorrow.toString(), i.getStringExtra("date"))
         assertEquals("fajr", i.getStringExtra("key"))
+    }
+
+    @Test fun receiverChainsFromDecember31ToJanuary1WithoutOpeningApp() {
+        val end = LocalDate.of(2026, 12, 31)
+        val next = LocalDate.of(2027, 1, 1)
+        prefs.edit().putString("scheduled_prayers", stored(next, time = "06:00")).commit()
+        fire(date = end)
+        val alarm = shadowOf(am).scheduledAlarms.single()
+        assertEquals(next.atTime(5, 55).atZone(zone).toInstant().toEpochMilli(), alarm.triggerAtMs)
+        assertEquals("2027-01-01", shadowOf(alarm.operation).savedIntent.getStringExtra("date"))
     }
 
     @Test fun withoutExactAlarmPermissionFallsBackWithoutCrash() {
