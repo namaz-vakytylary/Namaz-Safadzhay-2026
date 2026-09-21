@@ -1,10 +1,13 @@
 name: Build Namaz Vakytylary TEST offline schedules
 
 on:
+  push:
+    branches: ["test/1.2-test3", "test/1.2-test3-silent-updates"]
   workflow_dispatch:
 
 jobs:
   build:
+    if: startsWith(github.ref, 'refs/heads/test/1.2-test3')
     runs-on: ubuntu-latest
 
     steps:
@@ -32,7 +35,7 @@ jobs:
         run: python3 scripts/preflight.py
 
       - name: Unit tests and lint
-        run: ./gradlew --no-daemon :app:testReleaseUnitTest :app:lintRelease
+        run: ./gradlew --no-daemon clean :app:testReleaseUnitTest :app:lintRelease
 
       - name: Build RELEASE APK
         run: |
@@ -99,7 +102,7 @@ jobs:
       - name: Upload RELEASE APK
         uses: actions/upload-artifact@v5
         with:
-          name: Namaz-Vakytylary-TEST-1.2-test3
+          name: Namaz-Vakytylary-TEST-1.2-test3.1
           path: app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
           retention-days: 30
