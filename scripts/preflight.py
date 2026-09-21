@@ -33,8 +33,9 @@ assert 'android.permission.ACCESS_NETWORK_STATE' in permissions
 assert 'android.permission.ACCESS_BACKGROUND_LOCATION' not in permissions
 app = manifest.find('application')
 assert app.get(ns+'allowBackup') == 'false'
+assert app.get(ns+'usesCleartextTraffic') == 'false'
 build = (ROOT / 'app/build.gradle.kts').read_text()
-for required in ['applicationId = "ru.namaz.safadzhay.test"','versionCode = 35','versionName = "1.2-test3"','namaz-release.jks','isDebuggable = false']:
+for required in ['applicationId = "ru.namaz.safadzhay.test"','versionCode = 36','versionName = "1.2-test3.1"','namaz-release.jks','isDebuggable = false']:
     assert required in build, required
 assert not (ROOT / 'app/namaz-test.jks').exists()
 assert (ROOT / 'app/namaz-release.jks').is_file()
