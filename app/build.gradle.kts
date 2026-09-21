@@ -3,11 +3,9 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
-
 android {
     namespace = "ru.namaz.safadzhay"
     compileSdk = 35
-
 
     defaultConfig {
         applicationId = "ru.namaz.safadzhay.test"
@@ -16,7 +14,6 @@ android {
         versionCode = 35
         versionName = "1.2-test3"
     }
-
 
     signingConfigs {
         create("namazRelease") {
@@ -27,7 +24,6 @@ android {
         }
     }
 
-
     buildTypes {
         getByName("release") {
             isDebuggable = false
@@ -35,7 +31,6 @@ android {
             signingConfig = signingConfigs.getByName("namazRelease")
         }
     }
-
 
     testOptions {
         unitTests.isIncludeAndroidResources = true
@@ -49,7 +44,6 @@ android {
         }
     }
 
-
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -57,13 +51,13 @@ android {
     }
 }
 
-
 kotlin {
     jvmToolchain(17)
 }
-
 
 dependencies {
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.robolectric:robolectric:4.16")
     implementation("androidx.core:core-ktx:1.15.0")
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.2")
+}
