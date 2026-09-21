@@ -28,17 +28,18 @@ ns = '{http://schemas.android.com/apk/res/android}'
 permissions = {x.get(ns+'name') for x in manifest.findall('uses-permission')}
 for permission in ['POST_NOTIFICATIONS','VIBRATE','RECEIVE_BOOT_COMPLETED','SCHEDULE_EXACT_ALARM','ACCESS_FINE_LOCATION','ACCESS_COARSE_LOCATION']:
     assert 'android.permission.'+permission in permissions, permission
-assert 'android.permission.INTERNET' not in permissions
+assert 'android.permission.INTERNET' in permissions
+assert 'android.permission.ACCESS_NETWORK_STATE' in permissions
 assert 'android.permission.ACCESS_BACKGROUND_LOCATION' not in permissions
 app = manifest.find('application')
 assert app.get(ns+'allowBackup') == 'false'
 build = (ROOT / 'app/build.gradle.kts').read_text()
-for required in ['applicationId = "ru.namaz.safadzhay"','versionCode = 31','versionName = "1.2"','namaz-release.jks','isDebuggable = false']:
+for required in ['applicationId = "ru.namaz.safadzhay.test"','versionCode = 35','versionName = "1.2-test3"','namaz-release.jks','isDebuggable = false']:
     assert required in build, required
 assert not (ROOT / 'app/namaz-test.jks').exists()
 assert (ROOT / 'app/namaz-release.jks').is_file()
 for xml in (ROOT/'app/src/main/res').rglob('*.xml'): ET.parse(xml)
-assert 'ТЕСТ' not in (ROOT/'app/src/main/res/values/strings.xml').read_text()
+assert 'Намаз Вакытлары Тест' in (ROOT/'app/src/main/res/values/strings.xml').read_text()
 resources = {p.stem for p in (ROOT/'app/src/main/res').rglob('*') if p.is_file()}
 for code in SRC.glob('*.kt'):
     for res in re.findall(r'(?<!android\.)R\.(?:drawable|mipmap)\.(\w+)',code.read_text()):
@@ -53,4 +54,4 @@ assert workflow.index('python3 scripts/preflight.py') < workflow.index(':app:ass
 assert hashlib.sha256((ROOT/'gradle/wrapper/gradle-wrapper.jar').read_bytes()).hexdigest() == '2db75c40782f5e8ba1fc278a5574bab070adccb2d21ca5a6e5ed840888448046'
 assert 'distributionSha256Sum=31c55713e40233a8303827ceb42ca48a47267a0ad4bab9177123121e71524c26' in (ROOT/'gradle/wrapper/gradle-wrapper.properties').read_text()
 subprocess.run(['bash','-n',str(ROOT/'gradlew')],check=True)
-print('PASS stable identity, original data fixture, permissions, XML, resources, shell syntax and CI gates')
+print('PASS separate test identity, original data fixture, permissions, XML, resources, shell syntax and CI gates')
