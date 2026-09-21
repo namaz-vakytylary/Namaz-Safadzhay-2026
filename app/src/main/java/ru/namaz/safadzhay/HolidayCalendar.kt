@@ -40,7 +40,7 @@ internal object HolidayCalendar {
         val labels = labels(date)
         // Other dates in the calendar retain their Friday label. On today's
         // banner, only Jumu'ah expires; coinciding holidays remain visible.
-        return if (date == now.toLocalDate() && (asr == null || !now.toLocalTime().isBefore(asr)))
+        return if (date == now.toLocalDate() && asr != null && !now.toLocalTime().isBefore(asr))
             labels.filterNot { it == "Джума-намаз" }
         else labels
     }
