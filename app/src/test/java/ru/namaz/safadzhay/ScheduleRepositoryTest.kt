@@ -67,7 +67,7 @@ class ScheduleRepositoryTest {
 
     @Test fun downloadPersistsAcrossRestartAndRetainsBuiltInDaysOffline() {
         publish(fixture())
-        assertTrue(repository().sync(false, true).changed)
+        assertTrue(repository().sync(online = true).changed)
         val restarted = repository()
         val days = restarted.merged("safadzhay", listOf(original))
         assertEquals(listOf("2026-08-01", "2027-01-01"), days.map { it.date })
@@ -75,43 +75,39 @@ class ScheduleRepositoryTest {
         assertEquals("06:00", days.last().fajr)
         assertEquals(1, restarted.merged("moscow", emptyList()).size)
         calls.clear()
-        assertFalse(restarted.sync(true, false).changed)
+        assertFalse(restarted.sync(online = false).changed)
         assertTrue(calls.isEmpty())
         assertTrue(File(context.filesDir, "downloaded-schedules.json").isFile)
     }
 
-    @Test fun unchangedRevisionDownloadsOnlyManifestAndWeeklyCheckIsThrottled() {
+    @Test fun everyNewCheckFetchesManifestButUnchangedRevisionDoesNotRedownloadJson() {
         publish(fixture())
         val repo = repository()
-        repo.sync(false, true)
-        calls.clear()
-        repo.sync(false, true)
-        assertTrue(calls.isEmpty())
-        now += ScheduleRepository.CHECK_INTERVAL
-        repo.sync(false, true)
-        assertEquals(listOf("manifest.json"), calls)
-        calls.clear()
-        repo.sync(true, true)
-        assertEquals(listOf("manifest.json"), calls)
+        repo.sync(true)
+        repeat(3) {
+            calls.clear()
+            repo.sync(true)
+            assertEquals(listOf("manifest.json"), calls)
+        }
     }
 
     @Test fun corruptDownloadCannotReplaceWorkingSnapshot() {
         publish(fixture())
-        val repo = repository(); repo.sync(true, true)
+        val repo = repository(); repo.sync(online = true)
         val before = File(context.filesDir, "downloaded-schedules.json").readBytes()
         publish(fixture(version = 2, fajr = "06:05"))
         responses["2027.json"] = "broken".toByteArray()
-        assertFalse(repo.sync(true, true).changed)
+        assertFalse(repo.sync(online = true).changed)
         assertArrayEquals(before, File(context.filesDir, "downloaded-schedules.json").readBytes())
         assertEquals("06:00", repository().merged("moscow", emptyList()).single().fajr)
     }
 
     @Test fun interruptedSecondYearDoesNotPartiallyCommitFirstYear() {
         publish(fixture())
-        val repo = repository(); repo.sync(true, true)
+        val repo = repository(); repo.sync(online = true)
         publish(fixture(version = 2, fajr = "06:05"), fixture(year = 2028))
         responses.remove("2028.json")
-        assertFalse(repo.sync(true, true).changed)
+        assertFalse(repo.sync(online = true).changed)
         val days = repository().merged("safadzhay", emptyList())
         assertEquals(1, days.size)
         assertEquals("06:00", days.single().fajr)
@@ -119,11 +115,11 @@ class ScheduleRepositoryTest {
 
     @Test fun newerRevisionUpdatesDataButOlderRevisionCannotRollItBack() {
         publish(fixture())
-        val repo = repository(); repo.sync(true, true)
+        val repo = repository(); repo.sync(online = true)
         publish(fixture(version = 2, fajr = "06:05"))
-        assertTrue(repo.sync(true, true).changed)
+        assertTrue(repo.sync(online = true).changed)
         publish(fixture())
-        assertFalse(repo.sync(true, true).changed)
+        assertFalse(repo.sync(online = true).changed)
         assertEquals("06:05", repository().merged("safadzhay", emptyList()).single().fajr)
     }
 
@@ -134,7 +130,7 @@ class ScheduleRepositoryTest {
         val bytes = payload.toString().toByteArray()
         responses["2027.json"] = bytes
         publish(entryFor(2027, 1, bytes))
-        assertFalse(repository().sync(true, true).changed)
+        assertFalse(repository().sync(online = true).changed)
         assertEquals(listOf(original), repository().merged("safadzhay", listOf(original)))
         fixture()
         val invalid = JSONObject(String(responses.getValue("2027.json")))
@@ -142,25 +138,25 @@ class ScheduleRepositoryTest {
         val invalidBytes = invalid.toString().toByteArray()
         responses["2027.json"] = invalidBytes
         publish(entryFor(2027, 1, invalidBytes))
-        assertFalse(repository().sync(true, true).changed)
+        assertFalse(repository().sync(online = true).changed)
     }
 
     @Test fun unsafeUrlDuplicateYearAndUnsupportedSchemaAreRejected() {
         val entry = fixture().put("path", "https://example.com/2027.json")
         publish(entry)
-        assertFalse(repository().sync(true, true).changed)
+        assertFalse(repository().sync(online = true).changed)
         assertEquals(listOf("manifest.json"), calls)
         calls.clear()
         val valid = fixture(); publish(valid, valid)
-        assertFalse(repository().sync(true, true).changed)
+        assertFalse(repository().sync(online = true).changed)
         assertEquals(listOf("manifest.json"), calls)
         responses["manifest.json"] = "{\"schemaVersion\":2,\"schedules\":[]}".toByteArray()
-        assertFalse(repository().sync(true, true).changed)
+        assertFalse(repository().sync(online = true).changed)
     }
 
     @Test fun offlineFirstLaunchAndInvalidSavedFileFallBackToBuiltIn() {
         val repo = repository()
-        assertFalse(repo.sync(false, false).changed)
+        assertFalse(repo.sync(online = false).changed)
         assertTrue(calls.isEmpty())
         File(context.filesDir, "downloaded-schedules.json").writeText("invalid")
         assertEquals(listOf(original), repository().merged("safadzhay", listOf(original)))
@@ -171,7 +167,7 @@ class ScheduleRepositoryTest {
         val payload = javaClass.getResourceAsStream("/schedules/2026.json")!!.use { it.readBytes() }
         responses["manifest.json"] = manifest; responses["2026.json"] = payload
         val repo = repository()
-        assertTrue(repo.sync(true, true).changed)
+        assertTrue(repo.sync(online = true).changed)
         val safadzhay = repo.merged("safadzhay", emptyList())
         val moscow = repo.merged("moscow", emptyList())
         assertEquals(153, safadzhay.size); assertEquals(153, moscow.size)
@@ -180,11 +176,92 @@ class ScheduleRepositoryTest {
         assertEquals("18:04", moscow.last().isha)
     }
 
+    @Test fun missingNextYearPreservesCurrentYearAndOnlyNewYearIsDownloaded() {
+        val manifest = javaClass.getResourceAsStream("/schedules/manifest.json")!!.use { it.readBytes() }
+        val payload = javaClass.getResourceAsStream("/schedules/2026.json")!!.use { it.readBytes() }
+        responses["manifest.json"] = manifest; responses["2026.json"] = payload
+        val repo = repository(); repo.sync(true)
+        assertFalse(repo.merged("moscow", emptyList()).any { it.date.startsWith("2027") })
+        val old = JSONObject(String(manifest)).getJSONArray("schedules").getJSONObject(0)
+        val nextYear = fixture()
+        publish(old, nextYear)
+        calls.clear(); assertTrue(repo.sync(true).changed)
+        assertEquals(listOf("manifest.json", "2027.json"), calls)
+        val dates = repository().merged("moscow", emptyList()).map { it.date }
+        assertEquals(listOf("2026-12-31", "2027-01-01"), dates.takeLast(2))
+        val revised = fixture(version = 2, fajr = "06:02")
+        publish(old, revised); calls.clear(); assertTrue(repo.sync(true).changed)
+        assertEquals(listOf("manifest.json", "2027.json"), calls)
+        publish(old, revised, fixture(2028)); calls.clear(); assertTrue(repo.sync(true).changed)
+        assertEquals(listOf("manifest.json", "2028.json"), calls)
+    }
+
+    private fun rejectsReplacement(change: (JSONObject, JSONObject) -> Unit) {
+        publish(fixture()); val repo = repository(); repo.sync(true)
+        val before = File(context.filesDir, "downloaded-schedules.json").readBytes()
+        val entry = fixture(version = 2)
+        val body = JSONObject(String(responses.getValue("2027.json")))
+        change(body, entry)
+        val bytes = body.toString().toByteArray()
+        responses["2027.json"] = bytes
+        entry.put("bytes", bytes.size).put("sha256", entryFor(2027, 2, bytes).getString("sha256"))
+        publish(entry)
+        assertFalse(repo.sync(true).changed)
+        assertArrayEquals(before, File(context.filesDir, "downloaded-schedules.json").readBytes())
+        assertEquals("06:00", repository().merged("moscow", emptyList()).single().fajr)
+    }
+    @Test fun duplicateDateRejected() = rejectsReplacement { body, entry ->
+        entry.put("dateTo", "2027-01-02").put("daysPerCity", 2)
+        body.getJSONObject("coverage").put("to", "2027-01-02")
+        for (i in 0..1) { val days = body.getJSONArray("cities").getJSONObject(i).getJSONArray("days"); days.put(days.getJSONObject(0)) }
+    }
+    @Test fun missingDateRejected() = rejectsReplacement { body, entry ->
+        entry.put("dateTo", "2027-01-02").put("daysPerCity", 2)
+        body.getJSONObject("coverage").put("to", "2027-01-02")
+    }
+    @Test fun invalidTimeRejected() = rejectsReplacement { body, _ ->
+        body.getJSONArray("cities").getJSONObject(0).getJSONArray("days").getJSONObject(0).put("fajr", "25:90")
+    }
+    @Test fun missingPrayerRejected() = rejectsReplacement { body, _ ->
+        body.getJSONArray("cities").getJSONObject(0).getJSONArray("days").getJSONObject(0).remove("isha")
+    }
+    @Test fun unknownCityRejected() = rejectsReplacement { body, entry ->
+        entry.put("cityIds", JSONArray().put("unknown").put("moscow"))
+        body.getJSONArray("cities").getJSONObject(0).put("id", "unknown")
+    }
+    @Test fun invalidYearVersionSchemaAndCoverageRejected() {
+        listOf("year", "version", "schemaVersion").forEach { key ->
+            rejectsReplacement { body, _ -> body.put(key, 0) }
+        }
+        rejectsReplacement { _, entry -> entry.put("completeYear", true) }
+    }
+    @Test fun wrongSizeAndWrongShaAndDamagedJsonPreserveSnapshot() {
+        publish(fixture()); val repo = repository(); repo.sync(true)
+        val before = File(context.filesDir, "downloaded-schedules.json").readBytes()
+        val wrongSize = fixture(version = 2); wrongSize.put("bytes", wrongSize.getInt("bytes") + 1); publish(wrongSize)
+        assertFalse(repo.sync(true).changed)
+        publish(fixture(version = 2).put("sha256", "0".repeat(64)))
+        assertFalse(repo.sync(true).changed)
+        val invalid = "{broken".toByteArray(); responses["2027.json"] = invalid; publish(entryFor(2027, 2, invalid))
+        assertFalse(repo.sync(true).changed)
+        assertArrayEquals(before, File(context.filesDir, "downloaded-schedules.json").readBytes())
+    }
+    @Test fun timeoutDnsAndHttpErrorAreSilentAndNextCheckRetries() {
+        publish(fixture()); val repo = repository(); repo.sync(true)
+        val before = File(context.filesDir, "downloaded-schedules.json").readBytes()
+        listOf(java.net.SocketTimeoutException(), java.net.UnknownHostException(), IOException("HTTP 503")).forEach { error ->
+            val failing = ScheduleRepository(context, { _, _ -> throw error })
+            assertFalse(failing.sync(true).changed)
+            assertArrayEquals(before, File(context.filesDir, "downloaded-schedules.json").readBytes())
+            calls.clear(); assertFalse(repository().sync(true).changed)
+            assertEquals(listOf("manifest.json"), calls)
+        }
+    }
+
     @Test fun downloadedNextYearReachesCalendarAndStoredNotificationChain() {
         publish(fixture())
-        val repo = repository(); assertTrue(repo.sync(true, true).changed)
-        context.getSharedPreferences("schedule_updates", Context.MODE_PRIVATE).edit()
-            .putLong("last_attempt", System.currentTimeMillis()).commit()
+        val repo = repository(); assertTrue(repo.sync(online = true).changed)
+        TestNetwork.offline(context)
         val controller = org.robolectric.Robolectric.buildActivity(MainActivity::class.java).create()
         val activity = controller.get()
         try {
