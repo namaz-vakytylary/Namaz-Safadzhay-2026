@@ -37,6 +37,9 @@ class NotificationTest {
 
     @Before fun setup() {
         app = RuntimeEnvironment.getApplication()
+        // UI tests must not contact the public update service.
+        app.getSharedPreferences("schedule_updates", Context.MODE_PRIVATE).edit()
+            .putLong("last_attempt", System.currentTimeMillis()).commit()
         prefs = app.getSharedPreferences("settings", Context.MODE_PRIVATE)
         prefs.edit().clear().putBoolean("notifications_enabled", true).putInt("notify_before_min", 5).apply()
         nm = app.getSystemService(NotificationManager::class.java)
@@ -73,7 +76,7 @@ class NotificationTest {
         n.contentIntent.send()
         val launched = shadowOf(app).nextStartedActivity
         assertEquals(MainActivity::class.java.name, launched.component!!.className)
-        assertEquals("ru.namaz.safadzhay.OPEN_PRAYER", launched.action)
+        assertEquals("ru.namaz.safadzhay.test.OPEN_PRAYER", launched.action)
         assertTrue(launched.flags and Intent.FLAG_ACTIVITY_CLEAR_TOP != 0)
         assertTrue(launched.flags and Intent.FLAG_ACTIVITY_SINGLE_TOP != 0)
     }
