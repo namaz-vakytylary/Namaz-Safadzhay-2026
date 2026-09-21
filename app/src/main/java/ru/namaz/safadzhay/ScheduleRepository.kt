@@ -27,7 +27,7 @@ internal class ScheduleRepository(
     private val file = AtomicFile(File(context.filesDir, "downloaded-schedules.json"))
     @Volatile private var bundles: Map<Int, Bundle> = readSaved()
 
-    data class Result(val changed: Boolean, val message: String)
+    data class Result(val changed: Boolean)
     data class Entry(val json: JSONObject, val year: Int, val version: Int, val path: String,
         val cities: Set<String>, val from: LocalDate, val to: LocalDate, val size: Int, val sha: String)
     data class Bundle(val entry: Entry, val raw: String, val cities: Map<String, List<PrayerDay>>)
@@ -44,14 +44,9 @@ internal class ScheduleRepository(
     fun hasDownloads(): Boolean = bundles.isNotEmpty()
     fun revision(): String = bundles.toSortedMap().values.joinToString("|") { it.entry.sha }
 
-    @Synchronized fun sync(force: Boolean, online: Boolean): Result {
-        if (!online) return Result(false, "Нет интернета. Сохранённое расписание доступно.")
+    @Synchronized fun sync(online: Boolean): Result {
+        if (!online) return Result(false)
         val now = clock()
-        val last = prefs.getLong("last_attempt", 0)
-        if (!force && last > 0 && now >= last && now - last < CHECK_INTERVAL) {
-            return Result(false, "Расписание уже проверялось на этой неделе.")
-        }
-        prefs.edit().putLong("last_attempt", now).commit()
         return try {
             val entries = parseManifest(download(BASE_URL + "manifest.json", MAX_MANIFEST))
             val next = bundles.toMutableMap()
@@ -89,10 +84,10 @@ internal class ScheduleRepository(
                 bundles = next.toMap()
             }
             prefs.edit().putLong("last_success", now).commit()
-            Result(changed, if (changed) "Расписание сохранено. Можно пользоваться без интернета."
-                else "Новых расписаний нет. Сохранённые данные доступны без интернета.")
-        } catch (_: Exception) {
-            Result(false, "Не удалось обновить расписание. Прежние данные сохранены.")
+            Result(changed)
+        } catch (error: Exception) {
+            android.util.Log.w("ScheduleRepository", "Schedule update rejected: ${error.javaClass.simpleName}")
+            Result(false)
         }
     }
 
@@ -118,7 +113,6 @@ internal class ScheduleRepository(
             instance ?: ScheduleRepository(context.applicationContext).also { instance = it }
         }
         const val BASE_URL = "https://emilzhianshin-dot.github.io/namaz-schedules/"
-        const val CHECK_INTERVAL = 7L * 24 * 60 * 60 * 1000
         private const val MAX_MANIFEST = 128 * 1024
         private const val MAX_BUNDLE = 1024 * 1024
         private const val MAX_SNAPSHOT = 48 * 1024 * 1024
