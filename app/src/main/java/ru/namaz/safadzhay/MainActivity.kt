@@ -55,25 +55,23 @@ import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.math.PI
 
-private data class PrayerDay(
-    val date: String,
-    val fajr: String,
-    val zuhr: String,
-    val asr: String,
-    val maghrib: String,
-    val isha: String
-)
-
 private data class Prayer(val name: String, val tatar: String, val time: String)
 private data class HijriDate(val day: Int, val month: Int, val year: Int)
 
 private const val SOUND_PICKER_REQUEST = 8102
-private const val OPEN_PRAYER_ACTION = "ru.namaz.safadzhay.OPEN_PRAYER"
+private const val OPEN_PRAYER_ACTION = "ru.namaz.safadzhay.test.OPEN_PRAYER"
 private const val SETTINGS_PREFS = "settings"
 private const val SOUND_URI_KEY = "notification_sound_uri"
 private const val NOTIFICATIONS_ENABLED_KEY = "notifications_enabled"
 private const val NOTIFY_BEFORE_MIN_KEY = "notify_before_min"
 private const val EXACT_ALARM_PROMPTED_KEY = "exact_alarm_prompted"
+private const val SHOW_TATAR_NAMES_KEY = "show_tatar_names"
+
+private fun showTatarNames(context: Context): Boolean =
+    context.getSharedPreferences(SETTINGS_PREFS, Context.MODE_PRIVATE).getBoolean(SHOW_TATAR_NAMES_KEY, true)
+
+private fun prayerDisplayName(context: Context, russian: String, tatar: String): String =
+    if (showTatarNames(context) && tatar.isNotBlank()) "$russian ($tatar)" else russian
 
 private fun selectedNotificationSound(context: Context): Uri {
     val prefs = context.getSharedPreferences(SETTINGS_PREFS, Context.MODE_PRIVATE)
@@ -113,10 +111,18 @@ private fun ensurePrayerNotificationChannel(context: Context): String {
 }
 
 
+// Process-wide queues let a completed download rebuild alarms even if its screen was closed.
+private val prayerAlarmWorker = java.util.concurrent.Executors.newSingleThreadExecutor()
+private val scheduleWorker = java.util.concurrent.Executors.newSingleThreadExecutor()
+
 class MainActivity : Activity() {
     private val zone = ZoneId.of("Europe/Moscow")
     private val handler = Handler(Looper.getMainLooper())
-    private val alarmExecutor = java.util.concurrent.Executors.newSingleThreadExecutor()
+    private val alarmExecutor = prayerAlarmWorker
+    private lateinit var scheduleRepository: ScheduleRepository
+    private var checkingSchedules = false
+    private var scheduleStatusText: TextView? = null
+    private var scheduleCheckButton: TextView? = null
     private var panelRoute = ""
     private var activeCompass: QiblaCompassView? = null
     private var activeQiblaLocation: QiblaLocationController? = null
@@ -504,6 +510,7 @@ class MainActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        scheduleRepository = ScheduleRepository.get(applicationContext)
         WindowCompat.setDecorFitsSystemWindows(window, false)
         val openedFromReminder = intent?.action == OPEN_PRAYER_ACTION
         selectedDate = savedInstanceState?.getString("selected_date")?.let { runCatching { LocalDate.parse(it) }.getOrNull() } ?: LocalDate.now(zone)
@@ -524,7 +531,9 @@ class MainActivity : Activity() {
             "notifications" -> showNotificationsScreen { showSettingsDialog() }
             "settings" -> showSettingsDialog()
             "qibla" -> showQiblaCompass()
+            "schedules" -> showScheduleUpdates()
         }
+        checkScheduleUpdates(false)
         if (openedFromReminder) intent.action = Intent.ACTION_MAIN
         handler.post(object : Runnable {
             override fun run() {
@@ -637,8 +646,8 @@ class MainActivity : Activity() {
             orientation = LinearLayout.VERTICAL; background = surface(); setPadding(dp(8), dp(5), dp(8), dp(7)); visibility = View.GONE
         }
         val months = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
-        val prev = label("‹", 27f).apply { gravity = Gravity.CENTER; contentDescription = "Предыдущий месяц"; setOnClickListener { if (calendarMonth > java.time.YearMonth.of(2026, 1)) { calendarMonth = calendarMonth.minusMonths(1); renderInlineCalendar() } } }
-        val next = label("›", 27f).apply { gravity = Gravity.CENTER; contentDescription = "Следующий месяц"; setOnClickListener { if (calendarMonth < java.time.YearMonth.of(2026, 12)) { calendarMonth = calendarMonth.plusMonths(1); renderInlineCalendar() } } }
+        val prev = label("‹", 27f).apply { gravity = Gravity.CENTER; contentDescription = "Предыдущий месяц"; setOnClickListener { if (calendarMonth > calendarMinMonth()) { calendarMonth = calendarMonth.minusMonths(1); renderInlineCalendar() } } }
+        val next = label("›", 27f).apply { gravity = Gravity.CENTER; contentDescription = "Следующий месяц"; setOnClickListener { if (calendarMonth < calendarMaxMonth()) { calendarMonth = calendarMonth.plusMonths(1); renderInlineCalendar() } } }
         months.addView(prev, LinearLayout.LayoutParams(dp(44), dp(40)))
         calendarTitle = label("", 16f, ink, true).apply { gravity = Gravity.CENTER }
         months.addView(calendarTitle, LinearLayout.LayoutParams(0, dp(40), 1f))
@@ -798,7 +807,7 @@ class MainActivity : Activity() {
         }
         prayerKeys.indices.forEach { i ->
             val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
-            row.addView(text("${prayerRussian[i]} (${prayerTatar[i]})", 16f, Color.WHITE, false).apply { gravity = Gravity.CENTER_VERTICAL }, LinearLayout.LayoutParams(0, dp(58), 1f))
+            row.addView(text(prayerDisplayName(this, prayerRussian[i], prayerTatar[i]), 16f, Color.WHITE, false).apply { gravity = Gravity.CENTER_VERTICAL }, LinearLayout.LayoutParams(0, dp(58), 1f))
             val sw = Switch(this).apply { isChecked = checked[i]; setOnCheckedChangeListener { _, v -> checked[i] = v } }
             row.setOnClickListener { sw.isChecked = !sw.isChecked }
             row.addView(sw, LinearLayout.LayoutParams(dp(58), dp(58)))
@@ -903,10 +912,94 @@ class MainActivity : Activity() {
         root.addView(screenRow(R.drawable.ic_notification, "Уведомления", if (prefs.getBoolean(NOTIFICATIONS_ENABLED_KEY, true)) "Включены" else "Выключены") { showNotificationsScreen { showSettingsDialog() } }, LinearLayout.LayoutParams(-1, dp(64)).apply { topMargin = dp(12) })
         root.addView(screenRow(R.drawable.ic_location, "Город", selectedCity) { showCityChoice { showSettingsDialog() } }, LinearLayout.LayoutParams(-1, dp(64)).apply { topMargin = dp(8) })
 
+        val languageRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(16), dp(12), dp(12), dp(12)); background = surface()
+        }
+        val languageLabels = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        languageLabels.addView(label("Названия намазов на татарском", 16f, ink))
+        languageLabels.addView(label("Показывать рядом с русскими", 13f, muted).apply { setPadding(0, dp(4), 0, 0) })
+        languageRow.addView(languageLabels, LinearLayout.LayoutParams(0, -2, 1f))
+        val languageSwitch = Switch(this).apply {
+            contentDescription = "Названия намазов на татарском"
+            isChecked = prefs.getBoolean(SHOW_TATAR_NAMES_KEY, true)
+            setOnCheckedChangeListener { _, checked ->
+                prefs.edit().putBoolean(SHOW_TATAR_NAMES_KEY, checked).apply()
+                update()
+            }
+        }
+        languageRow.addView(languageSwitch, LinearLayout.LayoutParams(dp(56), dp(52)))
+        languageRow.setOnClickListener { languageSwitch.isChecked = !languageSwitch.isChecked }
+        root.addView(languageRow, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
+        root.addView(screenRow("↻", "Обновление расписания", "Сохранение для работы без интернета") {
+            showScheduleUpdates()
+        }, LinearLayout.LayoutParams(-1, -2).apply { height = dp(76); topMargin = dp(8) })
+
         root.addView(screenRow("ⓘ", "О приложении", "Версия ${packageManager.getPackageInfo(packageName, 0).versionName}") {
             showAboutDialog()
         }, LinearLayout.LayoutParams(-1, dp(64)).apply { topMargin = dp(8) })
         dialog.show()
+    }
+
+    private fun scheduleStorageStatus(): String {
+        val days = currentData()
+        val period = "${formatRussianDate(LocalDate.parse(days.first().date))} — ${formatRussianDate(LocalDate.parse(days.last().date))}"
+        val saved = if (scheduleRepository.hasDownloads()) "Расписание сохранено на телефоне" else "Используется встроенное расписание"
+        val checked = scheduleRepository.lastSuccess().takeIf { it > 0 }?.let {
+            java.time.Instant.ofEpochMilli(it).atZone(zone).format(DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm"))
+        } ?: "ещё не проверялось"
+        return "$saved\n$selectedCity: $period\nДней: ${days.size}\nПоследняя проверка: $checked"
+    }
+
+    private fun showScheduleUpdates() {
+        val pair = fullScreenPanel("Расписание") { showSettingsDialog() }
+        panelRoute = "schedules"
+        scheduleStatusText = label(scheduleStorageStatus(), 16f, ink).apply {
+            setPadding(dp(16), dp(16), dp(16), dp(16)); background = surface()
+        }
+        pair.second.addView(scheduleStatusText, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(12) })
+        scheduleCheckButton = button(if (checkingSchedules) "Проверяем…" else "Проверить обновления") {
+            checkScheduleUpdates(true)
+        }.apply { isEnabled = !checkingSchedules }
+        pair.second.addView(scheduleCheckButton, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(16) })
+        pair.second.addView(label("При открытии приложение проверяет обновления не чаще раза в неделю. Здесь можно проверить вручную.\n\nРасписание скачивается целиком для обоих городов и работает без интернета. Если появится новый год, он будет добавлен после скачивания.", 14f, muted).apply {
+            setPadding(dp(8), dp(16), dp(8), dp(8))
+        })
+        pair.first.show()
+    }
+
+    private fun checkScheduleUpdates(manual: Boolean) {
+        if (checkingSchedules) return
+        val manager = getSystemService(Context.CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
+        val network = manager.activeNetwork
+        val online = network != null && manager.getNetworkCapabilities(network)
+            ?.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET) == true
+        if (!manual && !online) return
+        checkingSchedules = true
+        scheduleCheckButton?.apply { isEnabled = false; text = "Проверяем…" }
+        scheduleWorker.execute {
+            val result = scheduleRepository.sync(manual, online)
+            if (result.changed) {
+                // Read the latest settings and serialize with any pending city/alarm changes.
+                alarmExecutor.execute {
+                    val prefs = getSharedPreferences(SETTINGS_PREFS, Context.MODE_PRIVATE)
+                    val city = prefs.getString("city", "Сафаджай") ?: "Сафаджай"
+                    runCatching { rebuildPrayerNotifications(dataForCity(city), city,
+                        prefs.getBoolean(NOTIFICATIONS_ENABLED_KEY, true),
+                        prefs.getInt(NOTIFY_BEFORE_MIN_KEY, 5).coerceIn(0, 180),
+                        prayerKeys.filter { prefs.getBoolean("notify_$it", true) }.toSet()) }
+                }
+            }
+            handler.post {
+                checkingSchedules = false
+                if (!isDestroyed && !isFinishing) {
+                    if (result.changed) { lastAlarmSignature = ""; lastCalendarRender = ""; lastPrayerRender = ""; update() }
+                    scheduleStatusText?.text = scheduleStorageStatus() + if (manual) "\n\n${result.message}" else ""
+                    scheduleCheckButton?.apply { isEnabled = true; text = "Проверить обновления" }
+                    if (manual) Toast.makeText(this, result.message, Toast.LENGTH_LONG).show()
+                }
+            }
+        }
     }
 
     private fun showAboutDialog() {
@@ -922,7 +1015,7 @@ class MainActivity : Activity() {
             scaleType = ImageView.ScaleType.FIT_CENTER
             importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
         }, LinearLayout.LayoutParams(dp(88), dp(88)))
-        root.addView(label("Намаз Вакытлары", 24f, ink, true).apply {
+        root.addView(label(getString(R.string.app_name), 24f, ink, true).apply {
             gravity = Gravity.CENTER; maxLines = 2
         }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(20) })
         val version = packageManager.getPackageInfo(packageName, 0).versionName
@@ -973,7 +1066,7 @@ class MainActivity : Activity() {
             val message = when {
                 !compass.hasCompass() -> "На телефоне нет поддерживаемого датчика компаса. Направление недоступно."
                 !hasLocation -> locationDescription
-                !compass.hasOrientation() -> "Настраиваем компас…\nДержите телефон плашмя"
+                !compass.hasOrientation() -> "Определяем направление…\nДержите телефон плашмя"
                 lowAccuracy -> "Держите телефон плашмя, вдали от металла и магнитов.\nПри необходимости выполните калибровку."
                 aligned -> "Вы направлены к кибле"
                 else -> "Поверните телефон\nСовместите Каабу с меткой сверху"
@@ -1064,7 +1157,7 @@ class MainActivity : Activity() {
 
     private fun schedulePrayerNotifications() {
         val prefs = getSharedPreferences(SETTINGS_PREFS, Context.MODE_PRIVATE)
-        val signature = listOf(selectedCity, LocalDate.now(zone), prefs.getBoolean(NOTIFICATIONS_ENABLED_KEY, true), prefs.getInt(NOTIFY_BEFORE_MIN_KEY, 5), prefs.getString(SOUND_URI_KEY, ""), prayerKeys.map { prefs.getBoolean("notify_$it", true) }, if (Build.VERSION.SDK_INT >= 31) (getSystemService(Context.ALARM_SERVICE) as AlarmManager).canScheduleExactAlarms() else true).joinToString("|")
+        val signature = listOf(selectedCity, LocalDate.now(zone), scheduleRepository.revision(), prefs.getBoolean(NOTIFICATIONS_ENABLED_KEY, true), prefs.getInt(NOTIFY_BEFORE_MIN_KEY, 5), prefs.getString(SOUND_URI_KEY, ""), prayerKeys.map { prefs.getBoolean("notify_$it", true) }, if (Build.VERSION.SDK_INT >= 31) (getSystemService(Context.ALARM_SERVICE) as AlarmManager).canScheduleExactAlarms() else true).joinToString("|")
         if (signature == lastAlarmSignature) return
         lastAlarmSignature = signature
         val days = currentData().toList()
@@ -1082,11 +1175,11 @@ class MainActivity : Activity() {
         val am = getSystemService(Context.ALARM_SERVICE) as AlarmManager
         val today = LocalDate.now(zone)
         val entries = mutableListOf<String>()
-        // Store the whole remaining Aug-Dec 2026 timetable. The receiver advances
-        // the chain when an alarm fires, so notifications continue while the app is closed.
-        for (offset in 0..180) {
-            val date = today.plusDays(offset.toLong())
-            val day = days.firstOrNull { it.date == date.toString() } ?: continue
+        val previousEntries = prefs.getString("scheduled_prayers", "").orEmpty()
+        // Keep all downloaded future dates, including the next year, for the receiver chain.
+        for (day in days) {
+            val date = LocalDate.parse(day.date)
+            if (date.isBefore(today)) continue
             val times = listOf(day.fajr, day.zuhr, day.asr, day.maghrib, day.isha)
             for (i in times.indices) {
                 val key = prayerKeys[i]
@@ -1098,23 +1191,19 @@ class MainActivity : Activity() {
         }
         prefs.edit().putString("scheduled_prayers", entries.joinToString("\n")).apply()
 
-        // Cancel previously scheduled alarms for every date/key first. This is important
-        // when a prayer notification is switched off or the selected city changes.
-        val firstDate = LocalDate.of(2026, 8, 1)
-        val lastDate = LocalDate.of(2026, 12, 31)
-        var cancelDate = firstDate
-        while (!cancelDate.isAfter(lastDate)) {
-            prayerKeys.forEach { oldKey ->
-                val requestCode = alarmRequestCode(cancelDate, oldKey)
-                val cancelIntent = Intent(this, PrayerNotificationReceiver::class.java)
-                val flags = PendingIntent.FLAG_NO_CREATE or
-                    (if (Build.VERSION.SDK_INT >= 23) PendingIntent.FLAG_IMMUTABLE else 0)
-                PendingIntent.getBroadcast(this, requestCode, cancelIntent, flags)?.let { existing ->
-                    am.cancel(existing)
-                    existing.cancel()
+        // Cancel the prior date/key identities, regardless of their year or city.
+        previousEntries.lineSequence().filter { it.isNotBlank() }.forEach { entry ->
+            val parts = entry.split("|")
+            if (parts.size >= 2) {
+                val date = runCatching { LocalDate.parse(parts[0]) }.getOrNull()
+                if (date != null && parts[1] in prayerKeys) {
+                    val flags = PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE
+                    PendingIntent.getBroadcast(this, alarmRequestCode(date, parts[1]),
+                        Intent(this, PrayerNotificationReceiver::class.java), flags)?.let { existing ->
+                        am.cancel(existing); existing.cancel()
+                    }
                 }
             }
-            cancelDate = cancelDate.plusDays(1)
         }
 
         // Rebuild the near-term alarms from the stored schedule.
@@ -1169,8 +1258,17 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun currentData(): List<PrayerDay> =
-        if (selectedCity == "Москва") moscowData else safadzhayData
+    private fun currentData(): List<PrayerDay> = dataForCity(selectedCity)
+
+    private fun dataForCity(city: String): List<PrayerDay> =
+        if (city == "Москва") scheduleRepository.merged("moscow", moscowData)
+        else scheduleRepository.merged("safadzhay", safadzhayData)
+
+    private fun calendarMinMonth(): java.time.YearMonth = java.time.YearMonth.from(
+        minOf(LocalDate.now(zone), LocalDate.parse(currentData().first().date)))
+
+    private fun calendarMaxMonth(): java.time.YearMonth = java.time.YearMonth.from(
+        maxOf(LocalDate.now(zone), LocalDate.parse(currentData().last().date)))
 
     private fun formatRussianDate(date: LocalDate): String {
         val months = listOf(
@@ -1183,7 +1281,7 @@ class MainActivity : Activity() {
     private fun dayFor(date: LocalDate): PrayerDay? = currentData().firstOrNull { it.date == date.toString() }
 
     private fun renderInlineCalendar() {
-        calendarMonth = calendarMonth.coerceIn(java.time.YearMonth.of(2026, 1), java.time.YearMonth.of(2026, 12))
+        calendarMonth = calendarMonth.coerceIn(calendarMinMonth(), calendarMaxMonth())
         if (!::calendarGrid.isInitialized) return
         val renderKey = "$calendarMonth|$selectedDate|${LocalDate.now(zone)}"
         if (lastCalendarRender == renderKey) return
@@ -1276,8 +1374,8 @@ class MainActivity : Activity() {
     }
 
     private fun openDatePicker() {
-        val minDate = LocalDate.of(2026, 8, 1)
-        val maxDate = LocalDate.of(2026, 12, 31)
+        val minDate = calendarMinMonth().atDay(1)
+        val maxDate = calendarMaxMonth().atEndOfMonth()
         val initial = selectedDate?.coerceIn(minDate, maxDate) ?: LocalDate.now(zone).coerceIn(minDate, maxDate)
         val dialog = DatePickerDialog(this, { _, year, month, dayOfMonth ->
             selectedDate = LocalDate.of(year, month + 1, dayOfMonth)
@@ -1331,14 +1429,14 @@ class MainActivity : Activity() {
             nextName.text = "Расписание"
             countdownLabel.visibility = View.VISIBLE
             countdown.text = "—"
-            countdownLabel.text = "Доступно: август–декабрь 2026"
+            countdownLabel.text = "Нужно загрузить расписание"
             progress.progress = 0f
             countdownStart.text = ""
             val missingKey = "missing|$selected|$selectedCity"
             if (lastPrayerRender != missingKey) {
                 lastPrayerRender = missingKey
                 prayerList.removeAllViews()
-                prayerList.addView(label("На эту дату нет вашего расписания.\nДоступно: август–декабрь 2026.", 14f, muted).apply { gravity = Gravity.CENTER; setPadding(dp(16), dp(16), dp(16), dp(16)) })
+                prayerList.addView(label("На эту дату расписание не загружено.\nОткройте настройки → Обновление расписания.", 14f, muted).apply { gravity = Gravity.CENTER; setPadding(dp(16), dp(16), dp(16), dp(16)) })
             }
             return
         }
@@ -1372,7 +1470,7 @@ class MainActivity : Activity() {
             val left = Duration.between(now, nextEvent.time).seconds.coerceAtLeast(0)
             progress.progress = (1.0 - left.toDouble() / total.toDouble()).coerceIn(0.0, 1.0).toFloat()
             countdown.text = String.format("%02d:%02d:%02d", left / 3600, (left % 3600) / 60, left % 60)
-            nextName.text = "${nextEvent.prayer.name} (${nextEvent.prayer.tatar})"
+            nextName.text = prayerDisplayName(this, nextEvent.prayer.name, nextEvent.prayer.tatar)
             countdownLabel.visibility = View.GONE
             countdownStart.text = "До начала намаза · ${nextEvent.prayer.time}"
         } else {
@@ -1385,7 +1483,7 @@ class MainActivity : Activity() {
                 val left = Duration.between(now, nextFajr).seconds.coerceAtLeast(0)
                 progress.progress = (1.0 - left.toDouble() / total.toDouble()).coerceIn(0.0, 1.0).toFloat()
                 countdown.text = String.format("%02d:%02d:%02d", left / 3600, (left % 3600) / 60, left % 60)
-                nextName.text = "Фаджр (Иртәнге намаз)"
+                nextName.text = prayerDisplayName(this, "Фаджр", "Иртәнге намаз")
                 countdownLabel.visibility = View.GONE
                 countdownStart.text = "Завтра · ${tomorrowDay.fajr}"
             } else {
@@ -1426,15 +1524,18 @@ class MainActivity : Activity() {
     }
 
     private fun updateTodayEventBanner(today: LocalDate) {
-        val items = eventsFor(today)
+        val now = LocalDateTime.now(zone)
+        val asr = dayFor(today)?.asr?.let { runCatching { java.time.LocalTime.parse(it) }.getOrNull() }
+        val items = HolidayCalendar.bannerLabels(today, now, asr)
         if (items.isEmpty()) { eventBanner.text = ""; eventBanner.visibility = View.GONE; return }
         eventBanner.visibility = View.VISIBLE
-        val prefix = if (today == LocalDate.now(zone)) "Сегодня: " else ""
+        val prefix = if (today == now.toLocalDate()) "Сегодня: " else ""
         eventBanner.text = items.joinToString("\n") { prefix + it }
     }
 
     private fun renderPrayers(prayers: List<Prayer>, nextIndex: Int, now: LocalDateTime, displayDate: LocalDate) {
-        val renderKey = "$selectedCity|$displayDate|$nextIndex|${now.toLocalDate()}|${now.hour}:${now.minute}|${prayers.joinToString()}"
+        val showTatar = showTatarNames(this)
+        val renderKey = "$selectedCity|$displayDate|$nextIndex|${now.toLocalDate()}|${now.hour}:${now.minute}|$showTatar|${prayers.joinToString()}"
         if (lastPrayerRender == renderKey) return
         lastPrayerRender = renderKey
         prayerList.removeAllViews()
@@ -1462,6 +1563,7 @@ class MainActivity : Activity() {
                 maxLines = 2
             }
             val tt = text("(${p.tatar})", 13f, Color.rgb(171, 202, 190), false).apply {
+                visibility = if (showTatar) View.VISIBLE else View.GONE
                 gravity = Gravity.START
                 setIncludeFontPadding(false)
                 maxLines = 2
@@ -1507,6 +1609,7 @@ class MainActivity : Activity() {
         if (::placeText.isInitialized) {
             schedulePrayerNotifications()
             update()
+            checkScheduleUpdates(false)
             if (panelRoute == "notifications") showNotificationsScreen { showSettingsDialog() }
         }
         activeCompass?.start()
@@ -1532,7 +1635,6 @@ class MainActivity : Activity() {
         activeCompass?.stop()
         aboutDialog?.dismiss()
         settingsPanel?.dismiss()
-        alarmExecutor.shutdown()
         super.onDestroy()
     }
 }
@@ -1564,7 +1666,7 @@ class PrayerNotificationReceiver : BroadcastReceiver() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val builder = NotificationCompat.Builder(context, channelId)
             .setSmallIcon(R.drawable.ic_notification)
-            .setContentTitle("Напоминание: $prayer ($tatar)")
+            .setContentTitle("Напоминание: ${prayerDisplayName(context, prayer, tatar)}")
             .setContentText(reminderText)
             .setContentIntent(openAppPendingIntent)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
