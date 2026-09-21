@@ -5,6 +5,22 @@ import org.junit.Test
 import java.time.LocalDate
 
 class CalendarTest {
+    @Test fun fridayBannerStartsAtMidnightAndEndsExactlyAtSelectedAsr() {
+        val date = LocalDate.of(2026, 9, 18)
+        val asr = java.time.LocalTime.of(15, 30)
+        assertTrue(HolidayCalendar.bannerLabels(date, date.atStartOfDay(), asr).contains("Джума-намаз"))
+        assertTrue(HolidayCalendar.bannerLabels(date, date.atTime(asr).minusNanos(1), asr).contains("Джума-намаз"))
+        assertFalse(HolidayCalendar.bannerLabels(date, date.atTime(asr), asr).contains("Джума-намаз"))
+        assertFalse(HolidayCalendar.bannerLabels(date, date.atTime(23, 59), asr).contains("Джума-намаз"))
+        assertTrue(HolidayCalendar.bannerLabels(date, date.atTime(asr), asr.plusHours(1)).contains("Джума-намаз"))
+    }
+    @Test fun bannerCutoffPreservesHolidaysAndOtherCalendarDates() {
+        val date = LocalDate.of(2026, 3, 20)
+        val asr = java.time.LocalTime.of(15, 30)
+        assertEquals(listOf("Ураза-байрам"), HolidayCalendar.bannerLabels(date, date.atTime(asr), asr))
+        assertEquals(listOf("Ураза-байрам"), HolidayCalendar.bannerLabels(date, date.atStartOfDay(), null))
+        assertEquals(listOf("Джума-намаз", "Ураза-байрам"), HolidayCalendar.bannerLabels(date, date.minusDays(1).atTime(23, 59), asr))
+    }
     @Test fun eventsUseOnlyDumRf2026() {
         assertTrue(HolidayCalendar.items.all { it.date.year == 2026 && it.sourceName == "ДУМ РФ, календарь 2026" })
         assertEquals(LocalDate.of(2026, 8, 24), HolidayCalendar.items.single { it.title == "Маулид" }.date)
