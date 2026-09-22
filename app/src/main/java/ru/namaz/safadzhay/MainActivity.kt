@@ -553,7 +553,6 @@ if (needsNotificationPermission) {
         }
     }
 },
-    },
     onChanged = {
         onScheduleUpdated()
     }
@@ -810,18 +809,18 @@ if (needsNotificationPermission) {
         }
 
         scheduleUpdateBar?.progress = safeValue
-scheduleUpdatePercent?.text = "$safeValue%"
+        scheduleUpdatePercent?.text = "$safeValue%"
 
-if (safeValue >= 100) {
-    scheduleUpdateStatus?.text = "Расписание обновлено"
+        if (safeValue >= 100) {
+            scheduleUpdateStatus?.text = "Расписание обновлено"
 
-    handler.postDelayed({
-        dismissScheduleUpdateDialog()
-    }, 2000L)
-} else {
-    scheduleUpdateStatus?.text =
-        "Загружаем данные на $year год..."
-}
+            handler.postDelayed({
+                dismissScheduleUpdateDialog()
+            }, 2000L)
+        } else {
+            scheduleUpdateStatus?.text =
+                "Загружаем данные на $year год..."
+        }
     }
 }
 
