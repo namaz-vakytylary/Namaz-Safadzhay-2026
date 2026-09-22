@@ -193,7 +193,31 @@ class AppRegressionTest {
     }
 
     @Test
-    fun notificationPermissionResultPersistsGrantAndDenial() {
-        ...
+fun notificationPermissionResultPersistsGrantAndDenial() {
+    shadowOf(app).denyPermissions(Manifest.permission.POST_NOTIFICATIONS)
+    ShadowAlarmManager.setCanScheduleExactAlarms(false)
+
+    val c = Robolectric.buildActivity(MainActivity::class.java).create()
+
+    try {
+        c.get().onRequestPermissionsResult(
+            7001,
+            arrayOf(Manifest.permission.POST_NOTIFICATIONS),
+            intArrayOf(android.content.pm.PackageManager.PERMISSION_GRANTED)
+        )
+
+        assertTrue(prefs.getBoolean("notifications_enabled", false))
+        assertTrue(prefs.getBoolean("exact_alarm_prompted", false))
+
+        c.get().onRequestPermissionsResult(
+            7001,
+            arrayOf(Manifest.permission.POST_NOTIFICATIONS),
+            intArrayOf(android.content.pm.PackageManager.PERMISSION_DENIED)
+        )
+
+        assertTrue(prefs.contains("notifications_enabled"))
+        assertFalse(prefs.getBoolean("notifications_enabled", true))
+    } finally {
+        c.destroy()
     }
 }
