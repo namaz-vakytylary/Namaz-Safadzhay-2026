@@ -845,13 +845,20 @@ if (needsNotificationPermission) {
     }
 
     private fun maybeRequestExactAlarmPermission(force: Boolean = false) {
-        if (Build.VERSION.SDK_INT < 31) return
-        val prefs = getSharedPreferences(SETTINGS_PREFS, Context.MODE_PRIVATE)
-        if (prefs.contains(NOTIFICATIONS_ENABLED_KEY) && !prefs.getBoolean(NOTIFICATIONS_ENABLED_KEY, false)) return
-        if (!force && prefs.getBoolean(EXACT_ALARM_PROMPTED_KEY, false)) return
-        prefs.edit().putBoolean(EXACT_ALARM_PROMPTED_KEY, true).apply()
-        showThemedMessage("Точные уведомления", "Чтобы напоминания о намазе приходили точно в выбранное время, разрешите точные будильники в настройках телефона.", "Открыть настройки", "Позже") { openExactAlarmSettings() }
-    }
+    if (Build.VERSION.SDK_INT < 31) return
+    val prefs = getSharedPreferences(SETTINGS_PREFS, Context.MODE_PRIVATE)
+    if (prefs.contains(NOTIFICATIONS_ENABLED_KEY) && !prefs.getBoolean(NOTIFICATIONS_ENABLED_KEY, false)) return
+    val am = getSystemService(Context.ALARM_SERVICE) as AlarmManager
+    if (am.canScheduleExactAlarms()) return
+    if (!force && prefs.getBoolean(EXACT_ALARM_PROMPTED_KEY, false)) return
+    prefs.edit().putBoolean(EXACT_ALARM_PROMPTED_KEY, true).apply()
+    showThemedMessage(
+        "Точные уведомления",
+        "Чтобы напоминания о намазе приходили точно в выбранное время, разрешите точные будильники в настройках телефона.",
+        "Открыть настройки",
+        "Позже"
+    ) { openExactAlarmSettings() }
+}
 
     private fun showCityChoice(refreshSettings: () -> Unit) {
         val pair = fullScreenPanel("Город") { refreshSettings() }
