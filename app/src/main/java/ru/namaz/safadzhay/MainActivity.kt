@@ -1582,19 +1582,31 @@ if (needsNotificationPermission) {
             mainScroll.scrollTo(0, 0)
             newIntent.action = Intent.ACTION_MAIN
         }
+    }override fun onResume() {
+    super.onResume()
+
+    if (::placeText.isInitialized) {
+        schedulePrayerNotifications()
+        update()
+
+        if (panelRoute == "notifications") {
+            showNotificationsScreen { showSettingsDialog() }
+        }
     }
 
- override fun onRequestPermissionsResult(
-    requestCode: Int,
-    permissions: Array<out String>,
-    grantResults: IntArray
-)
+    activeCompass?.start()
+
+    if (activeCompass?.hasCompass() == true) {
+        activeQiblaLocation?.start()
+    }
+}
+
+override fun onRequestPermissionsResult(
     requestCode: Int,
     permissions: Array<out String>,
     grantResults: IntArray
 ) {
-    super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-
+ 
     if (requestCode == 7001) {
         val granted =
             grantResults.firstOrNull() == android.content.pm.PackageManager.PERMISSION_GRANTED
