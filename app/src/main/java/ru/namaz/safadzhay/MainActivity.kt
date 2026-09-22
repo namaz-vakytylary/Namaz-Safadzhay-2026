@@ -1599,9 +1599,16 @@ if (needsNotificationPermission) {
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode == 7001) {
-    schedulePrayerNotifications()
     if (grantResults.firstOrNull() == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+        getSharedPreferences(SETTINGS_PREFS, Context.MODE_PRIVATE)
+            .edit()
+            .putBoolean(NOTIFICATIONS_ENABLED_KEY, true)
+            .apply()
+
+        schedulePrayerNotifications()
         maybeRequestExactAlarmPermission()
+    } else {
+        schedulePrayerNotifications()
     }
 }
 if (requestCode == QiblaLocationController.REQUEST_CODE) activeQiblaLocation?.start()
