@@ -1616,20 +1616,7 @@ if (needsNotificationPermission) {
     }
 }
 
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == 7001) {
-    if (grantResults.firstOrNull() == android.content.pm.PackageManager.PERMISSION_GRANTED) {
-        getSharedPreferences(SETTINGS_PREFS, Context.MODE_PRIVATE)
-            .edit()
-            .putBoolean(NOTIFICATIONS_ENABLED_KEY, true)
-            .apply()
-
-        schedulePrayerNotifications()
-        maybeRequestExactAlarmPermission()
-    } else {
-        schedulePrayerNotifications()
-    }
-}
+        
 if (requestCode == QiblaLocationController.REQUEST_CODE) activeQiblaLocation?.start()
 }
 
