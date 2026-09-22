@@ -1607,7 +1607,8 @@ override fun onRequestPermissionsResult(
     permissions: Array<out String>,
     grantResults: IntArray
 ) {
- 
+    super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+
     if (requestCode == 7001) {
         val granted =
             grantResults.firstOrNull() == android.content.pm.PackageManager.PERMISSION_GRANTED
