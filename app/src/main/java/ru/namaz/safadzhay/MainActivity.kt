@@ -133,7 +133,7 @@ class MainActivity : Activity() {
     private val mint = Color.rgb(70, 218, 145)
     private val muted = Color.rgb(173, 203, 189)
     private val ink = Color.rgb(235, 247, 240)
-        private var settingsPanel: android.app.Dialog? = null
+            private var settingsPanel: android.app.Dialog? = null
     private var aboutDialog: android.app.Dialog? = null
     private var scheduleUpdateDialog: android.app.Dialog? = null
     private var scheduleUpdateBar: android.widget.ProgressBar? = null
