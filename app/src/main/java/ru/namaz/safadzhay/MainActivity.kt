@@ -540,8 +540,17 @@ if (needsNotificationPermission) {
             "notifications" -> showNotificationsScreen { showSettingsDialog() }
             "settings" -> showSettingsDialog()
             "qibla" -> showQiblaCompass()
-        }
-        scheduleUpdateChecker.checkOnce { onScheduleUpdated() }
+        }scheduleUpdateChecker.checkOnce(
+    onProgress = { year, value ->
+        showScheduleUpdateDialog(year, value)
+    },
+    onFinished = {
+        dismissScheduleUpdateDialog()
+    },
+    onChanged = {
+        onScheduleUpdated()
+    }
+)
         if (openedFromReminder) intent.action = Intent.ACTION_MAIN
         handler.post(object : Runnable {
             override fun run() {
@@ -567,6 +576,249 @@ if (needsNotificationPermission) {
         setColor(if (selected) Color.rgb(10, 78, 54) else Color.rgb(8, 52, 39))
         setStroke(dp(1), if (selected) mint else Color.rgb(21, 83, 60))
     }
+    private fun showScheduleUpdateDialog(year: Int, value: Int) {
+    handler.post {
+        if (isFinishing || isDestroyed) return@post
+
+        val safeValue = value.coerceIn(0, 100)
+
+        if (scheduleUpdateDialog == null) {
+            val gold = Color.rgb(214, 178, 77)
+            val brightGreen = Color.rgb(67, 230, 145)
+            val progressTrack = Color.rgb(20, 75, 56)
+
+            val root = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                gravity = Gravity.CENTER_HORIZONTAL
+                setPadding(
+                    dp(24),
+                    dp(22),
+                    dp(24),
+                    dp(22)
+                )
+
+                background = GradientDrawable(
+                    GradientDrawable.Orientation.TOP_BOTTOM,
+                    intArrayOf(
+                        Color.rgb(7, 73, 50),
+                        Color.rgb(3, 48, 34)
+                    )
+                ).apply {
+                    cornerRadius = dp(26).toFloat()
+                    setStroke(dp(2), gold)
+                }
+            }
+
+            root.addView(
+                label(
+                    "☪",
+                    34f,
+                    gold,
+                    true
+                ).apply {
+                    gravity = Gravity.CENTER
+                },
+                LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT
+                )
+            )
+
+            root.addView(
+                label(
+                    "Обновление расписания",
+                    22f,
+                    ink,
+                    true
+                ).apply {
+                    gravity = Gravity.CENTER
+                    setPadding(0, dp(6), 0, 0)
+                },
+                LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT
+                )
+            )
+
+            root.addView(
+                label(
+                    "Загружаем актуальные времена намаза...",
+                    15f,
+                    muted
+                ).apply {
+                    gravity = Gravity.CENTER
+                    setPadding(0, dp(8), 0, dp(18))
+                },
+                LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT
+                )
+            )
+
+            val progressRow = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+            }
+
+            val bar = android.widget.ProgressBar(
+                this,
+                null,
+                android.R.attr.progressBarStyleHorizontal
+            ).apply {
+                max = 100
+                progress = 0
+
+                progressTintList =
+                    android.content.res.ColorStateList.valueOf(brightGreen)
+
+                progressBackgroundTintList =
+                    android.content.res.ColorStateList.valueOf(progressTrack)
+            }
+
+            progressRow.addView(
+                bar,
+                LinearLayout.LayoutParams(
+                    0,
+                    dp(18),
+                    1f
+                )
+            )
+
+            val percent = label(
+                "0%",
+                20f,
+                ink,
+                true
+            ).apply {
+                gravity = Gravity.CENTER
+            }
+
+            progressRow.addView(
+                percent,
+                LinearLayout.LayoutParams(
+                    dp(64),
+                    ViewGroup.LayoutParams.WRAP_CONTENT
+                ).apply {
+                    leftMargin = dp(12)
+                }
+            )
+
+            root.addView(
+                progressRow,
+                LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT
+                )
+            )
+
+            val status = label(
+                "Загружаем данные на $year год...",
+                14f,
+                muted
+            ).apply {
+                gravity = Gravity.CENTER
+                setPadding(0, dp(12), 0, dp(18))
+            }
+
+            root.addView(
+                status,
+                LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT
+                )
+            )
+
+            val notice = label(
+                "ⓘ   Пожалуйста, не закрывайте приложение",
+                14f,
+                ink
+            ).apply {
+                gravity = Gravity.CENTER
+
+                setPadding(
+                    dp(14),
+                    dp(12),
+                    dp(14),
+                    dp(12)
+                )
+
+                background = GradientDrawable().apply {
+                    cornerRadius = dp(24).toFloat()
+                    setColor(Color.rgb(5, 61, 44))
+                    setStroke(
+                        dp(1),
+                        Color.rgb(32, 126, 88)
+                    )
+                }
+            }
+
+            root.addView(
+                notice,
+                LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT
+                )
+            )
+
+            val dialog = android.app.Dialog(this)
+
+            dialog.requestWindowFeature(
+                android.view.Window.FEATURE_NO_TITLE
+            )
+
+            dialog.setCancelable(false)
+            dialog.setCanceledOnTouchOutside(false)
+            dialog.setContentView(root)
+
+            dialog.show()
+
+            val dialogWidth = minOf(
+                resources.displayMetrics.widthPixels - dp(32),
+                dp(520)
+            ).coerceAtLeast(dp(280))
+
+            dialog.window?.apply {
+                setBackgroundDrawable(
+                    android.graphics.drawable.ColorDrawable(
+                        Color.TRANSPARENT
+                    )
+                )
+
+                addFlags(
+                    android.view.WindowManager.LayoutParams.FLAG_DIM_BEHIND
+                )
+
+                setDimAmount(0.55f)
+
+                setLayout(
+                    dialogWidth,
+                    ViewGroup.LayoutParams.WRAP_CONTENT
+                )
+            }
+
+            scheduleUpdateDialog = dialog
+            scheduleUpdateBar = bar
+            scheduleUpdatePercent = percent
+            scheduleUpdateStatus = status
+        }
+
+        scheduleUpdateBar?.progress = safeValue
+        scheduleUpdatePercent?.text = "$safeValue%"
+        scheduleUpdateStatus?.text =
+            "Загружаем данные на $year год..."
+    }
+}
+
+private fun dismissScheduleUpdateDialog() {
+    handler.post {
+        scheduleUpdateDialog?.dismiss()
+
+        scheduleUpdateDialog = null
+        scheduleUpdateBar = null
+        scheduleUpdatePercent = null
+        scheduleUpdateStatus = null
+    }
+}.
     private fun cardBackground(next: Boolean, passed: Boolean): GradientDrawable = surface(next)
     private fun label(value: String, size: Float = 15f, color: Int = ink, bold: Boolean = false): TextView = text(value, size, color, bold).apply {
         includeFontPadding = false
