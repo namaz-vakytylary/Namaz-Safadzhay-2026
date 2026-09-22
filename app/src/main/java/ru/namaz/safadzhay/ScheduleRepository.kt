@@ -44,7 +44,7 @@ internal class ScheduleRepository(
     fun hasDownloads(): Boolean = bundles.isNotEmpty()
     fun revision(): String = bundles.toSortedMap().values.joinToString("|") { it.entry.sha }
 
-    @Synchronized fun sync(online: Boolean): Result {
+    
     @Synchronized fun sync(
     online: Boolean,
     onProgress: (year: Int, progress: Int) -> Unit = { _, _ -> }
