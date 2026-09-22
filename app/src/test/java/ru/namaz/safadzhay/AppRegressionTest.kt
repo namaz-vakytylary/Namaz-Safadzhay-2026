@@ -225,6 +225,9 @@ fun resumeReactsToExactAlarmPermissionChange() {
         c.pause().stop().destroy()
     }
 }
+@Test
+    fun notificationPermissionResultPersistsGrantAndDenial() {
+
     shadowOf(app).denyPermissions(Manifest.permission.POST_NOTIFICATIONS)
     ShadowAlarmManager.setCanScheduleExactAlarms(false)
 
