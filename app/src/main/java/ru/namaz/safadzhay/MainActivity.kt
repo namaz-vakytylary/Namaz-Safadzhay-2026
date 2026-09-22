@@ -540,7 +540,9 @@ if (needsNotificationPermission) {
             "notifications" -> showNotificationsScreen { showSettingsDialog() }
             "settings" -> showSettingsDialog()
             "qibla" -> showQiblaCompass()
-        }scheduleUpdateChecker.checkOnce(
+        }
+        
+        scheduleUpdateChecker.checkOnce(
     onProgress = { year, value ->
         showScheduleUpdateDialog(year, value)
     },
@@ -818,7 +820,7 @@ private fun dismissScheduleUpdateDialog() {
         scheduleUpdatePercent = null
         scheduleUpdateStatus = null
     }
-}.
+}
     private fun cardBackground(next: Boolean, passed: Boolean): GradientDrawable = surface(next)
     private fun label(value: String, size: Float = 15f, color: Int = ink, bold: Boolean = false): TextView = text(value, size, color, bold).apply {
         includeFontPadding = false
@@ -1906,7 +1908,12 @@ override fun onRequestPermissionsResult(
         activeQiblaLocation?.stop()
         activeCompass?.stop()
         aboutDialog?.dismiss()
-        settingsPanel?.dismiss()
+settingsPanel?.dismiss()
+scheduleUpdateDialog?.dismiss()
+scheduleUpdateDialog = null
+scheduleUpdateBar = null
+scheduleUpdatePercent = null
+scheduleUpdateStatus = null
         super.onDestroy()
     }
 }
