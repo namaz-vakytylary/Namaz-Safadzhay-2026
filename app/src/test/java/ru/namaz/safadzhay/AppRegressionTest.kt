@@ -189,6 +189,11 @@ class AppRegressionTest {
             assertEquals("Напоминание: Фаджр",nm.allNotifications.single().extras.getString(Notification.EXTRA_TITLE))
             prefs.edit().putBoolean("show_tatar_names",true).commit();fire()
             assertEquals("Напоминание: Фаджр (Иртәнге намаз)",nm.allNotifications.single().extras.getString(Notification.EXTRA_TITLE))
-        } finally { c.destroy() }
+                } finally { c.destroy() }
+    }
+
+    @Test
+    fun notificationPermissionResultPersistsGrantAndDenial() {
+        ...
     }
 }
