@@ -547,7 +547,12 @@ if (needsNotificationPermission) {
         showScheduleUpdateDialog(year, value)
     },
     onFinished = {
-        dismissScheduleUpdateDialog()
+    handler.post {
+        if ((scheduleUpdateBar?.progress ?: 0) < 100) {
+            dismissScheduleUpdateDialog()
+        }
+    }
+},
     },
     onChanged = {
         onScheduleUpdated()
@@ -805,9 +810,18 @@ if (needsNotificationPermission) {
         }
 
         scheduleUpdateBar?.progress = safeValue
-        scheduleUpdatePercent?.text = "$safeValue%"
-        scheduleUpdateStatus?.text =
-            "Загружаем данные на $year год..."
+scheduleUpdatePercent?.text = "$safeValue%"
+
+if (safeValue >= 100) {
+    scheduleUpdateStatus?.text = "Расписание обновлено"
+
+    handler.postDelayed({
+        dismissScheduleUpdateDialog()
+    }, 2000L)
+} else {
+    scheduleUpdateStatus?.text =
+        "Загружаем данные на $year год..."
+}
     }
 }
 
