@@ -45,51 +45,97 @@ internal class ScheduleRepository(
     fun revision(): String = bundles.toSortedMap().values.joinToString("|") { it.entry.sha }
 
     @Synchronized fun sync(online: Boolean): Result {
-        if (!online) return Result(false)
-        val now = clock()
-        return try {
-            val entries = parseManifest(download(BASE_URL + "manifest.json", MAX_MANIFEST))
-            val next = bundles.toMutableMap()
-            var changed = false
-            entries.forEach { entry ->
-                val old = bundles[entry.year]
-                // Never roll a saved year back to an older revision.
-                if (old != null && entry.version < old.entry.version) return@forEach
-                if (old != null && entry.version == old.entry.version) {
-                    require(entry.sha == old.entry.sha) { "A changed schedule needs a new version" }
-                    return@forEach
-                }
-                val bytes = download(BASE_URL + entry.path, entry.size)
-                next[entry.year] = parseBundle(entry, bytes)
-                changed = true
-            }
-            if (changed) {
-                // Validate and download everything before replacing any working data.
-                val snapshot = JSONObject().put("schemaVersion", 1)
-                val saved = org.json.JSONArray()
-                next.toSortedMap().values.forEach {
-                    saved.put(JSONObject().put("entry", it.entry.json).put("payload", it.raw))
-                }
-                snapshot.put("bundles", saved)
-                val serialized = snapshot.toString().toByteArray(Charsets.UTF_8)
-                require(serialized.size <= MAX_SNAPSHOT)
-                val stream = file.startWrite()
-                try {
-                    stream.write(serialized)
-                    file.finishWrite(stream)
-                } catch (error: Exception) {
-                    file.failWrite(stream)
-                    throw error
-                }
-                bundles = next.toMap()
-            }
-            prefs.edit().putLong("last_success", now).commit()
-            Result(changed)
-        } catch (error: Exception) {
-            android.util.Log.w("ScheduleRepository", "Schedule update rejected: ${error.javaClass.simpleName}")
-            Result(false)
-        }
+    @Synchronized fun sync(
+    online: Boolean,
+    onProgress: (year: Int, progress: Int) -> Unit = { _, _ -> }
+): Result {
+    fun report(year: Int, progress: Int) {
+        runCatching { onProgress(year, progress) }
     }
+
+    if (!online) return Result(false)
+    val now = clock()
+
+    return try {
+        val entries = parseManifest(download(BASE_URL + "manifest.json", MAX_MANIFEST))
+        val next = bundles.toMutableMap()
+        val updatedYears = mutableListOf<Int>()
+        var changed = false
+
+        entries.forEach { entry ->
+            val old = bundles[entry.year]
+
+            if (old != null && entry.version < old.entry.version) return@forEach
+
+            if (old != null && entry.version == old.entry.version) {
+                require(entry.sha == old.entry.sha) {
+                    "A changed schedule needs a new version"
+                }
+                return@forEach
+            }
+
+            report(entry.year, 12)
+
+            val bytes = download(BASE_URL + entry.path, entry.size)
+
+            report(entry.year, 68)
+
+            next[entry.year] = parseBundle(entry, bytes)
+
+            report(entry.year, 88)
+
+            updatedYears.add(entry.year)
+            changed = true
+        }
+
+        if (changed) {
+            val snapshot = JSONObject().put("schemaVersion", 1)
+            val saved = org.json.JSONArray()
+
+            next.toSortedMap().values.forEach {
+                saved.put(
+                    JSONObject()
+                        .put("entry", it.entry.json)
+                        .put("payload", it.raw)
+                )
+            }
+
+            snapshot.put("bundles", saved)
+
+            val serialized = snapshot.toString().toByteArray(Charsets.UTF_8)
+            require(serialized.size <= MAX_SNAPSHOT)
+
+            val stream = file.startWrite()
+
+            try {
+                stream.write(serialized)
+                file.finishWrite(stream)
+            } catch (error: Exception) {
+                file.failWrite(stream)
+                throw error
+            }
+
+            bundles = next.toMap()
+
+            updatedYears.forEach {
+                report(it, 100)
+            }
+        }
+
+        prefs.edit()
+            .putLong("last_success", now)
+            .commit()
+
+        Result(changed)
+
+    } catch (error: Exception) {
+        android.util.Log.w(
+            "ScheduleRepository",
+            "Schedule update rejected: ${error.javaClass.simpleName}"
+        )
+        Result(false)
+    }
+}
 
     private fun readSaved(): Map<Int, Bundle> = try {
         val bytes = file.openRead().use { readLimited(it, MAX_SNAPSHOT) }
