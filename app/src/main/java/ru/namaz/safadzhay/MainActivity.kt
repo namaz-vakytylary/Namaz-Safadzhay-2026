@@ -1582,7 +1582,8 @@ if (needsNotificationPermission) {
             mainScroll.scrollTo(0, 0)
             newIntent.action = Intent.ACTION_MAIN
         }
-    }override fun onResume() {
+
+override fun onResume() {
     super.onResume()
 
     if (::placeText.isInitialized) {
