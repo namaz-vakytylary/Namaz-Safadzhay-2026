@@ -193,7 +193,38 @@ class AppRegressionTest {
     }
 
     @Test
-fun notificationPermissionResultPersistsGrantAndDenial() {
+fun resumeReactsToExactAlarmPermissionChange() {
+    val c = Robolectric.buildActivity(MainActivity::class.java)
+        .create()
+        .start()
+        .resume()
+
+    try {
+        waitWorkers(c.get())
+
+        val before = ReflectionHelpers.getField<String>(
+            c.get(),
+            "lastAlarmSignature"
+        )
+
+        assertTrue(before.isNotBlank())
+
+        c.pause()
+        ShadowAlarmManager.setCanScheduleExactAlarms(false)
+        c.resume()
+
+        waitWorkers(c.get())
+
+        val after = ReflectionHelpers.getField<String>(
+            c.get(),
+            "lastAlarmSignature"
+        )
+
+        assertNotEquals(before, after)
+    } finally {
+        c.pause().stop().destroy()
+    }
+}
     shadowOf(app).denyPermissions(Manifest.permission.POST_NOTIFICATIONS)
     ShadowAlarmManager.setCanScheduleExactAlarms(false)
 
