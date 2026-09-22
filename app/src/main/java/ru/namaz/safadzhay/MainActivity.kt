@@ -1584,17 +1584,37 @@ if (needsNotificationPermission) {
         }
     }
 
-    override fun onResume() {
-        super.onResume()
-        // Rebuild alarms after returning from Android exact-alarm settings and after app updates/restarts.
-        if (::placeText.isInitialized) {
-            schedulePrayerNotifications()
-            update()
-            if (panelRoute == "notifications") showNotificationsScreen { showSettingsDialog() }
+ override fun onRequestPermissionsResult(
+    requestCode: Int,
+    permissions: Array<out String>,
+    grantResults: IntArray
+) {
+    super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+
+    if (requestCode == 7001) {
+        val granted =
+            grantResults.firstOrNull() == android.content.pm.PackageManager.PERMISSION_GRANTED
+
+        getSharedPreferences(SETTINGS_PREFS, Context.MODE_PRIVATE)
+            .edit()
+            .putBoolean(NOTIFICATIONS_ENABLED_KEY, granted)
+            .apply()
+
+        schedulePrayerNotifications()
+
+        if (granted) {
+            maybeRequestExactAlarmPermission()
         }
-        activeCompass?.start()
-        if (activeCompass?.hasCompass() == true) activeQiblaLocation?.start()
+
+        if (panelRoute == "notifications") {
+            showNotificationsScreen { showSettingsDialog() }
+        }
     }
+
+    if (requestCode == QiblaLocationController.REQUEST_CODE) {
+        activeQiblaLocation?.start()
+    }
+}
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
