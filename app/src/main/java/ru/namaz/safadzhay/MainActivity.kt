@@ -1616,7 +1616,6 @@ if (needsNotificationPermission) {
     }
 }
 
-    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode == 7001) {
     if (grantResults.firstOrNull() == android.content.pm.PackageManager.PERMISSION_GRANTED) {
