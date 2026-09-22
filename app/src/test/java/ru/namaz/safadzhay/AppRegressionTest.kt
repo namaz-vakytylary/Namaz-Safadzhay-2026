@@ -217,7 +217,8 @@ fun notificationPermissionResultPersistsGrantAndDenial() {
 
         assertTrue(prefs.contains("notifications_enabled"))
         assertFalse(prefs.getBoolean("notifications_enabled", true))
-    } finally {
+        } finally {
         c.destroy()
     }
+}
 }
