@@ -862,6 +862,7 @@ class MainActivity : Activity() {
                     update(); schedulePrayerNotifications(); refreshSettings()
                 }
             }
+            choice.minimumHeight = dp(64)
             pair.second.addView(choice, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(10) })
         }
         pair.second.addView(label("Время намазов зависит от выбранного города. Направление киблы определяется по местоположению телефона.", 14f, muted).apply { setPadding(0, dp(12), 0, 0) })
