@@ -112,7 +112,7 @@ internal class ScheduleRepository(
         fun get(context: Context): ScheduleRepository = instance ?: synchronized(this) {
             instance ?: ScheduleRepository(context.applicationContext).also { instance = it }
         }
-        const val BASE_URL = "https://emilzhianshin-dot.github.io/namaz-schedules/"
+        const val BASE_URL = "https://namaz-vakytylary.github.io/namaz-schedules/"
         private const val MAX_MANIFEST = 128 * 1024
         private const val MAX_BUNDLE = 1024 * 1024
         private const val MAX_SNAPSHOT = 48 * 1024 * 1024
