@@ -522,10 +522,16 @@ class MainActivity : Activity() {
         buildUi()
         update()
         schedulePrayerNotifications()
-        if (prefs.getBoolean(NOTIFICATIONS_ENABLED_KEY, false) && Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(this@MainActivity, "android.permission.POST_NOTIFICATIONS") != android.content.pm.PackageManager.PERMISSION_GRANTED) {
-            requestPermissions(arrayOf("android.permission.POST_NOTIFICATIONS"), 7001)
-        }
-        maybeRequestExactAlarmPermission()
+        val firstNotificationSetup = !prefs.contains(NOTIFICATIONS_ENABLED_KEY)
+val needsNotificationPermission = firstNotificationSetup &&
+    Build.VERSION.SDK_INT >= 33 &&
+    ContextCompat.checkSelfPermission(this@MainActivity, "android.permission.POST_NOTIFICATIONS") != android.content.pm.PackageManager.PERMISSION_GRANTED
+
+if (needsNotificationPermission) {
+    requestPermissions(arrayOf("android.permission.POST_NOTIFICATIONS"), 7001)
+} else {
+    maybeRequestExactAlarmPermission()
+}
         when (if (openedFromReminder) null else savedInstanceState?.getString("panel_route")) {
             "notifications" -> showNotificationsScreen { showSettingsDialog() }
             "settings" -> showSettingsDialog()
@@ -841,9 +847,7 @@ class MainActivity : Activity() {
     private fun maybeRequestExactAlarmPermission(force: Boolean = false) {
         if (Build.VERSION.SDK_INT < 31) return
         val prefs = getSharedPreferences(SETTINGS_PREFS, Context.MODE_PRIVATE)
-        if (!prefs.getBoolean(NOTIFICATIONS_ENABLED_KEY, false)) return
-        val am = getSystemService(Context.ALARM_SERVICE) as AlarmManager
-        if (am.canScheduleExactAlarms()) return
+        if (prefs.contains(NOTIFICATIONS_ENABLED_KEY) && !prefs.getBoolean(NOTIFICATIONS_ENABLED_KEY, false)) return
         if (!force && prefs.getBoolean(EXACT_ALARM_PROMPTED_KEY, false)) return
         prefs.edit().putBoolean(EXACT_ALARM_PROMPTED_KEY, true).apply()
         showThemedMessage("Точные уведомления", "Чтобы напоминания о намазе приходили точно в выбранное время, разрешите точные будильники в настройках телефона.", "Открыть настройки", "Позже") { openExactAlarmSettings() }
@@ -1587,9 +1591,14 @@ class MainActivity : Activity() {
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == 7001) schedulePrayerNotifications()
-        if (requestCode == QiblaLocationController.REQUEST_CODE) activeQiblaLocation?.start()
+        if (requestCode == 7001) {
+    schedulePrayerNotifications()
+    if (grantResults.firstOrNull() == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+        maybeRequestExactAlarmPermission()
     }
+}
+if (requestCode == QiblaLocationController.REQUEST_CODE) activeQiblaLocation?.start()
+}
 
     override fun onSaveInstanceState(outState: Bundle) {
         outState.putString("selected_date", selectedDate?.toString())
