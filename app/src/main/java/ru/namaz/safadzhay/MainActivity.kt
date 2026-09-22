@@ -1908,12 +1908,12 @@ override fun onRequestPermissionsResult(
         activeQiblaLocation?.stop()
         activeCompass?.stop()
         aboutDialog?.dismiss()
-settingsPanel?.dismiss()
-scheduleUpdateDialog?.dismiss()
-scheduleUpdateDialog = null
-scheduleUpdateBar = null
-scheduleUpdatePercent = null
-scheduleUpdateStatus = null
+        settingsPanel?.dismiss()
+        scheduleUpdateDialog?.dismiss()
+        scheduleUpdateDialog = null
+        scheduleUpdateBar = null
+        scheduleUpdatePercent = null
+        scheduleUpdateStatus = null
         super.onDestroy()
     }
 }
