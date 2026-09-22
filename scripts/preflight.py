@@ -35,10 +35,14 @@ app = manifest.find('application')
 assert app.get(ns+'allowBackup') == 'false'
 assert app.get(ns+'usesCleartextTraffic') == 'false'
 build = (ROOT / 'app/build.gradle.kts').read_text()
-for required in ['applicationId = "ru.namaz.safadzhay.test"','versionCode = 36','versionName = "1.2-test3.1"','namaz-release.jks','isDebuggable = false']:
+for required in ['applicationId = "ru.namaz.safadzhay.test"','versionCode = 36','versionName = "1.2-test3.1"','isDebuggable = false']:
     assert required in build, required
 assert not (ROOT / 'app/namaz-test.jks').exists()
-assert (ROOT / 'app/namaz-release.jks').is_file()
+tracked = subprocess.check_output(['git', 'ls-files', '-z'], cwd=ROOT).decode().split('\0')
+assert not any(p.endswith(('.jks', '.keystore')) for p in tracked if p), 'Signing key must not be tracked'
+assert not re.search(r'(?:storePassword|keyPassword)\s*=\s*[\"\']', build), 'Signing passwords must not be literals'
+for name in ['NAMAZ_KEYSTORE_PATH', 'NAMAZ_STORE_PASSWORD', 'NAMAZ_KEY_ALIAS', 'NAMAZ_KEY_PASSWORD']:
+    assert 'environmentVariable("' + name + '")' in build, 'Missing external signing input: ' + name
 for xml in (ROOT/'app/src/main/res').rglob('*.xml'): ET.parse(xml)
 assert 'Намаз Вакытлары Тест' in (ROOT/'app/src/main/res/values/strings.xml').read_text()
 resources = {p.stem for p in (ROOT/'app/src/main/res').rglob('*') if p.is_file()}
