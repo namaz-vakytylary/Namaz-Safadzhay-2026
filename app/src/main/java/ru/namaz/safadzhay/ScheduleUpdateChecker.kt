@@ -88,7 +88,4 @@ internal class ScheduleUpdateChecker(
         internal val worker = Executors.newSingleThreadExecutor()
     }
 }
-    companion object {
-        internal val worker = Executors.newSingleThreadExecutor()
-    }
-}
+    
