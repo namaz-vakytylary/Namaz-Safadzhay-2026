@@ -2,17 +2,22 @@ name: Build Namaz Vakytylary TEST offline schedules
 
 on:
   push:
-    branches: ["test/1.2-test3", "test/1.2-test3-silent-updates"]
+    branches: ["test/1.2-test3-security"]
   workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   build:
-    if: startsWith(github.ref, 'refs/heads/test/1.2-test3')
+    if: github.ref == 'refs/heads/test/1.2-test3-security'
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
+        with:
+          persist-credentials: false
 
       - name: Set up JDK 17
         uses: actions/setup-java@v5
@@ -32,14 +37,34 @@ jobs:
           grep -n "applicationId" app/build.gradle.kts || true
 
       - name: Check original timetable and test identity
-        run: python3 scripts/preflight.py
+        run: |
+          python3 scripts/preflight.py
+          python3 -m unittest discover -s scripts -p 'test_*.py'
 
       - name: Unit tests and lint
         run: ./gradlew --no-daemon clean :app:testReleaseUnitTest :app:lintRelease
 
-      - name: Build RELEASE APK
+      - name: Build signed TEST APK
+        env:
+          NAMAZ_KEYSTORE_BASE64: ${{ secrets.NAMAZ_TEST_KEYSTORE_BASE64 }}
+          NAMAZ_KEYSTORE_PATH: ${{ runner.temp }}/namaz-signing/release.jks
+          NAMAZ_STORE_PASSWORD: ${{ secrets.NAMAZ_TEST_STORE_PASSWORD }}
+          NAMAZ_KEY_ALIAS: ${{ secrets.NAMAZ_TEST_KEY_ALIAS }}
+          NAMAZ_KEY_PASSWORD: ${{ secrets.NAMAZ_TEST_KEY_PASSWORD }}
         run: |
-          ./gradlew --no-daemon --stacktrace :app:assembleRelease
+          python3 scripts/restore-signing.py
+          ./gradlew --no-daemon :app:assembleRelease
+
+      - name: Remove temporary signing key
+        if: always()
+        env:
+          NAMAZ_KEYSTORE_PATH: ${{ runner.temp }}/namaz-signing/release.jks
+        run: |
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          Path(os.environ["NAMAZ_KEYSTORE_PATH"]).unlink(missing_ok=True)
+          PY
 
       - name: Verify APK exists
         run: |
