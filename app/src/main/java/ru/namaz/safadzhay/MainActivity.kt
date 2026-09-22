@@ -1617,8 +1617,7 @@ if (needsNotificationPermission) {
 }
 
         
-if (requestCode == QiblaLocationController.REQUEST_CODE) activeQiblaLocation?.start()
-}
+
 
     override fun onSaveInstanceState(outState: Bundle) {
         outState.putString("selected_date", selectedDate?.toString())
