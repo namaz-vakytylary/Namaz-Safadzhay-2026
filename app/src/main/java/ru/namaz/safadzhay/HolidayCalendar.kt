@@ -45,10 +45,15 @@ internal object HolidayCalendar {
         addAll(items.filter { it.date == date }.map { it.title })
     }
 
-    fun bannerLabels(date: LocalDate, now: java.time.LocalDateTime, asr: java.time.LocalTime?): List<String> {
-    if (date != now.toLocalDate()) return emptyList()
+   fun bannerLabels(date: LocalDate, now: java.time.LocalDateTime, asr: java.time.LocalTime?): List<String> {
     if (date.dayOfWeek != DayOfWeek.FRIDAY) return emptyList()
-    if (asr != null && !now.toLocalTime().isBefore(asr)) return emptyList()
+
+    if (date == now.toLocalDate() &&
+        asr != null &&
+        !now.toLocalTime().isBefore(asr)
+    ) {
+        return emptyList()
+    }
 
     return listOf("Джума-намаз")
 }
