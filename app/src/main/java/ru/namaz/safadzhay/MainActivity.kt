@@ -983,7 +983,6 @@ private fun dismissScheduleUpdateDialog() {
         calendarGrid = android.widget.GridLayout(this).apply { columnCount = 7; alignmentMode = android.widget.GridLayout.ALIGN_BOUNDS }
         calendarPanel.addView(calendarGrid, LinearLayout.LayoutParams(-1, -2))
         headerBox.addView(calendarPanel, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(7) })
-        countdownCard = android.widget.FrameLayout(this).apply { background = surface() }
         holidayCard = LinearLayout(this).apply {
     orientation = LinearLayout.VERTICAL
     visibility = View.GONE
@@ -994,6 +993,7 @@ headerBox.addView(
         bottomMargin = dp(7)
     }
 )
+        countdownCard = android.widget.FrameLayout(this).apply { background = surface() }
         progress = CardProgressIndicator(this).apply { importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO }
         countdownCard.addView(progress, android.widget.FrameLayout.LayoutParams(-1, -1))
         heroCopy = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER }
