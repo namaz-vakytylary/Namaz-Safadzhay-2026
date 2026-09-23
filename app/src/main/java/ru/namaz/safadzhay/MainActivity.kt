@@ -1768,10 +1768,7 @@ dayContent.addView(
     LinearLayout.LayoutParams(numberWidth, numberHeight)
 )
 
-cell.addView(
-    dayContent,
-    LinearLayout.LayoutParams(dp(38), dp(38))
-)
+
 
             val marker = ImageView(this).apply {
     if (hasHoliday && inMonth) {
