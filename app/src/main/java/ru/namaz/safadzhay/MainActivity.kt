@@ -1736,14 +1736,15 @@ headerBox.addView(
     } else {
         visibility = View.INVISIBLE
     }
+
     scaleType = ImageView.ScaleType.FIT_CENTER
     importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
 }
 
 cell.addView(
     marker,
-    LinearLayout.LayoutParams(dp(14), dp(14)).apply {
-        topMargin = dp(1)
+    LinearLayout.LayoutParams(dp(18), dp(18)).apply {
+        topMargin = -dp(5)
     }
 )
 
