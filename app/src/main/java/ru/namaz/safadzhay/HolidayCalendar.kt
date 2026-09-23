@@ -46,11 +46,10 @@ internal object HolidayCalendar {
     }
 
     fun bannerLabels(date: LocalDate, now: java.time.LocalDateTime, asr: java.time.LocalTime?): List<String> {
-        val labels = labels(date)
-        // Other dates in the calendar retain their Friday label. On today's
-        // banner, only Jumu'ah expires; coinciding holidays remain visible.
-        return if (date == now.toLocalDate() && asr != null && !now.toLocalTime().isBefore(asr))
-            labels.filterNot { it == "Джума-намаз" }
-        else labels
-    }
+    if (date != now.toLocalDate()) return emptyList()
+    if (date.dayOfWeek != DayOfWeek.FRIDAY) return emptyList()
+    if (asr != null && !now.toLocalTime().isBefore(asr)) return emptyList()
+
+    return listOf("Джума-намаз")
+}
 }
