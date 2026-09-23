@@ -1774,9 +1774,26 @@ holidayCard.setOnClickListener {
         }
     }
 
-    content.addView(
-        text("☾  Мусульманский праздник", 13f, Color.rgb(214, 178, 77), true)
+    val holidayDetailsHeader = LinearLayout(this).apply {
+    orientation = LinearLayout.HORIZONTAL
+    gravity = Gravity.CENTER_VERTICAL
+
+    addView(
+        ImageView(this@MainActivity).apply {
+            setImageResource(R.drawable.ic_holiday_crescent)
+            scaleType = ImageView.ScaleType.FIT_CENTER
+        },
+        LinearLayout.LayoutParams(dp(22), dp(22)).apply {
+            marginEnd = dp(7)
+        }
     )
+
+    addView(
+        text("Мусульманский праздник", 13f, Color.rgb(214, 178, 77), true)
+    )
+}
+
+content.addView(holidayDetailsHeader)
 
     content.addView(
         text(holiday.title, 21f, Color.WHITE, true),
