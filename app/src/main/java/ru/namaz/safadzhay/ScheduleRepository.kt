@@ -74,18 +74,13 @@ internal class ScheduleRepository(
                 return@forEach
             }
 
-            report(entry.year, 12)
+                        report(entry.year, 12)
 
-Thread.sleep(10000)
-
-val bytes = download(BASE_URL + entry.path, entry.size)
+            val bytes = download(BASE_URL + entry.path, entry.size)
             report(entry.year, 68)
-Thread.sleep(1000)
 
-next[entry.year] = parseBundle(entry, bytes)
-
-report(entry.year, 88)
-Thread.sleep(1000)
+            next[entry.year] = parseBundle(entry, bytes)
+            report(entry.year, 88)
 
             updatedYears.add(entry.year)
             changed = true
