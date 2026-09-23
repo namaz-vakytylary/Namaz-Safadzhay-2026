@@ -986,6 +986,42 @@ private fun dismissScheduleUpdateDialog() {
         holidayCard = LinearLayout(this).apply {
     orientation = LinearLayout.VERTICAL
     visibility = View.GONE
+    setPadding(dp(16), dp(12), dp(16), dp(12))
+
+    background = GradientDrawable().apply {
+        cornerRadius = dp(16).toFloat()
+        setColor(Color.rgb(8, 52, 39))
+        setStroke(dp(1), Color.rgb(214, 178, 77))
+    }
+
+    addView(
+        text("☾  Мусульманский праздник", 13f, Color.rgb(214, 178, 77), true)
+    )
+
+    addView(
+        text("", 18f, Color.WHITE, true).apply {
+            tag = "holiday_title"
+        },
+        LinearLayout.LayoutParams(-1, -2).apply {
+            topMargin = dp(5)
+        }
+    )
+
+    addView(
+        text("", 13f, Color.rgb(190, 205, 198)).apply {
+            tag = "holiday_hijri"
+        },
+        LinearLayout.LayoutParams(-1, -2).apply {
+            topMargin = dp(2)
+        }
+    )
+
+    addView(
+        text("Нажмите, чтобы узнать подробнее  ›", 12f, Color.rgb(214, 178, 77)),
+        LinearLayout.LayoutParams(-1, -2).apply {
+            topMargin = dp(7)
+        }
+    )
 }
 headerBox.addView(
     holidayCard,
