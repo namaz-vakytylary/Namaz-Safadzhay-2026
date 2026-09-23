@@ -1730,8 +1730,18 @@ headerBox.addView(
         return
     }
 
-    holidayCard.visibility = View.VISIBLE
+    val titleView = holidayCard.findViewWithTag<TextView>("holiday_title")
+    val hijriView = holidayCard.findViewWithTag<TextView>("holiday_hijri")
+
+    titleView.text = holiday.title
+    hijriView.text = if (holiday.hijriDate.isNotBlank()) {
+        holiday.hijriDate
+    } else {
+        hijriText(date)
     }
+
+    holidayCard.visibility = View.VISIBLE
+}
     private fun openDatePicker() {
         val minDate = calendarMinMonth().atDay(1)
         val maxDate = calendarMaxMonth().atEndOfMonth()
