@@ -4,30 +4,32 @@
     android:viewportWidth="64"
     android:viewportHeight="64">
 
-    <!-- Золотой полумесяц -->
+    <!-- Полумесяц -->
     <path
         android:fillColor="#F6C453"
         android:fillType="evenOdd"
-        android:pathData="
-            M32,6
-            A26,26 0,1 0,32 58
-            A20,20 0,1 1,32 6
+        android:pathData="M31,5
+            C16,5 5,17 5,32
+            C5,47 17,59 32,59
+            C43,59 53,52 58,42
+            C52,47 46,49 40,49
+            C27,49 17,39 17,26
+            C17,17 22,9 31,5
             Z" />
 
-    <!-- Золотая звезда -->
+    <!-- Звезда -->
     <path
         android:fillColor="#F6C453"
-        android:pathData="
-            M43,19
-            L45.7,25.2
-            L52.5,25.8
-            L47.3,30.3
-            L48.9,37
-            L43,33.5
-            L37.1,37
-            L38.7,30.3
-            L33.5,25.8
-            L40.3,25.2
+        android:pathData="M43,18
+            L46,25
+            L53.5,25.6
+            L47.8,30.5
+            L49.6,38
+            L43,34
+            L36.4,38
+            L38.2,30.5
+            L32.5,25.6
+            L40,25
             Z" />
 
 </vector>
