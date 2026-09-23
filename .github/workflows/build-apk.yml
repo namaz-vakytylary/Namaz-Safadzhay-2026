@@ -1,10 +1,7 @@
 name: Build Namaz Vakytylary TEST offline schedules
 
 on:
-  push:
-    branches: ["test/1.2-test3-security"]
   workflow_dispatch:
-
 permissions:
   contents: read
 
