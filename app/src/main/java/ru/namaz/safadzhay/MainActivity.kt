@@ -1800,6 +1800,21 @@ cell.addView(
     }
 )
 
+val fridayDot = TextView(this).apply {
+    gravity = Gravity.CENTER
+    text = if (isFriday && inMonth) "•" else ""
+    textSize = 12f
+    setTextColor(
+        if (isToday) Color.rgb(48, 228, 161)
+        else Color.rgb(100, 190, 150)
+    )
+    setIncludeFontPadding(false)
+}
+
+cell.addView(
+    fridayDot,
+    LinearLayout.LayoutParams(dp(34), dp(8))
+)
             val lp = android.widget.GridLayout.LayoutParams().apply {
                 width = 0
                 height = maxOf(dp(44), numberHeight + dp(17))
