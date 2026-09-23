@@ -35,11 +35,11 @@ internal object HolidayCalendar {
         rf("2026-06-16", "Начало года по Хиджре", "Начало 1448 года по Хиджре."),
         rf("2026-06-25", "День Ашура", "Десятый день месяца Мухаррам."),
         rf("2026-08-24", "Маулид", "Памятная дата рождения Пророка Мухаммада ﷺ.", true),
-    ).sortedBy { it.date }
+        ).sortedBy { it.date }
+
     fun holidayFor(date: LocalDate): Holiday? =
-    
         items.firstOrNull { it.date == date }
-        
+
     fun labels(date: LocalDate): List<String> = buildList {
         if (date.dayOfWeek == DayOfWeek.FRIDAY) add("Джума-намаз")
         addAll(items.filter { it.date == date }.map { it.title })
