@@ -1755,6 +1755,14 @@ headerBox.addView(
             val dayContent = LinearLayout(this).apply {
     orientation = LinearLayout.VERTICAL
     gravity = Gravity.CENTER
+
+    if (hasHoliday && inMonth) {
+        background = GradientDrawable().apply {
+            shape = GradientDrawable.OVAL
+            setColor(Color.TRANSPARENT)
+            setStroke(dp(1), Color.rgb(246, 196, 83))
+        }
+    }
 }
 
 dayContent.addView(
