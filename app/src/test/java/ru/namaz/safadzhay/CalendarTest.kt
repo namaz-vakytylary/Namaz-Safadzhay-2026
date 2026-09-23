@@ -27,13 +27,14 @@ class CalendarTest {
         HolidayCalendar.bannerLabels(date, date.atTime(asr), asr).isEmpty()
     )
 
-    assertTrue(
-        HolidayCalendar.bannerLabels(
-            date,
-            date.minusDays(1).atTime(23, 59),
-            asr
-        ).isEmpty()
+    assertEquals(
+    listOf("Джума-намаз"),
+    HolidayCalendar.bannerLabels(
+        date,
+        date.minusDays(1).atTime(23, 59),
+        asr
     )
+)
 }
     @Test fun fridayWithoutDownloadedAsrDoesNotDisappearAtMidnight() {
         val date = LocalDate.of(2027, 1, 1)
