@@ -1782,12 +1782,14 @@ dayContent.addView(
     importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
 }
 
-dayContent.addView(
-    marker,
-    LinearLayout.LayoutParams(dp(15), dp(15)).apply {
-        topMargin = -dp(7)
-    }
-)
+if (hasHoliday && inMonth) {
+    dayContent.addView(
+        marker,
+        LinearLayout.LayoutParams(dp(15), dp(15)).apply {
+            topMargin = -dp(7)
+        }
+    )
+}
 cell.addView(
     dayContent,
     LinearLayout.LayoutParams(dp(38), dp(38))
