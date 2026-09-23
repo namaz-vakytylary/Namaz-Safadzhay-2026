@@ -1686,6 +1686,16 @@ headerBox.addView(
         }
     }
 
+    private fun updateHolidayCard(date: LocalDate) {
+    val holiday = HolidayCalendar.holidayFor(date)
+
+    if (holiday == null) {
+        holidayCard.visibility = View.GONE
+        return
+    }
+
+    holidayCard.visibility = View.VISIBLE
+    }
     private fun openDatePicker() {
         val minDate = calendarMinMonth().atDay(1)
         val maxDate = calendarMaxMonth().atEndOfMonth()
