@@ -1708,12 +1708,21 @@ headerBox.addView(
             ).apply {
                 gravity = Gravity.CENTER
                 setIncludeFontPadding(false)
-                if (isSelected) {
-                    background = GradientDrawable().apply {
-                        shape = GradientDrawable.OVAL
-                        setColor(Color.rgb(32, 194, 127))
-                    }
-                }
+                if (isSelected || (hasHoliday && inMonth)) {
+    background = GradientDrawable().apply {
+        shape = GradientDrawable.OVAL
+
+        if (isSelected) {
+            setColor(Color.rgb(32, 194, 127))
+        } else {
+            setColor(Color.TRANSPARENT)
+        }
+
+        if (hasHoliday) {
+            setStroke(dp(1), Color.rgb(246, 196, 83))
+        }
+    }
+}
             }
             dayNumber.maxLines = 1
             val numberHeight = maxOf(dp(27), kotlin.math.ceil(dayNumber.paint.fontSpacing).toInt())
