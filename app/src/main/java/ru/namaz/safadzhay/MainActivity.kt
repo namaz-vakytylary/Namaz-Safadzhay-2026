@@ -160,6 +160,7 @@ class MainActivity : Activity() {
     private lateinit var calendarPanel: LinearLayout
     private lateinit var calendarTitle: TextView
     private lateinit var calendarGrid: android.widget.GridLayout
+    private lateinit var holidayCard: LinearLayout
     private var calendarMonth: java.time.YearMonth = java.time.YearMonth.of(2026, 9)
     private val prayerKeys = listOf("fajr", "zuhr", "asr", "maghrib", "isha")
     private val prayerRussian = listOf("Фаджр", "Зухр", "Аср", "Магриб", "Иша")
