@@ -1720,15 +1720,23 @@ headerBox.addView(
             val numberWidth = maxOf(dp(29), kotlin.math.ceil(dayNumber.paint.measureText("31")).toInt() + dp(4))
             cell.addView(dayNumber, LinearLayout.LayoutParams(numberWidth, numberHeight))
 
-            val dot = TextView(this).apply {
-                gravity = Gravity.CENTER
-                text = if (hasEvent && inMonth) "•" else ""
-                setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, 12f)
-                importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
-                setTextColor(if (isToday) Color.rgb(48, 228, 161) else Color.rgb(100, 190, 150))
-                setIncludeFontPadding(false)
-            }
-            cell.addView(dot, LinearLayout.LayoutParams(dp(34), dp(8)))
+            val marker = ImageView(this).apply {
+    if (hasHoliday && inMonth) {
+        setImageResource(R.drawable.ic_holiday_crescent)
+        visibility = View.VISIBLE
+    } else {
+        visibility = View.INVISIBLE
+    }
+    scaleType = ImageView.ScaleType.FIT_CENTER
+    importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+}
+
+cell.addView(
+    marker,
+    LinearLayout.LayoutParams(dp(14), dp(14)).apply {
+        topMargin = dp(1)
+    }
+)
 
             val lp = android.widget.GridLayout.LayoutParams().apply {
                 width = 0
