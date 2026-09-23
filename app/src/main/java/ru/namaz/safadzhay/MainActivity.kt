@@ -139,6 +139,8 @@ class MainActivity : Activity() {
     private var scheduleUpdateBar: android.widget.ProgressBar? = null
     private var scheduleUpdatePercent: TextView? = null
     private var scheduleUpdateStatus: TextView? = null
+    private var scheduleUpdateShownAt = 0L
+    private var scheduleUpdateCompletionPending = false
     private var settingsPanelBack: () -> Unit = {}
 
     private lateinit var countdown: TextView
