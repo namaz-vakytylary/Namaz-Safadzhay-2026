@@ -1737,11 +1737,11 @@ headerBox.addView(
     background = GradientDrawable().apply {
         shape = GradientDrawable.OVAL
 
-        if (isSelected) {
-            setColor(Color.rgb(32, 194, 127))
-        } else {
-            setColor(Color.TRANSPARENT)
-        }
+       if (isSelected && !hasHoliday) {
+    setColor(Color.rgb(32, 194, 127))
+} else {
+    setColor(Color.TRANSPARENT)
+}
 
         if (hasHoliday) {
             setStroke(dp(1), Color.rgb(246, 196, 83))
