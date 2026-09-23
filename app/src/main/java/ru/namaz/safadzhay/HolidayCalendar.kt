@@ -37,7 +37,9 @@ internal object HolidayCalendar {
         rf("2026-08-24", "Маулид", "Памятная дата рождения Пророка Мухаммада ﷺ.", true),
     ).sortedBy { it.date }
     fun holidayFor(date: LocalDate): Holiday? =
-    items.firstOrNull { it.date == date }
+    
+        items.firstOrNull { it.date == date }
+        
     fun labels(date: LocalDate): List<String> = buildList {
         if (date.dayOfWeek == DayOfWeek.FRIDAY) add("Джума-намаз")
         addAll(items.filter { it.date == date }.map { it.title })
