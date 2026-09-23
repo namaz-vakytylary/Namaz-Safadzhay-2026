@@ -23,6 +23,8 @@ internal data class Holiday(
     }
 }
 
+internal object HolidayCalendar {
+    
 private fun rf(date: String, title: String, text: String, night: Boolean = false): Holiday {
     val parsedDate = LocalDate.parse(date)
     return Holiday(
