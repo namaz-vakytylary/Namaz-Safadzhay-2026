@@ -1752,7 +1752,20 @@ headerBox.addView(
             dayNumber.maxLines = 1
             val numberHeight = maxOf(dp(27), kotlin.math.ceil(dayNumber.paint.fontSpacing).toInt())
             val numberWidth = maxOf(dp(29), kotlin.math.ceil(dayNumber.paint.measureText("31")).toInt() + dp(4))
-            cell.addView(dayNumber, LinearLayout.LayoutParams(numberWidth, numberHeight))
+            val dayContent = LinearLayout(this).apply {
+    orientation = LinearLayout.VERTICAL
+    gravity = Gravity.CENTER
+}
+
+dayContent.addView(
+    dayNumber,
+    LinearLayout.LayoutParams(numberWidth, numberHeight)
+)
+
+cell.addView(
+    dayContent,
+    LinearLayout.LayoutParams(dp(38), dp(38))
+)
 
             val marker = ImageView(this).apply {
     if (hasHoliday && inMonth) {
