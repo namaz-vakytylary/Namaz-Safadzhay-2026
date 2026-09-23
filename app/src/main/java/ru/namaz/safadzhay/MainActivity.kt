@@ -559,10 +559,7 @@ if (needsNotificationPermission) {
                 onScheduleUpdated()
             }
         )
-    onChanged = {
-        onScheduleUpdated()
-    }
-)
+    
         if (openedFromReminder) intent.action = Intent.ACTION_MAIN
         handler.post(object : Runnable {
             override fun run() {
@@ -828,8 +825,7 @@ handler.postDelayed({
 }, 400L)
         
         }
-        }
-
+        
         if (safeValue >= 100) {
             scheduleUpdateCompletionPending = true
         }
