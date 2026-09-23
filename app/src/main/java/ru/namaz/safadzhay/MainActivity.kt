@@ -1033,11 +1033,36 @@ addView(holidayHeader)
     )
 
     addView(
-        text("Нажмите, чтобы узнать подробнее  ›", 12f, Color.rgb(214, 178, 77)),
-        LinearLayout.LayoutParams(-1, -2).apply {
-            topMargin = dp(7)
-        }
-    )
+    LinearLayout(this@MainActivity).apply {
+        orientation = LinearLayout.HORIZONTAL
+        gravity = Gravity.CENTER_VERTICAL
+
+        addView(
+            text(
+                "Нажмите, чтобы узнать подробнее",
+                12f,
+                Color.rgb(214, 178, 77)
+            ),
+            LinearLayout.LayoutParams(0, -2, 1f)
+        )
+
+        addView(
+            text(
+                "›",
+                24f,
+                Color.rgb(246, 196, 83),
+                true
+            ).apply {
+                gravity = Gravity.CENTER
+                includeFontPadding = false
+            },
+            LinearLayout.LayoutParams(dp(28), dp(28))
+        )
+    },
+    LinearLayout.LayoutParams(-1, -2).apply {
+        topMargin = dp(5)
+    }
+)
 }
 headerBox.addView(
     holidayCard,
