@@ -80,10 +80,12 @@ Thread.sleep(10000)
 
 val bytes = download(BASE_URL + entry.path, entry.size)
             report(entry.year, 68)
+Thread.sleep(1000)
 
-            next[entry.year] = parseBundle(entry, bytes)
+next[entry.year] = parseBundle(entry, bytes)
 
-            report(entry.year, 88)
+report(entry.year, 88)
+Thread.sleep(1000)
 
             updatedYears.add(entry.year)
             changed = true
