@@ -534,9 +534,13 @@ val needsNotificationPermission = firstNotificationSetup &&
     ContextCompat.checkSelfPermission(this@MainActivity, "android.permission.POST_NOTIFICATIONS") != android.content.pm.PackageManager.PERMISSION_GRANTED
 
 if (needsNotificationPermission) {
-    requestPermissions(arrayOf("android.permission.POST_NOTIFICATIONS"), 7001)
+    requestPermissions(
+        arrayOf("android.permission.POST_NOTIFICATIONS"),
+        7001
+    )
 } else {
     maybeRequestExactAlarmPermission()
+    startScheduleUpdateCheck()
 }
         when (if (openedFromReminder) null else savedInstanceState?.getString("panel_route")) {
             "notifications" -> showNotificationsScreen { showSettingsDialog() }
@@ -544,21 +548,7 @@ if (needsNotificationPermission) {
             "qibla" -> showQiblaCompass()
         }
         
-                scheduleUpdateChecker.checkOnce(
-            onProgress = { year, value ->
-                showScheduleUpdateDialog(year, value)
-            },
-            onFinished = {
-                handler.post {
-                    if (!scheduleUpdateCompletionPending) {
-                        dismissScheduleUpdateDialog()
-                    }
-                }
-            },
-            onChanged = {
-                onScheduleUpdated()
-            }
-        )
+                
     
         if (openedFromReminder) intent.action = Intent.ACTION_MAIN
         handler.post(object : Runnable {
@@ -568,7 +558,23 @@ if (needsNotificationPermission) {
             }
         })
     }
-
+private fun startScheduleUpdateCheck() {
+    scheduleUpdateChecker.checkOnce(
+        onProgress = { year, value ->
+            showScheduleUpdateDialog(year, value)
+        },
+        onFinished = {
+            handler.post {
+                if (!scheduleUpdateCompletionPending) {
+                    dismissScheduleUpdateDialog()
+                }
+            }
+        },
+        onChanged = {
+            onScheduleUpdated()
+        }
+    )
+}
     private fun text(value: String, size: Float, color: Int, bold: Boolean = false): TextView = TextView(this).apply {
         text = value
         textSize = size
@@ -1942,8 +1948,11 @@ override fun onRequestPermissionsResult(
         }
 
         if (panelRoute == "notifications") {
-            showNotificationsScreen { showSettingsDialog() }
-        }
+    showNotificationsScreen { showSettingsDialog() }
+}
+
+startScheduleUpdateCheck()
+}
     }
 
     if (requestCode == QiblaLocationController.REQUEST_CODE) {
