@@ -1792,7 +1792,11 @@ if (hasHoliday && inMonth) {
 }
 cell.addView(
     dayContent,
-    LinearLayout.LayoutParams(dp(38), dp(38))
+    if (hasHoliday && inMonth) {
+        LinearLayout.LayoutParams(dp(38), dp(38))
+    } else {
+        LinearLayout.LayoutParams(numberWidth, numberHeight)
+    }
 )
 
             val lp = android.widget.GridLayout.LayoutParams().apply {
