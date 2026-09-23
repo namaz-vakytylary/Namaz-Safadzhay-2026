@@ -14,13 +14,27 @@ class CalendarTest {
         assertFalse(HolidayCalendar.bannerLabels(date, date.atTime(23, 59), asr).contains("Джума-намаз"))
         assertTrue(HolidayCalendar.bannerLabels(date, date.atTime(asr), asr.plusHours(1)).contains("Джума-намаз"))
     }
-    @Test fun bannerCutoffPreservesHolidaysAndOtherCalendarDates() {
-        val date = LocalDate.of(2026, 3, 20)
-        val asr = java.time.LocalTime.of(15, 30)
-        assertEquals(listOf("Ураза-байрам"), HolidayCalendar.bannerLabels(date, date.atTime(asr), asr))
-        assertEquals(listOf("Джума-намаз", "Ураза-байрам"), HolidayCalendar.bannerLabels(date, date.atStartOfDay(), null))
-        assertEquals(listOf("Джума-намаз", "Ураза-байрам"), HolidayCalendar.bannerLabels(date, date.minusDays(1).atTime(23, 59), asr))
-    }
+   @Test fun bannerShowsOnlyJumuahAndNeverHolidayNames() {
+    val date = LocalDate.of(2026, 3, 20)
+    val asr = java.time.LocalTime.of(15, 30)
+
+    assertEquals(
+        listOf("Джума-намаз"),
+        HolidayCalendar.bannerLabels(date, date.atStartOfDay(), asr)
+    )
+
+    assertTrue(
+        HolidayCalendar.bannerLabels(date, date.atTime(asr), asr).isEmpty()
+    )
+
+    assertTrue(
+        HolidayCalendar.bannerLabels(
+            date,
+            date.minusDays(1).atTime(23, 59),
+            asr
+        ).isEmpty()
+    )
+}
     @Test fun fridayWithoutDownloadedAsrDoesNotDisappearAtMidnight() {
         val date = LocalDate.of(2027, 1, 1)
         assertEquals(listOf("Джума-намаз"), HolidayCalendar.bannerLabels(date, date.atStartOfDay(), null))
