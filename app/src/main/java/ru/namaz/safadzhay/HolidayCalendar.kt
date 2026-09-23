@@ -10,11 +10,16 @@ internal data class Holiday(
     val title: String,
     val description: String,
     val sourceName: String,
-    val night: Boolean = false
+    val night: Boolean = false,
+    val hijriDate: String = ""
 ) {
     val displayDate: String get() {
         val fmt = DateTimeFormatter.ofPattern("d MMMM yyyy", Locale("ru"))
-        return if (night) "Ночь ${date.minusDays(1).format(fmt)} — ${date.format(fmt)}" else date.format(fmt)
+        return if (night) {
+            "Ночь ${date.minusDays(1).format(fmt)} — ${date.format(fmt)}"
+        } else {
+            date.format(fmt)
+        }
     }
 }
 
