@@ -1817,7 +1817,7 @@ cell.addView(
 )
             val lp = android.widget.GridLayout.LayoutParams().apply {
                 width = 0
-                height = maxOf(dp(44), numberHeight + dp(17))
+                height = maxOf(dp(48), numberHeight + dp(17))
                 columnSpec = android.widget.GridLayout.spec(android.widget.GridLayout.UNDEFINED, 1f)
             }
             calendarGrid.addView(cell, lp)
