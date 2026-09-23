@@ -544,20 +544,21 @@ if (needsNotificationPermission) {
             "qibla" -> showQiblaCompass()
         }
         
-        scheduleUpdateChecker.checkOnce(
-    onProgress = { year, value ->
-        showScheduleUpdateDialog(year, value)
-    },
-        onFinished = {
-        handler.post {
-            if (!scheduleUpdateCompletionPending) {
-                dismissScheduleUpdateDialog()
+                scheduleUpdateChecker.checkOnce(
+            onProgress = { year, value ->
+                showScheduleUpdateDialog(year, value)
+            },
+            onFinished = {
+                handler.post {
+                    if (!scheduleUpdateCompletionPending) {
+                        dismissScheduleUpdateDialog()
+                    }
+                }
+            },
+            onChanged = {
+                onScheduleUpdated()
             }
-        }
-    },
-        }
-    }
-},
+        )
     onChanged = {
         onScheduleUpdated()
     }
@@ -826,6 +827,48 @@ handler.postDelayed({
     }
 }, 400L)
         
+        }
+        }
+
+        if (safeValue >= 100) {
+            scheduleUpdateCompletionPending = true
+        }
+
+        val minimumOffset = when {
+            safeValue >= 100 -> 2300L
+            safeValue >= 88 -> 1600L
+            safeValue >= 68 -> 900L
+            else -> 0L
+        }
+
+        val delay = (
+            scheduleUpdateShownAt +
+                minimumOffset -
+                android.os.SystemClock.uptimeMillis()
+            ).coerceAtLeast(0L)
+
+        val applyProgress = Runnable {
+            if (scheduleUpdateDialog != null) {
+                scheduleUpdateBar?.progress = safeValue
+                scheduleUpdatePercent?.text = "$safeValue%"
+
+                if (safeValue >= 100) {
+                    scheduleUpdateStatus?.text = "Расписание обновлено"
+
+                    handler.postDelayed({
+                        dismissScheduleUpdateDialog()
+                    }, 2000L)
+                } else {
+                    scheduleUpdateStatus?.text =
+                        "Загружаем данные на $year год..."
+                }
+            }
+        }
+
+        if (delay > 0L) {
+            handler.postDelayed(applyProgress, delay)
+        } else {
+            applyProgress.run()
         }
     }
 }
