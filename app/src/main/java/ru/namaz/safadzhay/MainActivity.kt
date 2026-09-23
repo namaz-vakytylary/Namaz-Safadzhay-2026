@@ -1743,9 +1743,7 @@ headerBox.addView(
     setColor(Color.TRANSPARENT)
 }
 
-        if (hasHoliday) {
-            setStroke(dp(1), Color.rgb(246, 196, 83))
-        }
+        
     }
 }
             }
