@@ -41,11 +41,23 @@ class CalendarTest {
         assertEquals(listOf("Джума-намаз"), HolidayCalendar.bannerLabels(date, date.atStartOfDay(), null))
         assertEquals(listOf("Джума-намаз"), HolidayCalendar.bannerLabels(date, date.atTime(9, 0), null))
     }
-    @Test fun eventsUseOnlyDumRf2026() {
-        assertTrue(HolidayCalendar.items.all { it.date.year == 2026 && it.sourceName == "ДУМ РФ, календарь 2026" })
-        assertEquals(LocalDate.of(2026, 8, 24), HolidayCalendar.items.single { it.title == "Маулид" }.date)
-        assertFalse(HolidayCalendar.labels(LocalDate.of(2026, 8, 25)).contains("Маулид"))
-    }
+    @Test fun eventsUseCorrectDumRfCalendarYear() {
+    assertTrue(
+        HolidayCalendar.items.all {
+            it.sourceName == "ДУМ РФ, календарь ${it.date.year}"
+        }
+    )
+
+    assertTrue(
+        HolidayCalendar.items.any {
+            it.title == "Маулид" && it.date == LocalDate.of(2026, 8, 24)
+        }
+    )
+
+    assertFalse(
+        HolidayCalendar.labels(LocalDate.of(2026, 8, 25)).contains("Маулид")
+    )
+}
     @Test fun fridayAndHolidayAreBothPresentInOneDay() {
         assertEquals(listOf("Джума-намаз", "Ураза-байрам"), HolidayCalendar.labels(LocalDate.of(2026, 3, 20)))
     }
