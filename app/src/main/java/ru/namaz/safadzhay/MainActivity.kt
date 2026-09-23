@@ -1779,10 +1779,10 @@ cell.addView(
     importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
 }
 
-cell.addView(
+dayContent.addView(
     marker,
-    LinearLayout.LayoutParams(dp(18), dp(18)).apply {
-        topMargin = -dp(5)
+    LinearLayout.LayoutParams(dp(15), dp(15)).apply {
+        topMargin = -dp(7)
     }
 )
 
