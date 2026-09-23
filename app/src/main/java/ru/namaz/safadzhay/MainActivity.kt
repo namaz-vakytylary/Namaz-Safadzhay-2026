@@ -1732,6 +1732,7 @@ headerBox.addView(
         if (selectedDate == null) selectedDate = todayDate
         if (lastDay != todayDate) { lastDay = todayDate; schedulePrayerNotifications() }
         val selected = selectedDate!!
+        updateHolidayCard(selected)
         if (selected != todayDate && !scheduleTabSelected) scheduleTabSelected = true
         updateTabStyles()
         placeText.text = selectedCity
