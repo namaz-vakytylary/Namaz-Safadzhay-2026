@@ -548,10 +548,13 @@ if (needsNotificationPermission) {
     onProgress = { year, value ->
         showScheduleUpdateDialog(year, value)
     },
-    onFinished = {
-    handler.post {
-        if ((scheduleUpdateBar?.progress ?: 0) < 100) {
-            dismissScheduleUpdateDialog()
+        onFinished = {
+        handler.post {
+            if (!scheduleUpdateCompletionPending) {
+                dismissScheduleUpdateDialog()
+            }
+        }
+    },
         }
     }
 },
@@ -822,22 +825,7 @@ handler.postDelayed({
             "Загружаем данные на $year год..."
     }
 }, 400L)
-        }
-
-        scheduleUpdateShownAt = android.os.SystemClock.uptimeMillis()
-scheduleUpdateCompletionPending = false
-
-handler.postDelayed({
-    if (
-        scheduleUpdateDialog != null &&
-        (scheduleUpdateBar?.progress ?: 0) < 40
-    ) {
-        scheduleUpdateBar?.progress = 40
-        scheduleUpdatePercent?.text = "40%"
-        scheduleUpdateStatus?.text =
-            "Загружаем данные на $year год..."
-    }
-}, 400L)
+        
         }
     }
 }
