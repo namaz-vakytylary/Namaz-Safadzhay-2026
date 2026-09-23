@@ -1788,6 +1788,10 @@ dayContent.addView(
         topMargin = -dp(7)
     }
 )
+cell.addView(
+    dayContent,
+    LinearLayout.LayoutParams(dp(38), dp(38))
+)
 
             val lp = android.widget.GridLayout.LayoutParams().apply {
                 width = 0
