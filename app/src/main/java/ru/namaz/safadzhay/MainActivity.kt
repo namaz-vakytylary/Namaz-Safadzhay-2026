@@ -1705,6 +1705,7 @@ headerBox.addView(
             val isSelected = d == selected
             val isToday = d == today
             val hasEvent = eventsFor(d).isNotEmpty()
+            val isFriday = d.dayOfWeek == java.time.DayOfWeek.FRIDAY
             val hasHoliday = HolidayCalendar.holidayFor(d) != null
 
             val cell = LinearLayout(this).apply {
