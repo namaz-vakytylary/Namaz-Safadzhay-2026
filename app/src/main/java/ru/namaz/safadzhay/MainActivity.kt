@@ -808,20 +808,36 @@ if (needsNotificationPermission) {
             scheduleUpdateBar = bar
             scheduleUpdatePercent = percent
             scheduleUpdateStatus = status
+            scheduleUpdateShownAt = android.os.SystemClock.uptimeMillis()
+scheduleUpdateCompletionPending = false
+
+handler.postDelayed({
+    if (
+        scheduleUpdateDialog != null &&
+        (scheduleUpdateBar?.progress ?: 0) < 40
+    ) {
+        scheduleUpdateBar?.progress = 40
+        scheduleUpdatePercent?.text = "40%"
+        scheduleUpdateStatus?.text =
+            "Загружаем данные на $year год..."
+    }
+}, 400L)
         }
 
-        scheduleUpdateBar?.progress = safeValue
-        scheduleUpdatePercent?.text = "$safeValue%"
+        scheduleUpdateShownAt = android.os.SystemClock.uptimeMillis()
+scheduleUpdateCompletionPending = false
 
-        if (safeValue >= 100) {
-            scheduleUpdateStatus?.text = "Расписание обновлено"
-
-            handler.postDelayed({
-                dismissScheduleUpdateDialog()
-            }, 2000L)
-        } else {
-            scheduleUpdateStatus?.text =
-                "Загружаем данные на $year год..."
+handler.postDelayed({
+    if (
+        scheduleUpdateDialog != null &&
+        (scheduleUpdateBar?.progress ?: 0) < 40
+    ) {
+        scheduleUpdateBar?.progress = 40
+        scheduleUpdatePercent?.text = "40%"
+        scheduleUpdateStatus?.text =
+            "Загружаем данные на $year год..."
+    }
+}, 400L)
         }
     }
 }
