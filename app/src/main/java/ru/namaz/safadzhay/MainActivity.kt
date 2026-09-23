@@ -994,9 +994,25 @@ private fun dismissScheduleUpdateDialog() {
         setStroke(dp(1), Color.rgb(214, 178, 77))
     }
 
+    val holidayHeader = LinearLayout(this@MainActivity).apply {
+    orientation = LinearLayout.HORIZONTAL
+    gravity = Gravity.CENTER_VERTICAL
+
     addView(
-        text("☾  Мусульманский праздник", 13f, Color.rgb(214, 178, 77), true)
+        ImageView(this@MainActivity).apply {
+            setImageResource(R.drawable.ic_holiday_crescent)
+            scaleType = ImageView.ScaleType.FIT_CENTER
+        },
+        LinearLayout.LayoutParams(dp(22), dp(22)).apply {
+            marginEnd = dp(7)
+        }
     )
+
+    addView(
+        text("Мусульманский праздник", 13f, Color.rgb(214, 178, 77), true)
+    )
+}
+addView(holidayHeader)
 
     addView(
         text("", 18f, Color.WHITE, true).apply {
