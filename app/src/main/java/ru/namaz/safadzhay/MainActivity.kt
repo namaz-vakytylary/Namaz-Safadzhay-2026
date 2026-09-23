@@ -1952,7 +1952,6 @@ override fun onRequestPermissionsResult(
 }
 
 startScheduleUpdateCheck()
-}
     }
 
     if (requestCode == QiblaLocationController.REQUEST_CODE) {
