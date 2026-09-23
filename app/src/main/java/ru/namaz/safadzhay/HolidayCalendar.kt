@@ -23,8 +23,16 @@ internal data class Holiday(
     }
 }
 
-internal object HolidayCalendar {
-    private fun rf(date: String, title: String, text: String, night: Boolean = false) = Holiday(LocalDate.parse(date), title, text, "ДУМ РФ, календарь 2026", night)
+private fun rf(date: String, title: String, text: String, night: Boolean = false): Holiday {
+    val parsedDate = LocalDate.parse(date)
+    return Holiday(
+        parsedDate,
+        title,
+        text,
+        "ДУМ РФ, календарь ${parsedDate.year}",
+        night
+    )
+}
     val items = listOf(
         rf("2026-01-16", "Ночь Мирадж", "Памятная ночь Исра и Мирадж.", true),
         rf("2026-02-03", "Ночь Бараат", "Памятная ночь середины месяца Шаабан.", true),
