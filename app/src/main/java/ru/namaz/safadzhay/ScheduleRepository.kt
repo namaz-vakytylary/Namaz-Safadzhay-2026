@@ -79,6 +79,8 @@ internal class ScheduleRepository(
         var changed = false
 
         entries.forEach { entry ->
+            if (entry.year < currentYear) return@forEach
+            
             val old = bundles[entry.year]
 
             if (old != null && entry.version < old.entry.version) return@forEach
