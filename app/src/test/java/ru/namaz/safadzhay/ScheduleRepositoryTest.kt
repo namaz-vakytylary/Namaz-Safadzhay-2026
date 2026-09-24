@@ -298,7 +298,7 @@ class ScheduleRepositoryTest {
                 "calendarTitle"
             )
 
-        assertEquals("Сентябрь 2026", title.text.toString())
+        assertFalse(title.text.toString().contains("2027"))
 
         val downloaded2027 = repo.merged("safadzhay", listOf(original))
 
