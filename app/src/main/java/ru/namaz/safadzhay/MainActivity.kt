@@ -1647,11 +1647,23 @@ headerBox.addView(
         scheduleRepository.dataForYear("safadzhay", currentYear, safadzhayData)
     }
 }
-    private fun calendarMinMonth(): java.time.YearMonth =
-    java.time.YearMonth.from(LocalDate.parse(currentData().first().date))
+    private fun calendarMinMonth(): java.time.YearMonth {
+    val data = currentData()
+    return if (data.isNotEmpty()) {
+        java.time.YearMonth.from(LocalDate.parse(data.first().date))
+    } else {
+        java.time.YearMonth.now(zone)
+    }
+}
 
-private fun calendarMaxMonth(): java.time.YearMonth =
-    java.time.YearMonth.from(LocalDate.parse(currentData().last().date))
+private fun calendarMaxMonth(): java.time.YearMonth {
+    val data = currentData()
+    return if (data.isNotEmpty()) {
+        java.time.YearMonth.from(LocalDate.parse(data.last().date))
+    } else {
+        java.time.YearMonth.now(zone)
+    }
+}
     private fun formatRussianDate(date: LocalDate): String {
         val months = listOf(
             "Января", "Февраля", "Марта", "Апреля", "Мая", "Июня",
