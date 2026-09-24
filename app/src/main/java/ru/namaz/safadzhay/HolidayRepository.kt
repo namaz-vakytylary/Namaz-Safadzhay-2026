@@ -16,9 +16,10 @@ import java.time.LocalDate
  */
 internal class HolidayRepository(context: Context) {
 
-    private val file = AtomicFile(
-        File(context.filesDir, "downloaded-holidays.json")
-    )
+    private val filesDir = context.filesDir
+
+private fun fileFor(year: Int): AtomicFile =
+    AtomicFile(File(filesDir, "downloaded-holidays-$year.json"))
 
     fun loadSaved(year: Int): List<Holiday>? {
         return try {
