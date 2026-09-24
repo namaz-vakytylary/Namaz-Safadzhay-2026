@@ -95,12 +95,7 @@ internal class ScheduleRepository(
             report(entry.year, 68)
 
             next[entry.year] = parseBundle(entry, bytes)
-            val currentYear = LocalDate.now().year
-if (entry.year == currentYear) {
-    next.keys
-        .filter { it < currentYear }
-        .forEach { next.remove(it) }
-}
+
             report(entry.year, 88)
 
             updatedYears.add(entry.year)
