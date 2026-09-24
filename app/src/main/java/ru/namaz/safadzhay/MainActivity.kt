@@ -1909,21 +1909,30 @@ cell.addView(
         }
 
         val selectedDay = dayFor(selected)
-        if (selectedDay == null) {
-            nextName.text = "Расписание"
-            countdownLabel.visibility = View.VISIBLE
-            countdown.text = "—"
-            countdownLabel.text = "Нет расписания на эту дату"
-            progress.progress = 0f
-            countdownStart.text = ""
-            val missingKey = "missing|$selected|$selectedCity"
-            if (lastPrayerRender != missingKey) {
-                lastPrayerRender = missingKey
-                prayerList.removeAllViews()
-                prayerList.addView(label("На эту дату расписание отсутствует.", 14f, muted).apply { gravity = Gravity.CENTER; setPadding(dp(16), dp(16), dp(16), dp(16)) })
-            }
-            return
-        }
+       if (selectedDay == null) {
+    nextName.text = "Расписание пока недоступно"
+    countdownLabel.visibility = View.VISIBLE
+    countdown.text = "—"
+    countdownLabel.text = "Для этой даты время намаза ещё не загружено."
+    progress.progress = 0f
+    countdownStart.text = ""
+
+    val unavailablePrayers = listOf(
+        Prayer("Фаджр", "Иртәнге намаз", "— —"),
+        Prayer("Зухр", "Өйлә намазы", "— —"),
+        Prayer("Аср", "Икенде намазы", "— —"),
+        Prayer("Магриб", "Ахшам намазы", "— —"),
+        Prayer("Иша", "Ястү намазы", "— —")
+    )
+
+    renderPrayers(
+        unavailablePrayers,
+        -1,
+        now,
+        selected
+    )
+    return
+}
 
         val prayers = getPrayers(selectedDay)
         if (selected != todayDate) {
