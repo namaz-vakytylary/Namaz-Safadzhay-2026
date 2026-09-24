@@ -22,15 +22,17 @@ private fun fileFor(year: Int): AtomicFile =
     AtomicFile(File(filesDir, "downloaded-holidays-$year.json"))
 
     fun loadSaved(year: Int): List<Holiday>? {
-        return try {
-            if (!file.baseFile.exists()) return null
+    return try {
+        val file = fileFor(year)
 
-            val raw = file.openRead().bufferedReader().use { it.readText() }
-            parse(raw, year)
-        } catch (_: Exception) {
-            null
-        }
+        if (!file.baseFile.exists()) return null
+
+        val raw = file.openRead().bufferedReader().use { it.readText() }
+        parse(raw, year)
+    } catch (_: Exception) {
+        null
     }
+}
 
     fun download(year: Int): List<Holiday>? {
         return try {
