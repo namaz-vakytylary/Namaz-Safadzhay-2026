@@ -61,7 +61,7 @@ private fun rf(date: String, title: String, text: String, night: Boolean = false
         ).sortedBy { it.date }
 
     fun holidayFor(date: LocalDate): Holiday? =
-        items.firstOrNull { it.date == date }
+    holidaysFor(date.year).firstOrNull { it.date == date }
 
     fun labels(date: LocalDate): List<String> = buildList {
         if (date.dayOfWeek == DayOfWeek.FRIDAY) add("Джума-намаз")
