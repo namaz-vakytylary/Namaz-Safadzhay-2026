@@ -566,7 +566,7 @@ if (needsNotificationPermission) {
         })
     }
 private fun startScheduleUpdateCheck() {
-    ScheduleUpdateChecker.worker.execute {
+    holidayUpdateWorker.execute {
     val year = LocalDate.now(zone).year
     val holidays = holidayRepository.download(year)
 
