@@ -1833,9 +1833,7 @@ cell.addView(
     } else {
         hijriText(date)
     }
-holidayCard.setOnClickListener {
-    showHolidayDetails(holiday)
-}
+
     
     
     )
