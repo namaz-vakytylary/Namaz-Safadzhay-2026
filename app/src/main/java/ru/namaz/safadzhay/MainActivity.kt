@@ -1051,19 +1051,7 @@ addView(holidayHeader)
         }
     )
 
-    addView(
-    LinearLayout(this@MainActivity).apply {
-        orientation = LinearLayout.HORIZONTAL
-        gravity = Gravity.CENTER_VERTICAL
-
-        addView(
-            text(
-                "Нажмите, чтобы узнать подробнее",
-                12f,
-                Color.rgb(214, 178, 77)
-            ),
-            LinearLayout.LayoutParams(0, -2, 1f)
-        )
+    
 
         addView(
             text(
