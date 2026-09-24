@@ -1638,10 +1638,15 @@ headerBox.addView(
 
     private fun currentData(): List<PrayerDay> = dataForCity(selectedCity)
 
-    private fun dataForCity(city: String): List<PrayerDay> =
-        if (city == "Москва") scheduleRepository.merged("moscow", moscowData)
-        else scheduleRepository.merged("safadzhay", safadzhayData)
+    private fun dataForCity(city: String): List<PrayerDay> {
+    val currentYear = LocalDate.now(zone).year
 
+    return if (city == "Москва") {
+        scheduleRepository.dataForYear("moscow", currentYear, moscowData)
+    } else {
+        scheduleRepository.dataForYear("safadzhay", currentYear, safadzhayData)
+    }
+}
     private fun calendarMinMonth(): java.time.YearMonth =
     java.time.YearMonth.from(LocalDate.parse(currentData().first().date))
 
