@@ -519,6 +519,9 @@ class MainActivity : Activity() {
         scheduleUpdateChecker = (lastNonConfigurationInstance as? ScheduleUpdateChecker)
             ?: ScheduleUpdateChecker(applicationContext)
             holidayRepository = HolidayRepository(applicationContext)
+            holidayRepository.loadSaved(LocalDate.now(zone).year)?.let { holidays ->
+    HolidayCalendar.setRemote(LocalDate.now(zone).year, holidays)
+            }
         WindowCompat.setDecorFitsSystemWindows(window, false)
         val openedFromReminder = intent?.action == OPEN_PRAYER_ACTION
         selectedDate = savedInstanceState?.getString("selected_date")?.let { runCatching { LocalDate.parse(it) }.getOrNull() } ?: LocalDate.now(zone)
