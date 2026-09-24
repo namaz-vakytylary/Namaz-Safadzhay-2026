@@ -305,7 +305,8 @@ class ScheduleRepositoryTest {
         assertTrue(
             downloaded2027.any { it.date == "2027-01-01" }
         )
-    } finally {
+        } finally {
         controller.destroy()
     }
+}
 }
