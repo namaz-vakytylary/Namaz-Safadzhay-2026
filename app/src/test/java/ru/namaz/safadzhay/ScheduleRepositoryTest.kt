@@ -30,11 +30,16 @@ class ScheduleRepositoryTest {
         responses.clear(); calls.clear()
     }
 
-    private fun repository() = ScheduleRepository(context, { url, _ ->
+   private fun repository(year: Int = 2026) = ScheduleRepository(
+    context,
+    { url, _ ->
         val path = url.removePrefix(ScheduleRepository.BASE_URL)
         calls.add(path)
         responses[path] ?: throw IOException("offline")
-    }, { now })
+    },
+    { now },
+    { year }
+)
 
     // Synthetic data is confined to these unit tests; never bundled or published.
     private fun fixture(year: Int = 2027, version: Int = 1, fajr: String = "06:00"): JSONObject {
