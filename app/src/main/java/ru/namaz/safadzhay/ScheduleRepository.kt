@@ -21,7 +21,7 @@ internal data class PrayerDay(
 internal class ScheduleRepository(
     context: Context,
     private val download: (String, Int) -> ByteArray = ::downloadScheduleFile,
-    private val clock: () -> Long = System::currentTimeMillis
+    private val clock: () -> Long = System::currentTimeMillis,
     private val currentYear: () -> Int = { LocalDate.now().year }
 ) {
     private val prefs = context.getSharedPreferences("schedule_updates", Context.MODE_PRIVATE)
