@@ -1852,94 +1852,9 @@ holidayCard.setOnClickListener {
     showHolidayDetails(holiday)
 }
     
-    private fun showHolidayDetails(holiday: Holiday) {
-    val dialog = android.app.Dialog(this)
-
-    val content = LinearLayout(this).apply {
-        orientation = LinearLayout.VERTICAL
-        setPadding(dp(22), dp(20), dp(22), dp(20))
-
-        background = GradientDrawable().apply {
-            cornerRadius = dp(22).toFloat()
-            setColor(Color.rgb(8, 52, 39))
-            setStroke(dp(1), Color.rgb(214, 178, 77))
-        }
-    }
-
-    val holidayDetailsIcon = ImageView(this).apply {
-    setImageResource(R.drawable.ic_holiday_crescent)
-    scaleType = ImageView.ScaleType.FIT_CENTER
-    importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
-}
-
-content.addView(
-    holidayDetailsIcon,
-    LinearLayout.LayoutParams(dp(72), dp(72)).apply {
-        gravity = Gravity.CENTER_HORIZONTAL
-        bottomMargin = dp(10)
-    }
-)
-
-    content.addView(
-        text(holiday.title, 21f, Color.WHITE, true),
-        LinearLayout.LayoutParams(-1, -2).apply {
-            topMargin = dp(10)
-        }
+    
     )
 
-    val hijri = if (holiday.hijriDate.isNotBlank()) {
-        holiday.hijriDate
-    } else {
-        hijriText(holiday.date)
-    }
-
-    content.addView(
-        text(hijri, 14f, Color.rgb(190, 205, 198)),
-        LinearLayout.LayoutParams(-1, -2).apply {
-            topMargin = dp(5)
-        }
-    )
-
-    content.addView(
-        text(holiday.description, 15f, Color.WHITE),
-        LinearLayout.LayoutParams(-1, -2).apply {
-            topMargin = dp(16)
-        }
-    )
-
-    val close = text("Закрыть", 15f, Color.rgb(214, 178, 77), true).apply {
-        gravity = Gravity.CENTER
-        setPadding(dp(12), dp(12), dp(12), dp(12))
-        setOnClickListener {
-            dialog.dismiss()
-        }
-    }
-
-    content.addView(
-        close,
-        LinearLayout.LayoutParams(-1, -2).apply {
-            topMargin = dp(16)
-        }
-    )
-
-    dialog.setContentView(content)
-
-    dialog.window?.apply {
-        setBackgroundDrawableResource(android.R.color.transparent)
-        setLayout(
-            (resources.displayMetrics.widthPixels * 0.92f).toInt(),
-            ViewGroup.LayoutParams.WRAP_CONTENT
-        )
-        setGravity(Gravity.BOTTOM)
-    }
-
-    dialog.show()
-
-    dialog.window?.setLayout(
-        (resources.displayMetrics.widthPixels * 0.92f).toInt(),
-        ViewGroup.LayoutParams.WRAP_CONTENT
-    )
-    }
     private fun openDatePicker() {
         val minDate = calendarMinMonth().atDay(1)
         val maxDate = calendarMaxMonth().atEndOfMonth()
