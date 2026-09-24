@@ -1851,8 +1851,7 @@ cell.addView(
 holidayCard.setOnClickListener {
     showHolidayDetails(holiday)
 }
-    holidayCard.visibility = View.VISIBLE
-}
+    
     private fun showHolidayDetails(holiday: Holiday) {
     val dialog = android.app.Dialog(this)
 
