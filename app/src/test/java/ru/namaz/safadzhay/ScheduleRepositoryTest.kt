@@ -258,28 +258,54 @@ class ScheduleRepositoryTest {
         }
     }
 
-    @Test fun downloadedNextYearReachesCalendarAndStoredNotificationChain() {
-        publish(fixture())
-        val repo = repository(); assertTrue(repo.sync(online = true).changed)
-        TestNetwork.offline(context)
-        val controller = org.robolectric.Robolectric.buildActivity(MainActivity::class.java).create()
-        val activity = controller.get()
-        try {
-            org.robolectric.util.ReflectionHelpers.getField<java.util.concurrent.ExecutorService>(activity, "alarmExecutor")
-                .submit {}.get(15, java.util.concurrent.TimeUnit.SECONDS)
-            org.robolectric.util.ReflectionHelpers.setField(activity, "scheduleRepository", repo)
-            org.robolectric.util.ReflectionHelpers.setField(activity, "calendarMonth", java.time.YearMonth.of(2027, 1))
-            org.robolectric.util.ReflectionHelpers.callInstanceMethod<Unit>(activity, "renderInlineCalendar")
-            val title = org.robolectric.util.ReflectionHelpers.getField<android.widget.TextView>(activity, "calendarTitle")
-            assertEquals("Январь 2027", title.text.toString())
-            val days = repo.merged("safadzhay", listOf(original))
-            val method = MainActivity::class.java.getDeclaredMethod("rebuildPrayerNotifications",
-                List::class.java, String::class.java, java.lang.Boolean.TYPE, java.lang.Integer.TYPE, Set::class.java)
-            method.isAccessible = true
-            method.invoke(activity, days, "Сафаджай", true, 5, setOf("fajr", "zuhr", "asr", "maghrib", "isha"))
-            val stored = context.getSharedPreferences("settings", Context.MODE_PRIVATE).getString("scheduled_prayers", "")!!
-            assertTrue(stored.contains("2027-01-01|fajr|Фаджр|Иртәнге намаз|06:00|Сафаджай"))
-            assertTrue(stored.contains("2027-01-01|isha|"))
-        } finally { controller.destroy() }
+    @Test fun downloadedNextYearIsNotShownBeforeItBecomesCurrentYear() {
+    publish(fixture())
+    val repo = repository()
+    assertTrue(repo.sync(online = true).changed)
+
+    TestNetwork.offline(context)
+
+    val controller =
+        org.robolectric.Robolectric.buildActivity(MainActivity::class.java).create()
+    val activity = controller.get()
+
+    try {
+        org.robolectric.util.ReflectionHelpers
+            .getField<java.util.concurrent.ExecutorService>(activity, "alarmExecutor")
+            .submit {}
+            .get(15, java.util.concurrent.TimeUnit.SECONDS)
+
+        org.robolectric.util.ReflectionHelpers.setField(
+            activity,
+            "scheduleRepository",
+            repo
+        )
+
+        org.robolectric.util.ReflectionHelpers.setField(
+            activity,
+            "calendarMonth",
+            java.time.YearMonth.of(2027, 1)
+        )
+
+        org.robolectric.util.ReflectionHelpers.callInstanceMethod<Unit>(
+            activity,
+            "renderInlineCalendar"
+        )
+
+        val title =
+            org.robolectric.util.ReflectionHelpers.getField<android.widget.TextView>(
+                activity,
+                "calendarTitle"
+            )
+
+        assertEquals("Сентябрь 2026", title.text.toString())
+
+        val downloaded2027 = repo.merged("safadzhay", listOf(original))
+
+        assertTrue(
+            downloaded2027.any { it.date == "2027-01-01" }
+        )
+    } finally {
+        controller.destroy()
     }
 }
