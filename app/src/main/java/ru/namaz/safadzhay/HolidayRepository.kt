@@ -110,7 +110,30 @@ private fun fileFor(year: Int): AtomicFile =
         null
     }
 }
+private fun downloadBytes(url: String, maxSize: Int): ByteArray {
+    val connection = URL(url).openConnection() as HttpURLConnection
 
+    connection.connectTimeout = 8000
+    connection.readTimeout = 8000
+    connection.instanceFollowRedirects = false
+    connection.requestMethod = "GET"
+
+    try {
+        require(connection.responseCode == HttpURLConnection.HTTP_OK)
+
+        val bytes = connection.inputStream.use { input ->
+            input.readBytes()
+        }
+
+        require(bytes.isNotEmpty())
+        require(bytes.size <= maxSize)
+
+        return bytes
+    } finally {
+        connection.disconnect()
+    }
+}
+    
     private fun save(year: Int, raw: String) {
     val bytes = raw.toByteArray(Charsets.UTF_8)
     require(bytes.size <= MAX_FILE_SIZE)
