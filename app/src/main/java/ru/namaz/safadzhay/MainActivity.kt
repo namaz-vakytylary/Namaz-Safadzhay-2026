@@ -1834,9 +1834,8 @@ cell.addView(
         hijriText(date)
     }
 
-    
-    
-    )
+   holidayCard.visibility = View.VISIBLE
+    }
 
     private fun openDatePicker() {
         val minDate = calendarMinMonth().atDay(1)
