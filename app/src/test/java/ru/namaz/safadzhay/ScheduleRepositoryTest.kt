@@ -265,8 +265,8 @@ class ScheduleRepositoryTest {
 
    @Test
 fun downloadedNextYearIsNotShownBeforeItBecomesCurrentYear() {
-    val currentYear = 2034
-    val nextYear = currentYear + 1
+    val currentYear = LocalDate.now().year
+val nextYear = currentYear + 1
 
     publish(fixture(year = nextYear))
 
@@ -328,8 +328,8 @@ fun downloadedNextYearIsNotShownBeforeItBecomesCurrentYear() {
 }
 @Test
 fun newYearRemovesOldCacheDoesNotRedownloadOldYearAndKeepsCurrentSchedule() {
-    val oldYear = 2034
-    val newYear = oldYear + 1
+    val oldYear = LocalDate.now().year
+val newYear = oldYear + 1
 
     val oldEntry = fixture(year = oldYear, fajr = "05:30")
     val newEntry = fixture(year = newYear, fajr = "06:10")
