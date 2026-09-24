@@ -74,7 +74,7 @@ internal class ScheduleRepository(
 
     return try {
         val entries = parseManifest(download(BASE_URL + "manifest.json", MAX_MANIFEST))
-        val currentYear = LocalDate.now().year
+        val currentYear = currentYear()
         val next = bundles.toMutableMap()
         val updatedYears = mutableListOf<Int>()
         var changed = false
