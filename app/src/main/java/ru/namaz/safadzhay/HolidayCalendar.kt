@@ -64,9 +64,9 @@ private fun rf(date: String, title: String, text: String, night: Boolean = false
     holidaysFor(date.year).firstOrNull { it.date == date }
 
     fun labels(date: LocalDate): List<String> = buildList {
-        if (date.dayOfWeek == DayOfWeek.FRIDAY) add("Джума-намаз")
-        addAll(items.filter { it.date == date }.map { it.title })
-    }
+    if (date.dayOfWeek == DayOfWeek.FRIDAY) add("Джума-намаз")
+    addAll(holidaysFor(date.year).filter { it.date == date }.map { it.title })
+}
 
    fun bannerLabels(date: LocalDate, now: java.time.LocalDateTime, asr: java.time.LocalTime?): List<String> {
     if (date.dayOfWeek != DayOfWeek.FRIDAY) return emptyList()
