@@ -104,6 +104,14 @@ internal class ScheduleRepository(
             updatedYears.add(entry.year)
             changed = true
         }
+        if (next.containsKey(currentYear)) {
+    val oldYears = next.keys.filter { it < currentYear }
+
+    if (oldYears.isNotEmpty()) {
+        oldYears.forEach { next.remove(it) }
+        changed = true
+    }
+}
 
         if (changed) {
             val snapshot = JSONObject().put("schemaVersion", 1)
