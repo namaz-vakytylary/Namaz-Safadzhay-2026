@@ -263,9 +263,14 @@ class ScheduleRepositoryTest {
         }
     }
 
-    @Test fun downloadedNextYearIsNotShownBeforeItBecomesCurrentYear() {
-    publish(fixture())
-    val repo = repository()
+   @Test
+fun downloadedNextYearIsNotShownBeforeItBecomesCurrentYear() {
+    val currentYear = 2034
+    val nextYear = currentYear + 1
+
+    publish(fixture(year = nextYear))
+
+    val repo = repository(year = currentYear)
     assertTrue(repo.sync(online = true).changed)
 
     TestNetwork.offline(context)
@@ -289,7 +294,7 @@ class ScheduleRepositoryTest {
         org.robolectric.util.ReflectionHelpers.setField(
             activity,
             "calendarMonth",
-            java.time.YearMonth.of(2027, 1)
+            java.time.YearMonth.of(nextYear, 1)
         )
 
         org.robolectric.util.ReflectionHelpers.callInstanceMethod<Unit>(
@@ -303,14 +308,21 @@ class ScheduleRepositoryTest {
                 "calendarTitle"
             )
 
-        assertFalse(title.text.toString().contains("2027"))
+        assertFalse(
+            title.text.toString().contains(nextYear.toString())
+        )
 
-        val downloaded2027 = repo.merged("safadzhay", listOf(original))
+        val downloadedNextYear = repo.merged(
+            "safadzhay",
+            listOf(original)
+        )
 
         assertTrue(
-            downloaded2027.any { it.date == "2027-01-01" }
+            downloadedNextYear.any {
+                it.date == "$nextYear-01-01"
+            }
         )
-        } finally {
+    } finally {
         controller.destroy()
     }
 }
