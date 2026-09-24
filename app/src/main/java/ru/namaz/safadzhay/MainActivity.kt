@@ -1053,22 +1053,7 @@ addView(holidayHeader)
 
     
 
-        addView(
-            text(
-                "›",
-                24f,
-                Color.rgb(246, 196, 83),
-                true
-            ).apply {
-                gravity = Gravity.CENTER
-                includeFontPadding = false
-            },
-            LinearLayout.LayoutParams(dp(28), dp(28))
-        )
-    },
-    LinearLayout.LayoutParams(-1, -2).apply {
-        topMargin = dp(5)
-    }
+        
 )
 }
 headerBox.addView(
