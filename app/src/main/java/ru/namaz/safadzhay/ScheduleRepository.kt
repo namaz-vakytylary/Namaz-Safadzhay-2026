@@ -22,7 +22,9 @@ internal class ScheduleRepository(
     context: Context,
     private val download: (String, Int) -> ByteArray = ::downloadScheduleFile,
     private val clock: () -> Long = System::currentTimeMillis,
-    private val currentYear: () -> Int = { LocalDate.now().year }
+   private val currentYear: () -> Int = {
+    LocalDate.now(java.time.ZoneId.of("Europe/Moscow")).year
+}
 ) {
     private val prefs = context.getSharedPreferences("schedule_updates", Context.MODE_PRIVATE)
     private val file = AtomicFile(File(context.filesDir, "downloaded-schedules.json"))
