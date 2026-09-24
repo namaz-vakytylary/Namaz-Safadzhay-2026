@@ -70,20 +70,21 @@ private fun fileFor(year: Int): AtomicFile =
         }
     }
 
-    private fun save(raw: String) {
-        val bytes = raw.toByteArray(Charsets.UTF_8)
-        require(bytes.size <= MAX_FILE_SIZE)
+    private fun save(year: Int, raw: String) {
+    val bytes = raw.toByteArray(Charsets.UTF_8)
+    require(bytes.size <= MAX_FILE_SIZE)
 
-        val stream = file.startWrite()
+    val file = fileFor(year)
+    val stream = file.startWrite()
 
-        try {
-            stream.write(bytes)
-            file.finishWrite(stream)
-        } catch (error: Exception) {
-            file.failWrite(stream)
-            throw error
-        }
+    try {
+        stream.write(bytes)
+        file.finishWrite(stream)
+    } catch (error: Exception) {
+        file.failWrite(stream)
+        throw error
     }
+}
 
     internal fun parse(raw: String, expectedYear: Int): List<Holiday> {
         val root = JSONObject(raw)
