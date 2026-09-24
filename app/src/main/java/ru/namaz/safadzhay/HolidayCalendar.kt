@@ -24,6 +24,19 @@ internal data class Holiday(
 }
 
 internal object HolidayCalendar {
+    @Volatile
+private var remoteByYear: Map<Int, List<Holiday>> = emptyMap()
+
+fun setRemote(year: Int, holidays: List<Holiday>?) {
+    remoteByYear = if (holidays == null) {
+        remoteByYear - year
+    } else {
+        remoteByYear + (year to holidays.sortedBy { it.date })
+    }
+}
+
+private fun holidaysFor(year: Int): List<Holiday> =
+    remoteByYear[year] ?: items.filter { it.date.year == year }
     
 private fun rf(date: String, title: String, text: String, night: Boolean = false): Holiday {
     val parsedDate = LocalDate.parse(date)
