@@ -565,7 +565,20 @@ if (needsNotificationPermission) {
         })
     }
 private fun startScheduleUpdateCheck() {
+    ScheduleUpdateChecker.worker.execute {
+    val year = LocalDate.now(zone).year
+    val holidays = holidayRepository.download(year)
+
+    if (holidays != null) {
+        HolidayCalendar.setRemote(year, holidays)
+
+        handler.post {
+            update()
+        }
+    }
+    }
     scheduleUpdateChecker.checkOnce(
+        
         onProgress = { year, value ->
             showScheduleUpdateDialog(year, value)
         },
