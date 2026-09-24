@@ -314,4 +314,45 @@ class ScheduleRepositoryTest {
         controller.destroy()
     }
 }
+@Test
+fun newYearRemovesOldCacheDoesNotRedownloadOldYearAndKeepsCurrentSchedule() {
+    // Сначала приложение находится в 2026 году.
+    val entry2026 = fixture(year = 2026, fajr = "05:30")
+    val entry2027 = fixture(year = 2027, fajr = "06:10")
+    publish(entry2026, entry2027)
+
+    val repo2026 = repository(year = 2026)
+
+    // Загружаем и сохраняем проверенные расписания.
+    assertTrue(repo2026.sync(online = true).changed)
+
+    // Имитируем наступление 2027 года и перезапуск репозитория.
+    calls.clear()
+    val repo2027 = repository(year = 2027)
+
+    assertTrue(repo2027.sync(online = true).changed)
+
+    // 1. Старый 2026 год должен исчезнуть из локального снимка.
+    val snapshot = File(
+        context.filesDir,
+        "downloaded-schedules.json"
+    ).readText()
+
+    assertFalse(snapshot.contains("\"year\":2026"))
+    assertTrue(snapshot.contains("\"year\":2027"))
+
+    // 2. После наступления 2027 года 2026.json больше не скачивается.
+    assertFalse(calls.contains("2026.json"))
+
+    // 3. Проверенное расписание 2027 остаётся рабочим.
+    val days2027 = repo2027.dataForYear(
+        "safadzhay",
+        2027,
+        emptyList()
+    )
+
+    assertEquals(1, days2027.size)
+    assertEquals("2027-01-01", days2027.first().date)
+    assertEquals("06:10", days2027.first().fajr)
+}
 }
