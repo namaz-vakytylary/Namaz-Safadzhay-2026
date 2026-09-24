@@ -140,14 +140,15 @@ class AppRegressionTest {
         try {
             waitWorkers(c.get()); invoke(c.get(),"showSettingsDialog")
             val settings=ReflectionHelpers.getField<Dialog>(c.get(),"settingsPanel")
-            val forbidden=listOf("Обновление расписания","Проверить","загружено","загрузить","JSON","Последняя проверка")
+            val forbidden=listOf("Обновление расписания","Проверить обновления","загрузить","JSON","Последняя проверка")
             val visible=texts(settings.window!!.decorView).joinToString("\n")
             assertFalse(visible,forbidden.any { visible.contains(it,true) })
             ReflectionHelpers.setField(c.get(),"selectedDate",LocalDate.of(2027,1,1))
             ReflectionHelpers.setField(c.get(),"scheduleTabSelected",true);invoke(c.get(),"update")
             val main=texts(c.get().window.decorView).joinToString("\n")
             assertFalse(main,forbidden.any { main.contains(it,true) })
-            assertTrue(main.contains("На эту дату расписание отсутствует."))
+           assertTrue(main.contains("Расписание пока недоступно"))
+assertTrue(main.contains("Для этой даты время намаза ещё не загружено."))
         } finally { c.destroy() }
     }
     @Test fun accessibilityActionsHaveNamesAndDateRemainsReadable() {
