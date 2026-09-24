@@ -39,6 +39,21 @@ internal class ScheduleRepository(
         }
         return result.values.sortedBy { it.date }
     }
+    fun dataForYear(
+    cityId: String,
+    year: Int,
+    builtIn: List<PrayerDay>
+): List<PrayerDay> {
+    val downloaded = bundles[year]?.cities?.get(cityId)
+
+    if (!downloaded.isNullOrEmpty()) {
+        return downloaded.sortedBy { it.date }
+    }
+
+    return builtIn
+        .filter { LocalDate.parse(it.date).year == year }
+        .sortedBy { it.date }
+    }
 
     fun lastSuccess(): Long = prefs.getLong("last_success", 0)
     fun hasDownloads(): Boolean = bundles.isNotEmpty()
