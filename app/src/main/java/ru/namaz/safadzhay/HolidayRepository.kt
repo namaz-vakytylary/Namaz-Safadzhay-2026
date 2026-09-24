@@ -36,40 +36,80 @@ private fun fileFor(year: Int): AtomicFile =
 }
 
     fun download(year: Int): List<Holiday>? {
-        return try {
-            require(year in 2026..2100)
+    return try {
+        require(year in 2026..2100)
 
-            val url = URL("$BASE_URL$year.json")
-            val connection = url.openConnection() as HttpURLConnection
+        // 1. Скачиваем manifest.json
+        val manifestBytes = downloadBytes(
+            ScheduleRepository.BASE_URL + "manifest.json",
+            MAX_MANIFEST_SIZE
+        )
 
-            connection.connectTimeout = 8000
-            connection.readTimeout = 8000
-            connection.instanceFollowRedirects = false
-            connection.requestMethod = "GET"
+        val manifest = JSONObject(
+            manifestBytes.toString(Charsets.UTF_8)
+        )
 
-            try {
-                require(connection.responseCode == HttpURLConnection.HTTP_OK)
+        require(manifest.getInt("schemaVersion") == 1)
 
-                val bytes = connection.inputStream.use {
-                    it.readBytes()
-                }
+        val entries = manifest.getJSONArray("holidays")
+        require(entries.length() <= 100)
 
-                require(bytes.isNotEmpty())
-                require(bytes.size <= MAX_FILE_SIZE)
+        // 2. Находим праздники нужного года
+        var entry: JSONObject? = null
 
-                val raw = bytes.toString(Charsets.UTF_8)
-                val holidays = parse(raw, year)
+        for (i in 0 until entries.length()) {
+            val candidate = entries.getJSONObject(i)
 
-                save(year, raw)
-
-                holidays
-            } finally {
-                connection.disconnect()
+            if (candidate.getInt("year") == year) {
+                entry = candidate
+                break
             }
-        } catch (_: Exception) {
-            null
         }
+
+        val holidayEntry = entry ?: return null
+
+        val path = holidayEntry.getString("path")
+        val expectedSize = holidayEntry.getInt("bytes")
+        val expectedSha = holidayEntry.getString("sha256")
+
+        require(
+            path.matches(
+                Regex("holidays/[A-Za-z0-9_-]+\\.json")
+            )
+        )
+        require(expectedSize in 1..MAX_FILE_SIZE)
+        require(expectedSha.matches(Regex("[a-f0-9]{64}")))
+
+        // 3. Скачиваем файл праздников
+        val bytes = downloadBytes(
+            ScheduleRepository.BASE_URL + path,
+            expectedSize
+        )
+
+        require(bytes.size == expectedSize)
+
+        // 4. Проверяем SHA-256
+        val actualSha = MessageDigest
+            .getInstance("SHA-256")
+            .digest(bytes)
+            .joinToString("") {
+                "%02x".format(it.toInt() and 255)
+            }
+
+        require(actualSha == expectedSha)
+
+        // 5. Проверяем содержимое JSON
+        val raw = bytes.toString(Charsets.UTF_8)
+        val holidays = parse(raw, year)
+
+        // Только проверенный файл сохраняем
+        save(year, raw)
+
+        holidays
+    } catch (_: Exception) {
+        null
     }
+}
 
     private fun save(year: Int, raw: String) {
     val bytes = raw.toByteArray(Charsets.UTF_8)
