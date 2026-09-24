@@ -106,7 +106,7 @@ private fun fileFor(year: Int): AtomicFile =
 save(year, raw)
 
 // После успешного получения текущего года удаляем старые локальные годы
-val currentYear = LocalDate.now().year
+val currentYear = LocalDate.now(java.time.ZoneId.of("Europe/Moscow")).year
 if (year == currentYear) {
     filesDir.listFiles()
         ?.filter {
