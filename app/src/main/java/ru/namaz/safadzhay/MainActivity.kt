@@ -1054,7 +1054,7 @@ addView(holidayHeader)
     
 
         
-)
+
 }
 headerBox.addView(
     holidayCard,
