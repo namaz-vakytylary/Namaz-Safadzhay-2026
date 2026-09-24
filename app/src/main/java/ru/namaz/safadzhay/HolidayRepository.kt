@@ -103,9 +103,21 @@ private fun fileFor(year: Int): AtomicFile =
         val holidays = parse(raw, year)
 
         // Только проверенный файл сохраняем
-        save(year, raw)
+save(year, raw)
 
-        holidays
+// После успешного получения текущего года удаляем старые локальные годы
+val currentYear = LocalDate.now().year
+if (year == currentYear) {
+    filesDir.listFiles()
+        ?.filter {
+            it.name.startsWith("downloaded-holidays-") &&
+            it.name.endsWith(".json") &&
+            it.name != "downloaded-holidays-$currentYear.json"
+        }
+        ?.forEach { it.delete() }
+}
+
+holidays
     } catch (_: Exception) {
         null
     }
