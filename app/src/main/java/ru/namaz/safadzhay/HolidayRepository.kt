@@ -197,3 +197,4 @@ private fun downloadBytes(url: String, maxSize: Int): ByteArray {
     private const val MAX_MANIFEST_SIZE = 128 * 1024
     private const val MAX_HOLIDAYS = 100
 }
+}
