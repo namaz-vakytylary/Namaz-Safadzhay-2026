@@ -193,10 +193,7 @@ private fun downloadBytes(url: String, maxSize: Int): ByteArray {
     }
 
     companion object {
-        private const val BASE_URL =
-            "https://namaz-vakytylary.github.io/namaz-schedules/holidays/"
-
-        private const val MAX_FILE_SIZE = 64 * 1024
-        private const val MAX_HOLIDAYS = 100
-    }
+    private const val MAX_FILE_SIZE = 64 * 1024
+    private const val MAX_MANIFEST_SIZE = 128 * 1024
+    private const val MAX_HOLIDAYS = 100
 }
