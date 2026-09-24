@@ -120,6 +120,7 @@ class MainActivity : Activity() {
     private val alarmExecutor = prayerAlarmWorker
     private lateinit var scheduleRepository: ScheduleRepository
     private lateinit var scheduleUpdateChecker: ScheduleUpdateChecker
+    private lateinit var holidayRepository: HolidayRepository
     private var panelRoute = ""
     private var activeCompass: QiblaCompassView? = null
     private var activeQiblaLocation: QiblaLocationController? = null
