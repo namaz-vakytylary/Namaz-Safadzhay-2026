@@ -57,9 +57,7 @@ internal class PrayerIconView(context: Context, private val name: String, privat
         val r = min(width, height) * .23f; val cx = width / 2f; val cy = height / 2f
         paint.color = tint; paint.strokeWidth = resources.displayMetrics.density * 1.5f; paint.style = Paint.Style.STROKE; paint.strokeCap = Paint.Cap.ROUND
         if (name == "Иша") {
-    val drawable = androidx.appcompat.content.res.AppCompatResources
-        .getDrawable(context, R.drawable.ic_isha_crescent)
-
+    val drawable = context.getDrawable(R.drawable.ic_isha_crescent)
     drawable?.setBounds(
         (cx - r * 1.7f).toInt(),
         (cy - r * 1.7f).toInt(),
