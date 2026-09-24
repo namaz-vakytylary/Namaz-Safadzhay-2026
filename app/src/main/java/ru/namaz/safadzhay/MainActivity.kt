@@ -1642,12 +1642,11 @@ headerBox.addView(
         if (city == "Москва") scheduleRepository.merged("moscow", moscowData)
         else scheduleRepository.merged("safadzhay", safadzhayData)
 
-    private fun calendarMinMonth(): java.time.YearMonth = java.time.YearMonth.from(
-        minOf(LocalDate.now(zone), LocalDate.parse(currentData().first().date)))
+    private fun calendarMinMonth(): java.time.YearMonth =
+    java.time.YearMonth.from(LocalDate.parse(currentData().first().date))
 
-    private fun calendarMaxMonth(): java.time.YearMonth = java.time.YearMonth.from(
-        maxOf(LocalDate.now(zone), LocalDate.parse(currentData().last().date)))
-
+private fun calendarMaxMonth(): java.time.YearMonth =
+    java.time.YearMonth.from(LocalDate.parse(currentData().last().date))
     private fun formatRussianDate(date: LocalDate): String {
         val months = listOf(
             "Января", "Февраля", "Марта", "Апреля", "Мая", "Июня",
