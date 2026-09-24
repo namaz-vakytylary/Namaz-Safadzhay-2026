@@ -57,11 +57,17 @@ internal class PrayerIconView(context: Context, private val name: String, privat
         val r = min(width, height) * .23f; val cx = width / 2f; val cy = height / 2f
         paint.color = tint; paint.strokeWidth = resources.displayMetrics.density * 1.5f; paint.style = Paint.Style.STROKE; paint.strokeCap = Paint.Cap.ROUND
         if (name == "Иша") {
-            val p = Path()
-            p.moveTo(cx + r * .7f, cy - r)
-            p.cubicTo(cx - r * 1.5f, cy - r * .7f, cx - r * 1.1f, cy + r * 1.6f, cx + r, cy + r * .6f)
-            p.cubicTo(cx - r * .3f, cy + r * .6f, cx - r * .4f, cy - r * .2f, cx + r * .7f, cy - r)
-            canvas.drawPath(p, paint)
+    val drawable = androidx.appcompat.content.res.AppCompatResources
+        .getDrawable(context, R.drawable.ic_isha_crescent)
+
+    drawable?.setBounds(
+        (cx - r * 1.7f).toInt(),
+        (cy - r * 1.7f).toInt(),
+        (cx + r * 1.7f).toInt(),
+        (cy + r * 1.7f).toInt()
+    )
+    drawable?.setTint(tint)
+    drawable?.draw(canvas)
         } else if (name == "Фаджр" || name == "Магриб") {
             val horizon = cy + r * .45f
             canvas.drawLine(cx-r*1.8f, horizon, cx+r*1.8f, horizon, paint)
