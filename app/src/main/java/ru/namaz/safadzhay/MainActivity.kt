@@ -113,6 +113,7 @@ private fun ensurePrayerNotificationChannel(context: Context): String {
 
 // Process-wide queues let a completed download rebuild alarms even if its screen was closed.
 private val prayerAlarmWorker = java.util.concurrent.Executors.newSingleThreadExecutor()
+private val holidayUpdateWorker = java.util.concurrent.Executors.newSingleThreadExecutor()
 
 class MainActivity : Activity() {
     private val zone = ZoneId.of("Europe/Moscow")
