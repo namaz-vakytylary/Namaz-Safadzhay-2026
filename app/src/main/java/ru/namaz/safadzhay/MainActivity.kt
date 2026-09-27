@@ -1549,6 +1549,9 @@ headerBox.addView(
     }
 
     private fun rebuildPrayerNotifications(days: List<PrayerDay>, city: String, notificationsEnabled: Boolean, notifyBeforeMinutes: Int, selectedKeys: Set<String>) {
+            if (notificationsEnabled && days.isEmpty()) {
+        return
+    }
         val prefs = getSharedPreferences(SETTINGS_PREFS, Context.MODE_PRIVATE)
         val am = getSystemService(Context.ALARM_SERVICE) as AlarmManager
         val today = LocalDate.now(zone)
