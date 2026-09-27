@@ -131,6 +131,7 @@ class MainActivity : Activity() {
     private var lastDay: LocalDate? = null
     private lateinit var countdownStart: TextView
     private lateinit var headerBox: LinearLayout
+    private lateinit var ramadanCard: LinearLayout
     private lateinit var heroCopy: LinearLayout
     private val mint = Color.rgb(70, 218, 145)
     private val muted = Color.rgb(173, 203, 189)
