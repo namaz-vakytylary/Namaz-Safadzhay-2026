@@ -1931,7 +1931,7 @@ cell.addView(
         return date.atTime(p[0].toInt(), p[1].toInt())
     }
 
-    private fun update() {
+private fun update() {
         val now = LocalDateTime.now(zone).withNano(0)
         val todayDate = now.toLocalDate()
 
