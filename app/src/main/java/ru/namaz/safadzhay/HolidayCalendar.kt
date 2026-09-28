@@ -63,6 +63,28 @@ private fun rf(date: String, title: String, text: String, night: Boolean = false
     fun holidayFor(date: LocalDate): Holiday? =
     holidaysFor(date.year).firstOrNull { it.date == date }
 
+    fun ramadanDay(date: LocalDate): Int? {
+    val holidays = holidaysFor(date.year)
+
+    val start = holidays
+        .firstOrNull { it.title == "Начало Рамадана" }
+        ?.date
+        ?: return null
+
+    val end = holidays
+        .firstOrNull { it.title == "Ураза-байрам" }
+        ?.date
+        ?: return null
+
+    if (date.isBefore(start) || !date.isBefore(end)) {
+        return null
+    }
+
+    return java.time.temporal.ChronoUnit.DAYS
+        .between(start, date)
+        .toInt() + 1
+}
+
     fun labels(date: LocalDate): List<String> = buildList {
     if (date.dayOfWeek == DayOfWeek.FRIDAY) add("Джума-намаз")
     addAll(holidaysFor(date.year).filter { it.date == date }.map { it.title })
