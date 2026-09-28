@@ -63,7 +63,7 @@ private fun rf(date: String, title: String, text: String, night: Boolean = false
     fun holidayFor(date: LocalDate): Holiday? =
     holidaysFor(date.year).firstOrNull { it.date == date }
 
-          fun ramadanDay(date: LocalDate): Int? {
+    fun ramadanDay(date: LocalDate): Int? {
         val holidays = holidaysFor(date.year)
 
         val start = holidays
