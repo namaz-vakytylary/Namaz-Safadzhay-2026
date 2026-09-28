@@ -1931,12 +1931,12 @@ cell.addView(
         return date.atTime(p[0].toInt(), p[1].toInt())
     }
 
-private fun update() {
+    private fun update() {
         val now = LocalDateTime.now(zone).withNano(0)
         val todayDate = now.toLocalDate()
 
                 val ramadanDay = HolidayCalendar.ramadanDay(todayDate)
-        val ramadanDayText = ramadanCard.findViewWithTag<TextView>("ramadan_day")
+    val ramadanDayText = ramadanCard.findViewWithTag<TextView>("ramadan_day")
 
         if (ramadanDay != null) {
             ramadanCard.visibility = View.VISIBLE
