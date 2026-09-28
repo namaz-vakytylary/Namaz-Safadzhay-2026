@@ -979,6 +979,48 @@ private fun dismissScheduleUpdateDialog() {
             setPadding(dp(12), dp(7), dp(12), dp(7)); background = surface(); visibility = View.GONE
         }
         headerBox.addView(eventBanner, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(4) })
+        ramadanCard = LinearLayout(this).apply {
+    orientation = LinearLayout.VERTICAL
+    gravity = Gravity.CENTER
+    visibility = View.GONE
+
+    setPadding(
+        dp(16),
+        dp(10),
+        dp(16),
+        dp(10)
+    )
+
+    background = GradientDrawable().apply {
+        cornerRadius = dp(18).toFloat()
+        setColor(Color.rgb(8, 52, 39))
+        setStroke(dp(1), Color.rgb(214, 178, 77))
+    }
+
+    addView(
+        label("☾  Рамадан", 18f, Color.rgb(235, 202, 104), true).apply {
+            gravity = Gravity.CENTER
+        },
+        LinearLayout.LayoutParams(-1, -2)
+    )
+
+    addView(
+        label("", 14f, ink, true).apply {
+            gravity = Gravity.CENTER
+            tag = "ramadan_day"
+        },
+        LinearLayout.LayoutParams(-1, -2).apply {
+            topMargin = dp(3)
+        }
+    )
+}
+
+headerBox.addView(
+    ramadanCard,
+    LinearLayout.LayoutParams(-1, -2).apply {
+        topMargin = dp(7)
+    }
+)
         modeRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; background = surface(false, 24); setPadding(dp(2), dp(2), dp(2), dp(2)) }
         todayButtonView = label("Сегодня", 13f, ink, true).apply {
             gravity = Gravity.CENTER; isFocusable = true
