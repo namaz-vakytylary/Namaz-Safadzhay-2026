@@ -2192,7 +2192,7 @@ cell.addView(
                 gravity = Gravity.CENTER_VERTICAL
                 setPadding(dp(12), dp(8), dp(12), dp(8))
                 minimumHeight = dp(66)
-                background = cardBackground(isNext, passed)
+                background = if (isIftar) iftarPrayerBackground() else cardBackground(isNext, passed)
                 alpha = if (passed && displayDate == now.toLocalDate()) 0.70f else 1f
             }
 
