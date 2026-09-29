@@ -1986,33 +1986,33 @@ cell.addView(
             countdownCard.visibility = View.VISIBLE
         }
 
-        val selectedDay = dayFor(selected)
-       if (selectedDay == null) {
-           ramadanCountdownBackground.visibility = View.GONE
-    nextName.text = "Расписание пока недоступно"
-    countdownLabel.visibility = View.VISIBLE
-    countdown.text = "—"
-    countdownLabel.text = "Для этой даты время намаза ещё не загружено."
-    progress.progress = 0f
-    countdownStart.text = ""
+                val selectedDay = dayFor(selected)
+        if (selectedDay == null) {
+            ramadanCountdownBackground.visibility = View.GONE
+            nextName.text = "Расписание пока недоступно"
+            countdownLabel.visibility = View.VISIBLE
+            countdown.text = "—"
+            countdownLabel.text = "Для этой даты время намаза ещё не загружено."
+            progress.progress = 0f
+            countdownStart.text = ""
 
-    val unavailablePrayers = listOf(
-        Prayer("Фаджр", "Иртәнге намаз", "— —"),
-        Prayer("Зухр", "Өйлә намазы", "— —"),
-        Prayer("Аср", "Икенде намазы", "— —"),
-        Prayer("Магриб", "Ахшам намазы", "— —"),
-        Prayer("Иша", "Ястү намазы", "— —")
-    )
+            val unavailablePrayers = listOf(
+                Prayer("Фаджр", "Иртәнге намаз", "— —"),
+                Prayer("Зухр", "Өйлә намазы", "— —"),
+                Prayer("Аср", "Икенде намазы", "— —"),
+                Prayer("Магриб", "Ахшам намазы", "— —"),
+                Prayer("Иша", "Ястү намазы", "— —")
+            )
 
-        renderPrayers(
-            unavailablePrayers,
-            -1,
-            now,
-            selected,
-            false
-        )
-    return
-}
+            renderPrayers(
+                unavailablePrayers,
+                -1,
+                now,
+                selected,
+                false
+            )
+            return
+        }
 
         val prayers = getPrayers(selectedDay)
         if (selected != todayDate) {
