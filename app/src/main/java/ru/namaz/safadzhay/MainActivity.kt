@@ -2004,11 +2004,12 @@ cell.addView(
         Prayer("Иша", "Ястү намазы", "— —")
     )
 
-    renderPrayers(
+        renderPrayers(
         unavailablePrayers,
         -1,
         now,
-        selected
+        selected,
+        false
     )
     return
 }
