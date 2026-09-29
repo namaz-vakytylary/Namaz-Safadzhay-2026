@@ -2057,7 +2057,6 @@ cell.addView(
                 countdownStart.text =
                     "До начала намаза · ${nextEvent.prayer.time}"
             }
-            }
         } else {
             val tomorrow = todayDate.plusDays(1)
             val tomorrowDay = dayFor(tomorrow)
