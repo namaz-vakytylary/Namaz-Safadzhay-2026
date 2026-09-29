@@ -2194,8 +2194,8 @@ cell.addView(
                 minimumHeight = dp(66)
                 background = cardBackground(isNext, passed)
                 alpha = if (passed && displayDate == now.toLocalDate()) 0.70f else 1f
+                row.addView(PrayerIconView(this, p.name, if (isIftar) Color.rgb(235, 202, 104) else if (isNext) mint else muted), LinearLayout.LayoutParams(dp(34), dp(42)).apply { rightMargin = dp(8) })
             }
-            row.addView(PrayerIconView(this, p.name, if (isNext) mint else muted), LinearLayout.LayoutParams(dp(34), dp(42)).apply { rightMargin = dp(8) })
             val nameBox = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
                 gravity = Gravity.CENTER_VERTICAL
