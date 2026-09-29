@@ -2005,7 +2005,7 @@ cell.addView(
     )
 
         renderPrayers(
-        unavailablePrayers,
+            unavailablePrayers,
             -1,
             now,
             selected,
