@@ -991,11 +991,10 @@ private fun dismissScheduleUpdateDialog() {
         dp(10)
     )
 
-    background = GradientDrawable().apply {
-        cornerRadius = dp(18).toFloat()
-        setColor(Color.rgb(8, 52, 39))
-        setStroke(dp(1), Color.rgb(214, 178, 77))
-    }
+    background = androidx.core.content.ContextCompat.getDrawable(
+    this@MainActivity,
+    R.drawable.ramadan_header
+)
 
     addView(
         label("☾  Рамадан", 18f, Color.rgb(235, 202, 104), true).apply {
