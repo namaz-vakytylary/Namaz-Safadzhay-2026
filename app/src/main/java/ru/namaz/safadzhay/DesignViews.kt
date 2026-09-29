@@ -16,10 +16,10 @@ internal class CardProgressIndicator(context: Context) : View(context) {
     private val outline = Path()
     private val segment = Path()
     private val measure = PathMeasure()
-var progress: Float = 0f
+        var progress: Float = 0f
         set(value) { field = value.coerceIn(0f, 1f); invalidate() }
         
-        var goldMode: Boolean = false
+    var goldMode: Boolean = false
         set(value) { field = value; invalidate() }
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
