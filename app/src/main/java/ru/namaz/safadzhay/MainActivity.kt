@@ -2036,7 +2036,7 @@ cell.addView(
                 left % 60
             )
 
-              if (ramadanDay != null && nextEvent.prayer.name == "Фаджр") {
+            if (ramadanDay != null && nextEvent.prayer.name == "Фаджр") {
                 nextName.text = "До окончания сухура"
                 countdownLabel.visibility = View.GONE
                 countdownStart.text =
