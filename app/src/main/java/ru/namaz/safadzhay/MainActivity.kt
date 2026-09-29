@@ -2107,8 +2107,14 @@ cell.addView(
                 progress.progress = 0f
             }
         }
-
-        val nextIndex = prayers.indexOfFirst { it.name == nextEvent?.prayer?.name && it.time == nextEvent?.prayer?.time }
+        val nextIndex = if (iftarJustStarted) {
+            prayers.indexOfFirst { it.name == "Магриб" }
+        } else {
+            prayers.indexOfFirst {
+                it.name == nextEvent?.prayer?.name &&
+                    it.time == nextEvent?.prayer?.time
+            }
+        }
         renderPrayers(prayers, nextIndex, now, todayDate)
     }
 
