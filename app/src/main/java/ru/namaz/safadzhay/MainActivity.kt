@@ -2014,33 +2014,72 @@ cell.addView(
         val nextEvent = eventsToday.firstOrNull { it.time.isAfter(now) }
         val previousEvent = eventsToday.lastOrNull { !it.time.isAfter(now) }
 
-        if (nextEvent != null) {
+                if (nextEvent != null) {
             val previousTime = previousEvent?.time
-                ?: dayFor(todayDate.minusDays(1))?.let { dateTime(todayDate.minusDays(1), it.isha) }
+                ?: dayFor(todayDate.minusDays(1))?.let {
+                    dateTime(todayDate.minusDays(1), it.isha)
+                }
                 ?: todayDate.atStartOfDay()
+
             val total = Duration.between(previousTime, nextEvent.time).seconds.coerceAtLeast(1)
             val left = Duration.between(now, nextEvent.time).seconds.coerceAtLeast(0)
-            progress.progress = (1.0 - left.toDouble() / total.toDouble()).coerceIn(0.0, 1.0).toFloat()
-            countdown.text = String.format("%02d:%02d:%02d", left / 3600, (left % 3600) / 60, left % 60)
-            nextName.text = prayerDisplayName(this, nextEvent.prayer.name, nextEvent.prayer.tatar)
-            countdownLabel.visibility = View.GONE
-            countdownStart.text = "До начала намаза · ${nextEvent.prayer.time}"
+
+            progress.progress =
+                (1.0 - left.toDouble() / total.toDouble())
+                    .coerceIn(0.0, 1.0)
+                    .toFloat()
+
+            countdown.text = String.format(
+                "%02d:%02d:%02d",
+                left / 3600,
+                (left % 3600) / 60,
+                left % 60
+            )
+
+            if (ramadanDay != null && nextEvent.prayer.name == "Фаджр") {
+                nextName.text = "До окончания сухура"
+                countdownLabel.visibility = View.GONE
+                countdownStart.text =
+                    "Сухур заканчивается с началом Фаджра · ${nextEvent.prayer.time}"
+            } else {
+                nextName.text =
+                    prayerDisplayName(
+                        this,
+                        nextEvent.prayer.name,
+                        nextEvent.prayer.tatar
+                    )
+                countdownLabel.visibility = View.GONE
+                countdownStart.text =
+                    "До начала намаза · ${nextEvent.prayer.time}"
+            }
         } else {
             val tomorrow = todayDate.plusDays(1)
             val tomorrowDay = dayFor(tomorrow)
+
             if (tomorrowDay != null) {
                 val nextFajr = dateTime(tomorrow, tomorrowDay.fajr)
                 val previousTime = eventsToday.lastOrNull()?.time ?: now
-                val total = Duration.between(previousTime, nextFajr).seconds.coerceAtLeast(1)
-                val left = Duration.between(now, nextFajr).seconds.coerceAtLeast(0)
-                progress.progress = (1.0 - left.toDouble() / total.toDouble()).coerceIn(0.0, 1.0).toFloat()
-                countdown.text = String.format("%02d:%02d:%02d", left / 3600, (left % 3600) / 60, left % 60)
-            }
-            } else {
-                nextName.text = prayerDisplayName(this, nextEvent.prayer.name, nextEvent.prayer.tatar)
+                val total =
+                    Duration.between(previousTime, nextFajr).seconds.coerceAtLeast(1)
+                val left =
+                    Duration.between(now, nextFajr).seconds.coerceAtLeast(0)
+
+                progress.progress =
+                    (1.0 - left.toDouble() / total.toDouble())
+                        .coerceIn(0.0, 1.0)
+                        .toFloat()
+
+                countdown.text = String.format(
+                    "%02d:%02d:%02d",
+                    left / 3600,
+                    (left % 3600) / 60,
+                    left % 60
+                )
+
+                nextName.text =
+                    prayerDisplayName(this, "Фаджр", "Иртәнге намаз")
                 countdownLabel.visibility = View.GONE
-                countdownStart.text = "До начала намаза · ${nextEvent.prayer.time}"
-            }
+                countdownStart.text = "Завтра · ${tomorrowDay.fajr}"
             } else {
                 nextName.text = "Расписание"
                 countdownLabel.visibility = View.VISIBLE
