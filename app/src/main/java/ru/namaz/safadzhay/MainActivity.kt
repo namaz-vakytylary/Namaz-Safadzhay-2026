@@ -2077,9 +2077,8 @@ cell.addView(
                 countdownStart.text =
                     "Ифтар с наступлением Магриба · ${nextEvent.prayer.time}"
             } else {
-                nextName.text =
                 ramadanCountdownBackground.visibility = View.GONE
-                    prayerDisplayName(
+                nextName.text =
                         this,
                         nextEvent.prayer.name,
                         nextEvent.prayer.tatar
