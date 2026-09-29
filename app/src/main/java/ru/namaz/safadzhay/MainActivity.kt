@@ -2035,10 +2035,7 @@ cell.addView(
                 val left = Duration.between(now, nextFajr).seconds.coerceAtLeast(0)
                 progress.progress = (1.0 - left.toDouble() / total.toDouble()).coerceIn(0.0, 1.0).toFloat()
                 countdown.text = String.format("%02d:%02d:%02d", left / 3600, (left % 3600) / 60, left % 60)
-                            if (ramadanDay != null && nextEvent.prayer.name == "Фаджр") {
-                nextName.text = "До окончания сухура"
-                countdownLabel.visibility = View.GONE
-                countdownStart.text = "Сухур заканчивается с началом Фаджра · ${nextEvent.prayer.time}"
+            }
             } else {
                 nextName.text = prayerDisplayName(this, nextEvent.prayer.name, nextEvent.prayer.tatar)
                 countdownLabel.visibility = View.GONE
