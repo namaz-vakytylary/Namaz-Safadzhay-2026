@@ -1986,7 +1986,7 @@ cell.addView(
             countdownCard.visibility = View.VISIBLE
         }
 
-                val selectedDay = dayFor(selected)
+        val selectedDay = dayFor(selected)
         if (selectedDay == null) {
             ramadanCountdownBackground.visibility = View.GONE
             nextName.text = "Расписание пока недоступно"
