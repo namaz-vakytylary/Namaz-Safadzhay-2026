@@ -2079,7 +2079,7 @@ cell.addView(
             } else {
                 ramadanCountdownBackground.visibility = View.GONE
                 nextName.text =
-                prayerDisplayName(
+                    prayerDisplayName(
                         this,
                         nextEvent.prayer.name,
                         nextEvent.prayer.tatar
