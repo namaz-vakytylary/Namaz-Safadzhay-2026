@@ -2185,6 +2185,7 @@ cell.addView(
             val hasTime = p.time.matches(Regex("\\d{1,2}:\\d{2}"))
             val eventDateTime = if (hasTime) dateTime(displayDate, p.time) else null
             val isNext = hasTime && index == nextIndex
+            val isIftar = isNext && iftarJustStarted && p.name == "Магриб"
             val passed = hasTime && eventDateTime != null && eventDateTime.isBefore(now) && !isNext
             val row = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL
