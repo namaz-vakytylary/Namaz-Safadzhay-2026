@@ -2053,7 +2053,9 @@ cell.addView(
                 (left % 3600) / 60,
                 left % 60
             )
-            if (iftarJustStarted) {
+                        if (iftarJustStarted) {
+                progress.goldMode = true
+               
                     
                 ramadanCountdownBackground.setImageResource(R.drawable.ramadan_iftar)
                 ramadanCountdownBackground.visibility = View.VISIBLE
