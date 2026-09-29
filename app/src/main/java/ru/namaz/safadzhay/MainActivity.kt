@@ -1,4 +1,4 @@
-Йpackage ru.namaz.safadzhay
+package ru.namaz.safadzhay
 
 import android.app.Activity
 import android.app.DatePickerDialog
@@ -2014,19 +2014,14 @@ cell.addView(
     return
 }
 
-        val prayers = getPrayers(selectedDay)
+                val prayers = getPrayers(selectedDay)
         if (selected != todayDate) {
             nextName.text = "Расписание"
             countdownLabel.visibility = View.VISIBLE
             countdown.text = "—"
             countdownLabel.text = "Намазы на ${formatRussianDate(selected)}"
             progress.progress = 0f
-                    renderPrayers(
-            unavailablePrayers,
-            -1,
-            now,
-            selected,
-            false
+            renderPrayers(prayers, -1, now, selected, false)
         )
             return
         }
