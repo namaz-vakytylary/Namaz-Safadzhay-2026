@@ -2175,7 +2175,7 @@ cell.addView(
         eventBanner.text = items.joinToString("\n") { prefix + it }
     }
 
-    private fun renderPrayers(prayers: List<Prayer>, nextIndex: Int, now: LocalDateTime, displayDate: LocalDate) {
+    private fun renderPrayers(prayers: List<Prayer>, nextIndex: Int, now: LocalDateTime, displayDate: LocalDate, iftarJustStarted: Boolean) {
         val showTatar = showTatarNames(this)
         val renderKey = "$selectedCity|$displayDate|$nextIndex|${now.toLocalDate()}|${now.hour}:${now.minute}|$showTatar|${prayers.joinToString()}"
         if (lastPrayerRender == renderKey) return
