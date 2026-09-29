@@ -40,7 +40,7 @@ internal class CardProgressIndicator(context: Context) : View(context) {
         measure.setPath(outline, true)
     }
 
-        override fun onDraw(canvas: Canvas) {
+            override fun onDraw(canvas: Canvas) {
         paint.color = if (goldMode) {
             Color.rgb(118, 88, 31)
         } else {
