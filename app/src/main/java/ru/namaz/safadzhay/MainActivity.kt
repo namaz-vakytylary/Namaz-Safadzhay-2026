@@ -155,6 +155,7 @@ class MainActivity : Activity() {
     private lateinit var progress: CardProgressIndicator
     private lateinit var eventBanner: TextView
     private lateinit var countdownCard: android.widget.FrameLayout
+    private lateinit var ramadanCountdownBackground: ImageView
     private lateinit var modeRow: LinearLayout
     private lateinit var todayButtonView: TextView
     private lateinit var scheduleButtonView: TextView
