@@ -18,7 +18,9 @@ internal class CardProgressIndicator(context: Context) : View(context) {
     private val measure = PathMeasure()
     var progress: Float = 0f
         set(value) { field = value.coerceIn(0f, 1f); invalidate() }
-
+        
+        var goldMode: Boolean = false
+        set(value) { field = value; invalidate() }
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
         val inset = paint.strokeWidth / 2f + resources.displayMetrics.density
