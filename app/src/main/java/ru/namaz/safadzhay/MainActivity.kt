@@ -2036,11 +2036,16 @@ cell.addView(
                 left % 60
             )
 
-            if (ramadanDay != null && nextEvent.prayer.name == "Фаджр") {
+                        if (ramadanDay != null && nextEvent.prayer.name == "Фаджр") {
                 nextName.text = "До окончания сухура"
                 countdownLabel.visibility = View.GONE
                 countdownStart.text =
                     "Сухур заканчивается с началом Фаджра · ${nextEvent.prayer.time}"
+            } else if (ramadanDay != null && nextEvent.prayer.name == "Магриб") {
+                nextName.text = "До ифтара"
+                countdownLabel.visibility = View.GONE
+                countdownStart.text =
+                    "Ифтар с наступлением Магриба · ${nextEvent.prayer.time}"
             } else {
                 nextName.text =
                     prayerDisplayName(
@@ -2051,6 +2056,7 @@ cell.addView(
                 countdownLabel.visibility = View.GONE
                 countdownStart.text =
                     "До начала намаза · ${nextEvent.prayer.time}"
+            }
             }
         } else {
             val tomorrow = todayDate.plusDays(1)
