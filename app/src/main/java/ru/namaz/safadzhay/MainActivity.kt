@@ -2022,7 +2022,6 @@ cell.addView(
             countdownLabel.text = "Намазы на ${formatRussianDate(selected)}"
             progress.progress = 0f
             renderPrayers(prayers, -1, now, selected, false)
-        )
             return
         }
 
