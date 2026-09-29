@@ -2013,6 +2013,10 @@ cell.addView(
         eventsToday.sortBy { it.time }
         val nextEvent = eventsToday.firstOrNull { it.time.isAfter(now) }
         val previousEvent = eventsToday.lastOrNull { !it.time.isAfter(now) }
+        val iftarJustStarted =
+            ramadanDay != null &&
+            previousEvent?.prayer?.name == "Магриб" &&
+            Duration.between(previousEvent.time, now).toMinutes() < 10
 
         if (nextEvent != null) {
             val previousTime = previousEvent?.time
