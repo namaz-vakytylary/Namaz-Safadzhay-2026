@@ -2052,6 +2052,10 @@ cell.addView(
                 left % 60
             )
             if (iftarJustStarted) {
+            {
+                    
+                ramadanCountdownBackground.setImageResource(R.drawable.ramadan_iftar)
+                ramadanCountdownBackground.visibility = View.VISIBLE
                 nextName.text = "Время ифтара наступило"
                 countdownLabel.visibility = View.GONE
                 countdown.text = ""
