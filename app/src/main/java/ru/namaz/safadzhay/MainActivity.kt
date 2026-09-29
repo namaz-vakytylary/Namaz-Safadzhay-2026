@@ -916,7 +916,7 @@ private fun dismissScheduleUpdateDialog() {
         cornerRadius = dp(18).toFloat()
         setColor(Color.rgb(42, 35, 20))
         setStroke(dp(2), Color.rgb(235, 202, 104))
-   }
+    }
     private fun label(value: String, size: Float = 15f, color: Int = ink, bold: Boolean = false): TextView = text(value, size, color, bold).apply {
         includeFontPadding = false
     }
