@@ -2139,7 +2139,7 @@ cell.addView(
                     it.time == nextEvent?.prayer?.time
             }
         }
-        renderPrayers(prayers, nextIndex, now, todayDate)
+        renderPrayers(prayers, nextIndex, now, todayDate, iftarJustStarted)
     }
 
     private fun hijriFor(date: LocalDate): HijriDate? {
