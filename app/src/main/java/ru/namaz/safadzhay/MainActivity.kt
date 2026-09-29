@@ -2053,6 +2053,7 @@ cell.addView(
                 (left % 3600) / 60,
                 left % 60
             )
+            progress.goldMode = false
             if (iftarJustStarted) {
                 progress.goldMode = true
                
