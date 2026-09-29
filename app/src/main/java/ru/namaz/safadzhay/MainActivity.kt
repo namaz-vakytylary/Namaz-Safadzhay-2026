@@ -2014,7 +2014,7 @@ cell.addView(
     return
 }
 
-                val prayers = getPrayers(selectedDay)
+        val prayers = getPrayers(selectedDay)
         if (selected != todayDate) {
             nextName.text = "Расписание"
             countdownLabel.visibility = View.VISIBLE
