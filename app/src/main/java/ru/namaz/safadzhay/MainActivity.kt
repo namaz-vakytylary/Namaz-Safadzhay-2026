@@ -1107,6 +1107,14 @@ headerBox.addView(
     }
 )
         countdownCard = android.widget.FrameLayout(this).apply { background = surface() }
+        val ramadanCountdownBackground = ImageView(this).apply {
+            scaleType = ImageView.ScaleType.CENTER_CROP
+            visibility = View.GONE
+        }
+        countdownCard.addView(
+            ramadanCountdownBackground,
+            android.widget.FrameLayout.LayoutParams(-1, -1)
+        )
         progress = CardProgressIndicator(this).apply { importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO }
         countdownCard.addView(progress, android.widget.FrameLayout.LayoutParams(-1, -1))
         heroCopy = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER }
