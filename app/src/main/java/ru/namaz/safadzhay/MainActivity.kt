@@ -1114,7 +1114,15 @@ headerBox.addView(
         bottomMargin = dp(7)
     }
 )
-        countdownCard = android.widget.FrameLayout(this).apply { background = surface() }
+                countdownCard = android.widget.FrameLayout(this).apply {
+            background = surface()
+            clipToOutline = true
+            outlineProvider = object : android.view.ViewOutlineProvider() {
+                override fun getOutline(view: View, outline: android.graphics.Outline) {
+                    outline.setRoundRect(0, 0, view.width, view.height, dp(18).toFloat())
+                }
+            }
+        }
         ramadanCountdownBackground = ImageView(this).apply {
             scaleType = ImageView.ScaleType.CENTER_CROP
             visibility = View.GONE
