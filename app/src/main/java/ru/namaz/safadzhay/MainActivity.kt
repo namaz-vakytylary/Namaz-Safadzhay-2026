@@ -991,9 +991,9 @@ private fun dismissScheduleUpdateDialog() {
         dp(10)
     )
 
-    background = androidx.core.content.ContextCompat.getDrawable(
-    this@MainActivity,
-    R.drawable.ramadan_header
+        background = androidx.core.content.ContextCompat.getDrawable(
+        this@MainActivity,
+        R.drawable.ramadan_header
 )
 
     addView(
