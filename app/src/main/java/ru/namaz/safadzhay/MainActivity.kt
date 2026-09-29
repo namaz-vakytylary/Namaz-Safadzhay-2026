@@ -17,6 +17,7 @@ import android.graphics.Paint
 import android.graphics.Typeface
 import android.hardware.GeomagneticField
 import android.hardware.Sensor
+
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
@@ -2061,12 +2062,13 @@ cell.addView(
                 countdownStart.text = ""
                 progress.progress = 1f
             } else if (ramadanDay != null && nextEvent.prayer.name == "Фаджр") {
+                ramadanCountdownBackground.setImageResource(R.drawable.ramadan_suhoor)
+                ramadanCountdownBackground.visibility = View.VISIBLE
                 nextName.text = "До окончания сухура"
                 countdownLabel.visibility = View.GONE
                 countdownStart.text =
                     "Сухур заканчивается с началом Фаджра · ${nextEvent.prayer.time}"
-              ramadanCountdownBackground.setImageResource(R.drawable.ramadan_suhoor)
-              ramadanCountdownBackground.visibility = View.VISIBLE
+             
             } else if (ramadanDay != null && nextEvent.prayer.name == "Магриб") {
                 nextName.text = "До ифтара"
                 countdownLabel.visibility = View.GONE
