@@ -991,10 +991,10 @@ private fun dismissScheduleUpdateDialog() {
         dp(10)
     )
 
-        background = androidx.core.content.ContextCompat.getDrawable(
+    background = androidx.core.content.ContextCompat.getDrawable(
         this@MainActivity,
         R.drawable.ramadan_header
-)
+    )
 
     addView(
         label("☾  Рамадан", 18f, Color.rgb(235, 202, 104), true).apply {
