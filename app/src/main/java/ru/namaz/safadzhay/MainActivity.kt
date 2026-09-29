@@ -2006,11 +2006,11 @@ cell.addView(
 
         renderPrayers(
         unavailablePrayers,
-        -1,
-        now,
-        selected,
-        false
-    )
+            -1,
+            now,
+            selected,
+            false
+        )
     return
 }
 
