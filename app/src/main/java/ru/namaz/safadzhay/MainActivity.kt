@@ -2090,6 +2090,8 @@ cell.addView(
                     "До начала намаза · ${nextEvent.prayer.time}"
             }
         } else {
+
+            ramadanCountdownBackground.visibility = View.GONE
             val tomorrow = todayDate.plusDays(1)
             val tomorrowDay = dayFor(tomorrow)
 
