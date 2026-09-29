@@ -2039,7 +2039,7 @@ cell.addView(
                 (left % 3600) / 60,
                 left % 60
             )
-if (iftarJustStarted) {
+            if (iftarJustStarted) {
                 nextName.text = "Время ифтара наступило"
                 countdownLabel.visibility = View.GONE
                 countdown.text = ""
