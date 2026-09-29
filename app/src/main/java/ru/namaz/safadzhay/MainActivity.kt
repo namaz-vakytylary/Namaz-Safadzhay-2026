@@ -1108,7 +1108,7 @@ headerBox.addView(
     }
 )
         countdownCard = android.widget.FrameLayout(this).apply { background = surface() }
-        val ramadanCountdownBackground = ImageView(this).apply {
+        ramadanCountdownBackground = ImageView(this).apply {
             scaleType = ImageView.ScaleType.CENTER_CROP
             visibility = View.GONE
         }
