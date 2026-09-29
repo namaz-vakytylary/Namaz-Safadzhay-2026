@@ -2215,7 +2215,7 @@ cell.addView(
             }
             nameBox.addView(ru, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
             nameBox.addView(tt, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(3) })
-            val time = text(p.time, 25f, if (isNext) Color.rgb(91, 224, 164) else Color.WHITE, true).apply {
+            val time = text(p.time, 25f, if (isIftar) Color.rgb(235, 202, 104) else if (isNext) Color.rgb(91, 224, 164) else Color.WHITE, true).apply {
                 gravity = Gravity.CENTER
                 typeface = Typeface.create("monospace", Typeface.BOLD)
                 setIncludeFontPadding(false)
