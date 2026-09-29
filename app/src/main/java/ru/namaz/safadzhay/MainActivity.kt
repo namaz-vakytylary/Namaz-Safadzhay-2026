@@ -2065,6 +2065,8 @@ cell.addView(
                 countdownLabel.visibility = View.GONE
                 countdownStart.text =
                     "Сухур заканчивается с началом Фаджра · ${nextEvent.prayer.time}"
+              ramadanCountdownBackground.setImageResource(R.drawable.ramadan_suhoor)
+              ramadanCountdownBackground.visibility = View.VISIBLE
             } else if (ramadanDay != null && nextEvent.prayer.name == "Магриб") {
                 nextName.text = "До ифтара"
                 countdownLabel.visibility = View.GONE
