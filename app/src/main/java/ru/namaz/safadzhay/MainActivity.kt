@@ -1947,10 +1947,7 @@ cell.addView(
             ramadanCard.visibility = View.GONE
             ramadanDayText.text = ""
         }
-        } else {
-            ramadanCard.visibility = View.GONE
-            ramadanDayText.text = ""
-        }
+        
         
         prayerList.visibility = View.VISIBLE
         if (!scheduleTabSelected) selectedDate = todayDate
