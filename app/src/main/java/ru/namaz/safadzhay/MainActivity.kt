@@ -1935,7 +1935,7 @@ cell.addView(
         val now = LocalDateTime.now(zone).withNano(0)
         val todayDate = now.toLocalDate()
 
-            val ramadanDay =
+        val ramadanDay =
             if (todayDate == LocalDate.of(2026, 8, 10)) 1
             else HolidayCalendar.ramadanDay(todayDate)
 
