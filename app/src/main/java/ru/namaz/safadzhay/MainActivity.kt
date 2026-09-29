@@ -2014,7 +2014,7 @@ cell.addView(
         val nextEvent = eventsToday.firstOrNull { it.time.isAfter(now) }
         val previousEvent = eventsToday.lastOrNull { !it.time.isAfter(now) }
 
-            if (nextEvent != null) {
+        if (nextEvent != null) {
             val previousTime = previousEvent?.time
                 ?: dayFor(todayDate.minusDays(1))?.let {
                     dateTime(todayDate.minusDays(1), it.isha)
