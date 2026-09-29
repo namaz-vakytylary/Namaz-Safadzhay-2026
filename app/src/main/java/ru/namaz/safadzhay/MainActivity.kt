@@ -1,4 +1,4 @@
-package ru.namaz.safadzhay
+Йpackage ru.namaz.safadzhay
 
 import android.app.Activity
 import android.app.DatePickerDialog
@@ -2182,8 +2182,7 @@ cell.addView(
     }
 
     private fun renderPrayers(prayers: List<Prayer>, nextIndex: Int, now: LocalDateTime, displayDate: LocalDate, iftarJustStarted: Boolean) {
-        val showTatar = showTatarNames(this)
-        val renderKey = "$selectedCity|$displayDate|$nextIndex|$iftarJustStarted|${now.toLocalDate()}|${now.hour}:${now.minute}|$showTatar|${prayers.joinToString()}"
+        val showTatar = showTatarNames(this)        val renderKey = "$selectedCity|$displayDate|$nextIndex|$iftarJustStarted|${now.toLocalDate()}|${now.hour}:${now.minute}|$showTatar|${prayers.joinToString()}"
         if (lastPrayerRender == renderKey) return
         lastPrayerRender = renderKey
         prayerList.removeAllViews()
