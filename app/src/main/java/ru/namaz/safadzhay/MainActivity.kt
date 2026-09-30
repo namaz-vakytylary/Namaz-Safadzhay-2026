@@ -1021,7 +1021,7 @@ private fun dismissScheduleUpdateDialog() {
     }
 
     addView(
-        FrameLayout(this@MainActivity).apply {
+        android.widget.FrameLayout(this@MainActivity).apply {
             addView(
                 backgroundImage,
                 FrameLayout.LayoutParams(-1, -1)
