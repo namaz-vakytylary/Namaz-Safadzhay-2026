@@ -994,7 +994,7 @@ private fun dismissScheduleUpdateDialog() {
 
     val backgroundImage = ImageView(this@MainActivity).apply {
         setImageResource(R.drawable.ramadan_header)
-        scaleType = ImageView.ScaleType.FIT_CENTER
+        scaleType = ImageView.ScaleType.CENTER_CROP
     }
 
     val textLayer = LinearLayout(this@MainActivity).apply {
