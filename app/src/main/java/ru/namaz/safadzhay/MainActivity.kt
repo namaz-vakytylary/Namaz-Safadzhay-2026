@@ -2136,6 +2136,9 @@ cell.addView(
                 nextName.setShadowLayer(4f, 0f, 2f, Color.BLACK)
                 nextName.text = "До окончания сухура"
                 countdownLabel.visibility = View.GONE
+
+                countdownStart.setTextColor(Color.rgb(244, 241, 232))
+                countdownStart.setShadowLayer(3f, 0f, 1f, Color.BLACK)
                 countdownStart.text =
                     "Сухур заканчивается с началом Фаджра · ${nextEvent.prayer.time}"
              
