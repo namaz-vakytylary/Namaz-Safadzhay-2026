@@ -2129,6 +2129,8 @@ cell.addView(
                             height = targetHeight
                         }
                 }
+                countdown.setTextColor(Color.rgb(244, 241, 232))
+                countdown.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 43f)
                 nextName.text = "До окончания сухура"
                 countdownLabel.visibility = View.GONE
                 countdownStart.text =
