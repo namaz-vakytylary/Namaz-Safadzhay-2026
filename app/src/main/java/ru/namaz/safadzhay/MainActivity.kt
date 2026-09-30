@@ -1004,8 +1004,7 @@ private fun dismissScheduleUpdateDialog() {
         R.drawable.ramadan_header
     )
 
-    addView(
-        label("☾  Рамадан", 18f, Color.rgb(235, 202, 104), true).apply {
+    addView(label("Рамадан", 18f, Color.rgb(235, 202, 104), true).apply {
             gravity = Gravity.CENTER
         },
         LinearLayout.LayoutParams(-1, -2)
