@@ -2131,6 +2131,13 @@ cell.addView(
                     "Ифтар с наступлением Магриба · ${nextEvent.prayer.time}"
             } else {
                 ramadanCountdownBackground.visibility = View.GONE
+                countdownCard.post {
+                    val params = countdownCard.layoutParams as LinearLayout.LayoutParams
+                    if (params.height != dp(174)) {
+                        params.height = dp(174)
+                        countdownCard.layoutParams = params
+                    }
+                }
                 nextName.text =
                     prayerDisplayName(
                         this,
