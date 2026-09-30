@@ -1024,7 +1024,7 @@ private fun dismissScheduleUpdateDialog() {
 
 headerBox.addView(
     ramadanCard,
-    LinearLayout.LayoutParams(-1, -2).apply {
+    LinearLayout.LayoutParams(-1, dp(64)).apply {
         topMargin = dp(7)
     }
 )
