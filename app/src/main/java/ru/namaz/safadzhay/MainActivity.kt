@@ -1167,7 +1167,7 @@ headerBox.addView(
         prayerList = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         root.addView(prayerList, LinearLayout.LayoutParams(-1, -2))
         root.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
-                                    if (
+            if (
                 countdownCard.visibility == View.VISIBLE &&
                 ramadanCountdownBackground.visibility != View.VISIBLE &&
                 scroll.height > 0
