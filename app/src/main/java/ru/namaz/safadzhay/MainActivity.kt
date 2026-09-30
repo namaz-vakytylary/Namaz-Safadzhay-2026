@@ -2151,6 +2151,9 @@ cell.addView(
                 }
                 countdown.setTextColor(Color.rgb(244, 241, 232))
                 countdown.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 43f)
+                
+                nextName.setTextColor(Color.rgb(244, 241, 232))
+                nextName.setShadowLayer(4f, 0f, 2f, Color.BLACK)
                 nextName.text = "До ифтара"
                 countdownLabel.visibility = View.GONE
                 countdownStart.text =
