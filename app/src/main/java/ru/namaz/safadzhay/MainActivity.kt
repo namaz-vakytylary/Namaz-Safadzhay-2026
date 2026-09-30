@@ -1167,7 +1167,11 @@ headerBox.addView(
         prayerList = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         root.addView(prayerList, LinearLayout.LayoutParams(-1, -2))
         root.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
-            if (countdownCard.visibility == View.VISIBLE && scroll.height > 0) {
+            if (
+    countdownCard.visibility == View.VISIBLE &&
+    ramadanCountdownBackground.visibility != View.VISIBLE &&
+    scroll.height > 0
+) {
                 // Fit five readable rows; allow scrolling if larger text or events need more room.
                 val occupied = root.paddingTop + root.paddingBottom + headerBox.height - countdownCard.height + prayerList.height
                 // Measure the full text, not the height already clipped by the current card.
