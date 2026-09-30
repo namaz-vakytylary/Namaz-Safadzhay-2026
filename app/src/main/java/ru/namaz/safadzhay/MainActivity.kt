@@ -1982,6 +1982,14 @@ cell.addView(
         val ramadanDayText = ramadanCard.findViewWithTag<TextView>("ramadan_day")
         if (ramadanDay != null) {
             ramadanCard.visibility = View.VISIBLE
+            ramadanCard.post {
+                val targetHeight = ramadanCard.width / 3
+                val params = ramadanCard.layoutParams as LinearLayout.LayoutParams
+                if (params.height != targetHeight) {
+                    params.height = targetHeight
+                    ramadanCard.layoutParams = params
+                }
+            }
             ramadanDayText.text = "Сегодня $ramadanDay-й день поста"
         } else {
             ramadanCard.visibility = View.GONE
