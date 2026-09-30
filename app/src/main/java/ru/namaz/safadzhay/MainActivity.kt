@@ -1114,7 +1114,7 @@ headerBox.addView(
         bottomMargin = dp(7)
     }
 )
-                countdownCard = android.widget.FrameLayout(this).apply {
+        countdownCard = android.widget.FrameLayout(this).apply {
             background = surface()
             clipToOutline = true
             outlineProvider = object : android.view.ViewOutlineProvider() {
