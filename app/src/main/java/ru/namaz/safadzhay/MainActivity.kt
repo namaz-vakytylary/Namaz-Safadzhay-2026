@@ -2151,6 +2151,13 @@ cell.addView(
         } else {
 
             ramadanCountdownBackground.visibility = View.GONE
+            countdownCard.post {
+                val params = countdownCard.layoutParams as LinearLayout.LayoutParams
+                if (params.height != dp(174)) {
+                    params.height = dp(174)
+                    countdownCard.layoutParams = params
+                }
+            }
             val tomorrow = todayDate.plusDays(1)
             val tomorrowDay = dayFor(tomorrow)
 
