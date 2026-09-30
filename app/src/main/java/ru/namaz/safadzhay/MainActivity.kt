@@ -2088,7 +2088,7 @@ cell.addView(
                     
                 ramadanCountdownBackground.setImageResource(R.drawable.ramadan_iftar_started)
                 ramadanCountdownBackground.visibility = View.VISIBLE
-                                countdownCard.post {
+                countdownCard.post {
                     val targetHeight = countdownCard.width / 3
                     countdownCard.layoutParams =
                         (countdownCard.layoutParams as LinearLayout.LayoutParams).apply {
