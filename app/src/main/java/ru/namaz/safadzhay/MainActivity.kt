@@ -2118,6 +2118,13 @@ cell.addView(
             } else if (ramadanDay != null && nextEvent.prayer.name == "Магриб") {
                 ramadanCountdownBackground.setImageResource(R.drawable.ramadan_iftar)
                 ramadanCountdownBackground.visibility = View.VISIBLE
+                countdownCard.post {
+                    val targetHeight = countdownCard.width / 3
+                    countdownCard.layoutParams =
+                        (countdownCard.layoutParams as LinearLayout.LayoutParams).apply {
+                            height = targetHeight
+                        }
+                }
                 nextName.text = "До ифтара"
                 countdownLabel.visibility = View.GONE
                 countdownStart.text =
