@@ -1124,7 +1124,7 @@ headerBox.addView(
             }
         }
         ramadanCountdownBackground = ImageView(this).apply {
-            scaleType = ImageView.ScaleType.CENTER_CROP
+            scaleType = ImageView.ScaleType.FIT_CENTER
             visibility = View.GONE
         }
         countdownCard.addView(
