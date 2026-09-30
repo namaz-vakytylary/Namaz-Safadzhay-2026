@@ -992,32 +992,46 @@ private fun dismissScheduleUpdateDialog() {
     gravity = Gravity.CENTER
     visibility = View.GONE
 
-    setPadding(
-        dp(16),
-        dp(10),
-        dp(16),
-        dp(10)
-    )
+    val backgroundImage = ImageView(this@MainActivity).apply {
+        setImageResource(R.drawable.ramadan_header)
+        scaleType = ImageView.ScaleType.FIT_CENTER
+    }
 
-    background = androidx.core.content.ContextCompat.getDrawable(
-        this@MainActivity,
-        R.drawable.ramadan_header
-    )
+    val textLayer = LinearLayout(this@MainActivity).apply {
+        orientation = LinearLayout.VERTICAL
+        gravity = Gravity.CENTER
+        setPadding(dp(16), dp(10), dp(16), dp(10))
 
-    addView(label("Рамадан", 18f, Color.rgb(235, 202, 104), true).apply {
-            gravity = Gravity.CENTER
-        },
-        LinearLayout.LayoutParams(-1, -2)
-    )
+        addView(
+            label("Рамадан", 18f, Color.rgb(235, 202, 104), true).apply {
+                gravity = Gravity.CENTER
+            },
+            LinearLayout.LayoutParams(-1, -2)
+        )
+
+        addView(
+            label("", 14f, ink, true).apply {
+                gravity = Gravity.CENTER
+                tag = "ramadan_day"
+            },
+            LinearLayout.LayoutParams(-1, -2).apply {
+                topMargin = dp(3)
+            }
+        )
+    }
 
     addView(
-        label("", 14f, ink, true).apply {
-            gravity = Gravity.CENTER
-            tag = "ramadan_day"
+        FrameLayout(this@MainActivity).apply {
+            addView(
+                backgroundImage,
+                FrameLayout.LayoutParams(-1, -1)
+            )
+            addView(
+                textLayer,
+                FrameLayout.LayoutParams(-1, -1)
+            )
         },
-        LinearLayout.LayoutParams(-1, -2).apply {
-            topMargin = dp(3)
-        }
+        LinearLayout.LayoutParams(-1, -1)
     )
 }
 
