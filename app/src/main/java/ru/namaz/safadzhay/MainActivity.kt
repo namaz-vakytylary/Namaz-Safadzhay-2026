@@ -2177,6 +2177,9 @@ cell.addView(
         } else {
 
             ramadanCountdownBackground.visibility = View.GONE
+
+            countdown.setTextColor(mint)
+            countdown.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 48f)
             countdownCard.post {
                 val params = countdownCard.layoutParams as LinearLayout.LayoutParams
                 if (params.height != dp(174)) {
