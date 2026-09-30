@@ -2073,7 +2073,7 @@ cell.addView(
                 progress.goldMode = true
                
                     
-                ramadanCountdownBackground.setImageResource(R.drawable.ramadan_iftar)
+                ramadanCountdownBackground.setImageResource(R.drawable.ramadan_iftar_started)
                 ramadanCountdownBackground.visibility = View.VISIBLE
                 nextName.text = "Время ифтара наступило"
                 countdownLabel.visibility = View.GONE
