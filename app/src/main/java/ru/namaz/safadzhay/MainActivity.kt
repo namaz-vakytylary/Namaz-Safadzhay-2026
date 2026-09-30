@@ -2103,6 +2103,13 @@ cell.addView(
             } else if (ramadanDay != null && nextEvent.prayer.name == "Фаджр") {
                 ramadanCountdownBackground.setImageResource(R.drawable.ramadan_suhoor)
                 ramadanCountdownBackground.visibility = View.VISIBLE
+                countdownCard.post {
+                    val targetHeight = countdownCard.width / 3
+                    countdownCard.layoutParams =
+                        (countdownCard.layoutParams as LinearLayout.LayoutParams).apply {
+                            height = targetHeight
+                        }
+                }
                 nextName.text = "До окончания сухура"
                 countdownLabel.visibility = View.GONE
                 countdownStart.text =
