@@ -1983,7 +1983,7 @@ cell.addView(
         if (ramadanDay != null) {
             ramadanCard.visibility = View.VISIBLE
             ramadanCard.post {
-                val targetHeight = ramadanCard.width / 3
+                val targetHeight = dp(95)
                 val params = ramadanCard.layoutParams as LinearLayout.LayoutParams
                 if (params.height != targetHeight) {
                     params.height = targetHeight
