@@ -1028,7 +1028,7 @@ private fun dismissScheduleUpdateDialog() {
             )
             addView(
                 textLayer,
-                FrameLayout.LayoutParams(-1, -1)
+                android.widget.FrameLayout.LayoutParams(-1, -1)
             )
         },
         LinearLayout.LayoutParams(-1, -1)
