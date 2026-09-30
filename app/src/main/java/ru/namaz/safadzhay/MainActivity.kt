@@ -2198,6 +2198,11 @@ cell.addView(
 
             countdown.setTextColor(mint)
             countdown.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 48f)
+
+            nextName.setTextColor(ink)
+            nextName.setShadowLayer(0f, 0f, 0f, Color.TRANSPARENT)
+            countdownStart.setTextColor(ink)
+            countdownStart.setShadowLayer(0f, 0f, 0f, Color.TRANSPARENT)
             countdownCard.post {
                 val params = countdownCard.layoutParams as LinearLayout.LayoutParams
                 if (params.height != dp(174)) {
