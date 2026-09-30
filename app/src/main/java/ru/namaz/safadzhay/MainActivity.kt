@@ -2114,6 +2114,8 @@ cell.addView(
                             height = targetHeight
                         }
                 }
+                nextName.setTextColor(Color.rgb(244, 241, 232))
+                nextName.setShadowLayer(4f, 0f, 2f, Color.BLACK)
                 nextName.text = "Время ифтара наступило"
                 countdownLabel.visibility = View.GONE
                 countdown.text = ""
