@@ -993,9 +993,22 @@ private fun dismissScheduleUpdateDialog() {
     visibility = View.GONE
 
     val backgroundImage = ImageView(this@MainActivity).apply {
-        setImageResource(R.drawable.ramadan_header)
-        scaleType = ImageView.ScaleType.CENTER_CROP
+    setImageResource(R.drawable.ramadan_header)
+    scaleType = ImageView.ScaleType.CENTER_CROP
+
+    clipToOutline = true
+    outlineProvider = object : android.view.ViewOutlineProvider() {
+        override fun getOutline(view: View, outline: android.graphics.Outline) {
+            outline.setRoundRect(
+                0,
+                0,
+                view.width,
+                view.height,
+                dp(16).toFloat()
+            )
+        }
     }
+}
 
     val textLayer = LinearLayout(this@MainActivity).apply {
         orientation = LinearLayout.VERTICAL
