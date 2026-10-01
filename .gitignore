@@ -11,4 +11,10 @@ local.properties
 *.keystore
 keystore.properties
 signing.properties
+*.p12
+*.pfx
+*.key
+*.pem
+.env
+.env.*
 __pycache__/
