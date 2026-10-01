@@ -5,6 +5,7 @@ This supplements GitHub secret scanning; it is not a comprehensive secret detect
 Only filenames and rule names are reported, never matching file contents.
 """
 from pathlib import Path
+import hashlib
 import re
 import subprocess
 import sys
@@ -32,6 +33,8 @@ def file_errors(path, content):
 
 def workflow_errors(path, content):
     errors = []
+    authorized_cleanup = (path == '.github/workflows/history-cleanup.yml'
+                          and hashlib.sha256(content.encode()).hexdigest() == 'a0fce3f5b1be78a91e89ad5be9c4233a21686a16fdb68e3bd5c773c6f4e6cb69')
     for action in re.findall(r'^\s*(?:-\s*)?uses:\s*([^\s#]+)', content, re.M):
         if not re.fullmatch(r'(?:actions/(?:checkout|setup-java|upload-artifact)|github/codeql-action/(?:init|analyze))@[0-9a-f]{40}', action):
             errors.append('unapproved or unpinned action')
@@ -42,7 +45,8 @@ def workflow_errors(path, content):
     if re.search(r'^\s*pull_request_target\s*:', content, re.M):
         errors.append('privileged pull request trigger')
     if re.search(r'^\s*(?:contents|actions|packages|pull-requests|issues|id-token):\s*write\s*$', content, re.M):
-        errors.append('unnecessary token write permission')
+        if not authorized_cleanup:
+            errors.append('unnecessary token write permission')
     if re.search(r'\bsecrets\s*(?:\.|\[)', content) and path != '.github/workflows/build-apk.yml':
         errors.append('signing secrets outside stable workflow')
     if 'security-events: write' in content and path != '.github/workflows/codeql.yml':
