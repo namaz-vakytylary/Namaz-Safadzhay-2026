@@ -1,18 +1,23 @@
-name: Build Namaz Vakytylary RELEASE
+name: Build Namaz Vakytylary 1.3 RELEASE
 
 on:
   workflow_dispatch:
+permissions:
+  contents: read
 
 jobs:
   build:
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
         with:
           distribution: temurin
           java-version: '17'
@@ -28,9 +33,39 @@ jobs:
           grep -n "versionName" app/build.gradle.kts || true
           grep -n "applicationId" app/build.gradle.kts || true
 
-      - name: Build RELEASE APK
+      - name: Preflight and signing helper tests
         run: |
-          ./gradlew --no-daemon --stacktrace assembleRelease
+          python3 scripts/preflight.py
+          python3 -m unittest discover -s scripts -p 'test_*.py'
+
+      - name: Unit tests
+        run: ./gradlew --no-daemon :app:testReleaseUnitTest
+
+      - name: Android lint
+        run: ./gradlew --no-daemon :app:lintRelease
+
+      # Keep the existing secret names and key; verify-apk.sh pins the stable certificate.
+      - name: Build signed stable APK
+        env:
+          NAMAZ_KEYSTORE_BASE64: ${{ secrets.NAMAZ_TEST_KEYSTORE_BASE64 }}
+          NAMAZ_KEYSTORE_PATH: ${{ runner.temp }}/namaz-signing/release.jks
+          NAMAZ_STORE_PASSWORD: ${{ secrets.NAMAZ_TEST_STORE_PASSWORD }}
+          NAMAZ_KEY_ALIAS: ${{ secrets.NAMAZ_TEST_KEY_ALIAS }}
+          NAMAZ_KEY_PASSWORD: ${{ secrets.NAMAZ_TEST_KEY_PASSWORD }}
+        run: |
+          python3 scripts/restore-signing.py
+          ./gradlew --no-daemon :app:assembleRelease
+
+      - name: Remove temporary signing key
+        if: always()
+        env:
+          NAMAZ_KEYSTORE_PATH: ${{ runner.temp }}/namaz-signing/release.jks
+        run: |
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          Path(os.environ["NAMAZ_KEYSTORE_PATH"]).unlink(missing_ok=True)
+          PY
 
       - name: Verify APK exists
         run: |
@@ -76,10 +111,34 @@ jobs:
 
           "$BUILD_TOOLS/aapt" dump badging "$APK" | grep "^package:"
 
-      - name: Upload RELEASE APK
-        uses: actions/upload-artifact@v5
+      - name: Verify stable identity, permissions, certificate and APK contents
+        run: bash scripts/verify-apk.sh
+
+      - name: Upload verification reports
+        if: always()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:
-          name: Namaz-Vakytylary-RELEASE
-          path: app/build/outputs/apk/release/app-release.apk
+          name: Namaz-Vakytylary-1.3-verification
+          path: |
+            app/build/reports/tests/testReleaseUnitTest
+            app/build/reports/lint-results-release.html
+            app/build/test-results/testReleaseUnitTest
+            app/build/reports/ui
+            apk-badging.txt
+            apk-manifest.txt
+            apk-signing.txt
+            apk.sha256
+          if-no-files-found: ignore
+
+      - name: Name stable APK
+        run: |
+          mkdir -p dist
+          cp app/build/outputs/apk/release/app-release.apk dist/Namaz_Vakytylary_1.3.apk
+
+      - name: Upload RELEASE APK
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: Namaz-Vakytylary-1.3-RELEASE
+          path: dist/Namaz_Vakytylary_1.3.apk
           if-no-files-found: error
           retention-days: 30

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ru.namaz.safadzhay.ScheduleRepositoryTest" tests="10" skipped="0" failures="0" errors="0" timestamp="2026-09-20T15:56:15" hostname="localhost" time="0.562">
+  <properties/>
+  <testcase name="unsafeUrlDuplicateYearAndUnsupportedSchemaAreRejected" classname="ru.namaz.safadzhay.ScheduleRepositoryTest" time="0.036"/>
+  <testcase name="offlineFirstLaunchAndInvalidSavedFileFallBackToBuiltIn" classname="ru.namaz.safadzhay.ScheduleRepositoryTest" time="0.024"/>
+  <testcase name="published2026FilesLoadAll306UnchangedDays" classname="ru.namaz.safadzhay.ScheduleRepositoryTest" time="0.062"/>
+  <testcase name="downloadedNextYearReachesCalendarAndStoredNotificationChain" classname="ru.namaz.safadzhay.ScheduleRepositoryTest" time="0.307"/>
+  <testcase name="corruptDownloadCannotReplaceWorkingSnapshot" classname="ru.namaz.safadzhay.ScheduleRepositoryTest" time="0.024"/>
+  <testcase name="interruptedSecondYearDoesNotPartiallyCommitFirstYear" classname="ru.namaz.safadzhay.ScheduleRepositoryTest" time="0.021"/>
+  <testcase name="unchangedRevisionDownloadsOnlyManifestAndWeeklyCheckIsThrottled" classname="ru.namaz.safadzhay.ScheduleRepositoryTest" time="0.023"/>
+  <testcase name="malformedDatesAndTimeZoneRejectedEvenWithMatchingChecksum" classname="ru.namaz.safadzhay.ScheduleRepositoryTest" time="0.019"/>
+  <testcase name="downloadPersistsAcrossRestartAndRetainsBuiltInDaysOffline" classname="ru.namaz.safadzhay.ScheduleRepositoryTest" time="0.018"/>
+  <testcase name="newerRevisionUpdatesDataButOlderRevisionCannotRollItBack" classname="ru.namaz.safadzhay.ScheduleRepositoryTest" time="0.028"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

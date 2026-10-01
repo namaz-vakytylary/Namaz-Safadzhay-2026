@@ -5,11 +5,83 @@ import org.junit.Test
 import java.time.LocalDate
 
 class CalendarTest {
-    @Test fun eventsUseOnlyDumRf2026() {
-        assertTrue(HolidayCalendar.items.all { it.date.year == 2026 && it.sourceName == "ДУМ РФ, календарь 2026" })
-        assertEquals(LocalDate.of(2026, 8, 24), HolidayCalendar.items.single { it.title == "Маулид" }.date)
-        assertFalse(HolidayCalendar.labels(LocalDate.of(2026, 8, 25)).contains("Маулид"))
+    @Test fun august10IsAnOrdinaryDayWithoutRamadanOverride() {
+        HolidayCalendar.setRemote(2026, null)
+        assertNull(HolidayCalendar.ramadanDay(LocalDate.of(2026, 8, 10)))
+        assertTrue(HolidayCalendar.labels(LocalDate.of(2026, 8, 10)).isEmpty())
     }
+
+    @Test fun realRamadanStartsOnFirstDayAndEndsBeforeEid() {
+        HolidayCalendar.setRemote(2026, null)
+        assertNull(HolidayCalendar.ramadanDay(LocalDate.of(2026, 2, 18)))
+        assertEquals(1, HolidayCalendar.ramadanDay(LocalDate.of(2026, 2, 19)))
+        assertEquals(2, HolidayCalendar.ramadanDay(LocalDate.of(2026, 2, 20)))
+        assertEquals(29, HolidayCalendar.ramadanDay(LocalDate.of(2026, 3, 19)))
+        assertNull(HolidayCalendar.ramadanDay(LocalDate.of(2026, 3, 20)))
+    }
+
+    @Test fun holidayRemainsInCalendarWhenFridayBannerEnds() {
+        val date = LocalDate.of(2026, 3, 20)
+        val asr = java.time.LocalTime.of(15, 30)
+        HolidayCalendar.setRemote(2026, null)
+        assertTrue(HolidayCalendar.bannerLabels(date, date.atTime(asr), asr).isEmpty())
+        assertEquals("Ураза-байрам", HolidayCalendar.holidayFor(date)?.title)
+        assertEquals(listOf("Джума-намаз", "Ураза-байрам"), HolidayCalendar.labels(date))
+    }
+
+    @Test fun fridayBannerStartsAtMidnightAndEndsExactlyAtSelectedAsr() {
+        val date = LocalDate.of(2026, 9, 18)
+        val asr = java.time.LocalTime.of(15, 30)
+        assertTrue(HolidayCalendar.bannerLabels(date, date.atStartOfDay(), asr).contains("Джума-намаз"))
+        assertTrue(HolidayCalendar.bannerLabels(date, date.atTime(asr).minusNanos(1), asr).contains("Джума-намаз"))
+        assertFalse(HolidayCalendar.bannerLabels(date, date.atTime(asr), asr).contains("Джума-намаз"))
+        assertFalse(HolidayCalendar.bannerLabels(date, date.atTime(23, 59), asr).contains("Джума-намаз"))
+        assertTrue(HolidayCalendar.bannerLabels(date, date.atTime(asr), asr.plusHours(1)).contains("Джума-намаз"))
+    }
+   @Test fun bannerShowsOnlyJumuahAndNeverHolidayNames() {
+    val date = LocalDate.of(2026, 3, 20)
+    val asr = java.time.LocalTime.of(15, 30)
+
+    assertEquals(
+        listOf("Джума-намаз"),
+        HolidayCalendar.bannerLabels(date, date.atStartOfDay(), asr)
+    )
+
+    assertTrue(
+        HolidayCalendar.bannerLabels(date, date.atTime(asr), asr).isEmpty()
+    )
+
+    assertEquals(
+    listOf("Джума-намаз"),
+    HolidayCalendar.bannerLabels(
+        date,
+        date.minusDays(1).atTime(23, 59),
+        asr
+    )
+)
+}
+    @Test fun fridayWithoutDownloadedAsrDoesNotDisappearAtMidnight() {
+        val date = LocalDate.of(2027, 1, 1)
+        assertEquals(listOf("Джума-намаз"), HolidayCalendar.bannerLabels(date, date.atStartOfDay(), null))
+        assertEquals(listOf("Джума-намаз"), HolidayCalendar.bannerLabels(date, date.atTime(9, 0), null))
+    }
+    @Test fun eventsUseCorrectDumRfCalendarYear() {
+    assertTrue(
+        HolidayCalendar.items.all {
+            it.sourceName == "ДУМ РФ, календарь ${it.date.year}"
+        }
+    )
+
+    assertTrue(
+        HolidayCalendar.items.any {
+            it.title == "Маулид" && it.date == LocalDate.of(2026, 8, 24)
+        }
+    )
+
+    assertFalse(
+        HolidayCalendar.labels(LocalDate.of(2026, 8, 25)).contains("Маулид")
+    )
+}
     @Test fun fridayAndHolidayAreBothPresentInOneDay() {
         assertEquals(listOf("Джума-намаз", "Ураза-байрам"), HolidayCalendar.labels(LocalDate.of(2026, 3, 20)))
     }

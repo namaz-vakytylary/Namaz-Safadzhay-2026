@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "schedules": [
+    {
+      "year": 2026,
+      "version": 1,
+      "path": "2026.json",
+      "cityIds": [
+        "safadzhay",
+        "moscow"
+      ],
+      "dateFrom": "2026-08-01",
+      "dateTo": "2026-12-31",
+      "completeYear": false,
+      "daysPerCity": 153,
+      "sha256": "e3eced62addac01975c59406cbe3fff08fc4c29a5139ffc7c5c38c6fa266feb6",
+      "bytes": 58602
+    }
+  ]
+}

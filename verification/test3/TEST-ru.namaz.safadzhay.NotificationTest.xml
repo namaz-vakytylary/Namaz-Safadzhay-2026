@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ru.namaz.safadzhay.NotificationTest" tests="13" skipped="0" failures="0" errors="0" timestamp="2026-09-20T15:56:09" hostname="localhost" time="5.878">
+  <properties/>
+  <testcase name="bootRestoresOnlyEnabledFutureAlarms" classname="ru.namaz.safadzhay.NotificationTest" time="2.967"/>
+  <testcase name="warmNotificationLaunchClosesSettingsAndAboutAndSelectsToday" classname="ru.namaz.safadzhay.NotificationTest" time="2.525"/>
+  <testcase name="changedSoundCreatesMatchingChannelAndZeroLeadText" classname="ru.namaz.safadzhay.NotificationTest" time="0.034"/>
+  <testcase name="grantingExactAlarmPermissionRestoresAlarms" classname="ru.namaz.safadzhay.NotificationTest" time="0.042"/>
+  <testcase name="withoutExactAlarmPermissionFallsBackWithoutCrash" classname="ru.namaz.safadzhay.NotificationTest" time="0.034"/>
+  <testcase name="coldNotificationLaunchOverridesRestoredScheduleAndSettings" classname="ru.namaz.safadzhay.NotificationTest" time="0.101"/>
+  <testcase name="fivePrayersRemainDistinctAndRedeliveryDoesNotDuplicate" classname="ru.namaz.safadzhay.NotificationTest" time="0.03"/>
+  <testcase name="closedAppReceiverSchedulesNextPrayerAtConfiguredLeadTime" classname="ru.namaz.safadzhay.NotificationTest" time="0.036"/>
+  <testcase name="notificationHasOriginalTextSoundVibrationAndDirectActivityAction" classname="ru.namaz.safadzhay.NotificationTest" time="0.028"/>
+  <testcase name="disabledPrayerSuppressesDeliveryAndNextAlarm" classname="ru.namaz.safadzhay.NotificationTest" time="0.02"/>
+  <testcase name="disabledNotificationsSuppressDeliveryAndNextAlarm" classname="ru.namaz.safadzhay.NotificationTest" time="0.018"/>
+  <testcase name="deniedPermissionDoesNotCrashAndKeepsNextAlarm" classname="ru.namaz.safadzhay.NotificationTest" time="0.019"/>
+  <testcase name="appUpdateRestoresStoredOriginalFormat" classname="ru.namaz.safadzhay.NotificationTest" time="0.023"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[[Robolectric] WARN: Android SDK 36 requires Java 21 (have Java 17). Tests won't be run on SDK 36 unless explicitly requested.
+Intent = Intent { act=android.intent.action.BOOT_COMPLETED pkg=ru.namaz.safadzhay.test }; Matching wrappers: [Wrapper[receiver=[ru.namaz.safadzhay.PrayerBootReceiver@66a339b1], context=[android.app.ContextImpl@d6186a8], intentFilter=[android.content.IntentFilter@51ee52e6]]]
+Intent = Intent { act=android.app.action.SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED pkg=ru.namaz.safadzhay.test }; Matching wrappers: [Wrapper[receiver=[ru.namaz.safadzhay.PrayerBootReceiver@67a5e64d], context=[android.app.ContextImpl@74ff238d], intentFilter=[android.content.IntentFilter@25518053]]]
+Intent = Intent { act=android.intent.action.MY_PACKAGE_REPLACED pkg=ru.namaz.safadzhay.test }; Matching wrappers: [Wrapper[receiver=[ru.namaz.safadzhay.PrayerBootReceiver@694666f5], context=[android.app.ContextImpl@15935bef], intentFilter=[android.content.IntentFilter@5fb12ad3]]]
+]]></system-err>
+</testsuite>

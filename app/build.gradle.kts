@@ -11,16 +11,16 @@ android {
         applicationId = "ru.namaz.safadzhay"
         minSdk = 23
         targetSdk = 35
-        versionCode = 32
-        versionName = "1.2"
+        versionCode = 33
+        versionName = "1.3"
     }
 
     signingConfigs {
         create("namazRelease") {
-            storeFile = file("namaz-release.jks")
-            storePassword = "NamazSafadzhay2026"
-            keyAlias = "namaz"
-            keyPassword = "NamazSafadzhay2026"
+            storeFile = providers.environmentVariable("NAMAZ_KEYSTORE_PATH").orNull?.let { file(it) }
+            storePassword = providers.environmentVariable("NAMAZ_STORE_PASSWORD").orNull
+            keyAlias = providers.environmentVariable("NAMAZ_KEY_ALIAS").orNull
+            keyPassword = providers.environmentVariable("NAMAZ_KEY_PASSWORD").orNull
         }
     }
 
@@ -60,4 +60,21 @@ dependencies {
     testImplementation("org.robolectric:robolectric:4.16")
     implementation("androidx.core:core-ktx:1.15.0")
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.2")
+}
+
+// Unit tests and lint need no signing secrets. A release APK must never fall back
+// to the debug key or an unsigned build when its protected inputs are missing.
+val verifyReleaseSigning by tasks.registering {
+    doLast {
+        val required = listOf("NAMAZ_KEYSTORE_PATH", "NAMAZ_STORE_PASSWORD", "NAMAZ_KEY_ALIAS", "NAMAZ_KEY_PASSWORD")
+        val missing = required.filter { providers.environmentVariable(it).orNull.isNullOrBlank() }
+        if (missing.isNotEmpty()) {
+            throw GradleException("Release signing is not configured; missing: " + missing.joinToString())
+        }
+    }
+}
+// AGP omits validateSigningRelease entirely if the signing inputs are absent.
+// Guard packaging as well so assembleRelease cannot silently create an unsigned APK.
+tasks.matching { it.name in setOf("validateSigningRelease", "packageRelease") }.configureEach {
+    dependsOn(verifyReleaseSigning)
 }

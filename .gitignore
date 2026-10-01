@@ -5,3 +5,10 @@ build/
 local.properties
 *.iml
 .DS_Store
+
+# Signing material must be supplied outside the repository.
+*.jks
+*.keystore
+keystore.properties
+signing.properties
+__pycache__/

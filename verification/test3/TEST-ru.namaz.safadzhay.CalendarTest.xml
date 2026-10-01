@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ru.namaz.safadzhay.CalendarTest" tests="8" skipped="0" failures="0" errors="0" timestamp="2026-09-20T15:55:50" hostname="localhost" time="0.087">
+  <properties/>
+  <testcase name="fridayAndHolidayAreBothPresentInOneDay" classname="ru.namaz.safadzhay.CalendarTest" time="0.04"/>
+  <testcase name="eventDatesAreSortedAndTitlesNotDuplicatedPerDay" classname="ru.namaz.safadzhay.CalendarTest" time="0.001"/>
+  <testcase name="ordinaryDayHasNoBannerContent" classname="ru.namaz.safadzhay.CalendarTest" time="0.0"/>
+  <testcase name="regularFridayHasOnlyFridayLabel" classname="ru.namaz.safadzhay.CalendarTest" time="0.0"/>
+  <testcase name="fridayBannerStartsAtMidnightAndEndsExactlyAtSelectedAsr" classname="ru.namaz.safadzhay.CalendarTest" time="0.0"/>
+  <testcase name="eventsUseOnlyDumRf2026" classname="ru.namaz.safadzhay.CalendarTest" time="0.001"/>
+  <testcase name="nightDisplayIncludesPreviousCivilDate" classname="ru.namaz.safadzhay.CalendarTest" time="0.041"/>
+  <testcase name="bannerCutoffPreservesHolidaysAndOtherCalendarDates" classname="ru.namaz.safadzhay.CalendarTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>
