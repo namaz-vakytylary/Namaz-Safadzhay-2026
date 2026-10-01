@@ -1,0 +1,166 @@
+{
+  "command": "gradlew --no-daemon :app:testReleaseUnitTest",
+  "totalTests": 77,
+  "failures": 0,
+  "errors": 0,
+  "skipped": 0,
+  "suites": [
+    {
+      "name": "ru.namaz.safadzhay.AppRegressionTest",
+      "tests": 10,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "timestamp": "2026-10-01T12:46:45",
+      "cases": [
+        "notificationPermissionResultPersistsGrantAndDenial",
+        "eachLaunchChecksOnceIncludingRetryButResumeAndRecreationDoNot",
+        "resumeReactsToExactAlarmPermissionChange",
+        "updateWaitsUntilNotificationPermissionDialogCloses",
+        "accessibilityActionsHaveNamesAndDateRemainsReadable",
+        "remoteRevisionRebuildsAlarmsAndCityLeadAndPrayerSelectionStillWork",
+        "tatarTogglePersistsAndNotificationUsesPreference",
+        "progressStagesAndTwoSecondCompletionMessageArePreserved",
+        "stablePackagePreservesDefaultNotificationsAndExplicitOptOut",
+        "settingsAndMissingDateHaveNoUpdateControlsOrDownloadStatus"
+      ]
+    },
+    {
+      "name": "ru.namaz.safadzhay.CalendarTest",
+      "tests": 12,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "timestamp": "2026-10-01T12:46:50",
+      "cases": [
+        "eventsUseCorrectDumRfCalendarYear",
+        "fridayAndHolidayAreBothPresentInOneDay",
+        "eventDatesAreSortedAndTitlesNotDuplicatedPerDay",
+        "ordinaryDayHasNoBannerContent",
+        "fridayWithoutDownloadedAsrDoesNotDisappearAtMidnight",
+        "august10IsAnOrdinaryDayWithoutRamadanOverride",
+        "regularFridayHasOnlyFridayLabel",
+        "fridayBannerStartsAtMidnightAndEndsExactlyAtSelectedAsr",
+        "holidayRemainsInCalendarWhenFridayBannerEnds",
+        "bannerShowsOnlyJumuahAndNeverHolidayNames",
+        "realRamadanStartsOnFirstDayAndEndsBeforeEid",
+        "nightDisplayIncludesPreviousCivilDate"
+      ]
+    },
+    {
+      "name": "ru.namaz.safadzhay.HolidayRepositoryTest",
+      "tests": 8,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "timestamp": "2026-10-01T12:46:50",
+      "cases": [
+        "verifiedDownloadPersistsAndRemainsAvailableOffline",
+        "wrongShaSizeAndCorruptJsonCannotReplaceWorkingFile",
+        "oversizedStreamIsRejectedBeforeItIsFullyConsumed",
+        "wrongYearDuplicateRecordsAndTooManyRecordsAreRejectedEvenWithValidHash",
+        "serverFailureAndInvalidLocalFileAllowBuiltInFallback",
+        "unsafePathsAndUnsupportedManifestAreRejected",
+        "atomicBackupIsRecoveredWhenBaseFileIsMissing",
+        "currentYearCleanupRemovesOnlyPastYearsAndPreservesFutureCache"
+      ]
+    },
+    {
+      "name": "ru.namaz.safadzhay.NotificationTest",
+      "tests": 14,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "timestamp": "2026-10-01T12:46:51",
+      "cases": [
+        "bootRestoresOnlyEnabledFutureAlarms",
+        "warmNotificationLaunchClosesSettingsAndAboutAndSelectsToday",
+        "changedSoundCreatesMatchingChannelAndZeroLeadText",
+        "receiverChainsFromDecember31ToJanuary1WithoutOpeningApp",
+        "grantingExactAlarmPermissionRestoresAlarms",
+        "withoutExactAlarmPermissionFallsBackWithoutCrash",
+        "coldNotificationLaunchOverridesRestoredScheduleAndSettings",
+        "fivePrayersRemainDistinctAndRedeliveryDoesNotDuplicate",
+        "closedAppReceiverSchedulesNextPrayerAtConfiguredLeadTime",
+        "notificationHasOriginalTextSoundVibrationAndDirectActivityAction",
+        "disabledPrayerSuppressesDeliveryAndNextAlarm",
+        "disabledNotificationsSuppressDeliveryAndNextAlarm",
+        "deniedPermissionDoesNotCrashAndKeepsNextAlarm",
+        "appUpdateRestoresStoredOriginalFormat"
+      ]
+    },
+    {
+      "name": "ru.namaz.safadzhay.QiblaMathTest",
+      "tests": 7,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "timestamp": "2026-10-01T12:46:51",
+      "cases": [
+        "sameMeridianPointsNorthOrSouth",
+        "staleFutureAndInvalidCoordinatesAreRejected",
+        "bearingsAcrossHemispheres",
+        "dateLineHasNoDirectionJump",
+        "excessiveLocationUncertaintyIsRejected",
+        "nearbyAndAntipodalDirectionIsNotPresentedAsCertain",
+        "northWrapUsesTheShortestRotation"
+      ]
+    },
+    {
+      "name": "ru.namaz.safadzhay.ScheduleRepositoryTest",
+      "tests": 20,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "timestamp": "2026-10-01T12:46:51",
+      "cases": [
+        "timeoutDnsAndHttpErrorAreSilentAndNextCheckRetries",
+        "unsafeUrlDuplicateYearAndUnsupportedSchemaAreRejected",
+        "missingPrayerRejected",
+        "offlineFirstLaunchAndInvalidSavedFileFallBackToBuiltIn",
+        "published2026FilesLoadAll306UnchangedDays",
+        "newYearRemovesOldCacheDoesNotRedownloadOldYearAndKeepsCurrentSchedule",
+        "everyNewCheckFetchesManifestButUnchangedRevisionDoesNotRedownloadJson",
+        "duplicateDateRejected",
+        "missingDateRejected",
+        "invalidTimeRejected",
+        "downloadedNextYearIsNotShownBeforeItBecomesCurrentYear",
+        "corruptDownloadCannotReplaceWorkingSnapshot",
+        "interruptedSecondYearDoesNotPartiallyCommitFirstYear",
+        "unknownCityRejected",
+        "missingNextYearPreservesCurrentYearAndOnlyNewYearIsDownloaded",
+        "wrongSizeAndWrongShaAndDamagedJsonPreserveSnapshot",
+        "malformedDatesAndTimeZoneRejectedEvenWithMatchingChecksum",
+        "downloadPersistsAcrossRestartAndRetainsBuiltInDaysOffline",
+        "newerRevisionUpdatesDataButOlderRevisionCannotRollItBack",
+        "invalidYearVersionSchemaAndCoverageRejected"
+      ]
+    },
+    {
+      "name": "ru.namaz.safadzhay.ScheduleUpdateCheckerTest",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "timestamp": "2026-10-01T12:46:52",
+      "cases": [
+        "queuesBackgroundWorkOnceAndRecreatedScreenGetsCompletion",
+        "failureDoesNotNotifyUiAndNewLaunchAttemptsAgain"
+      ]
+    },
+    {
+      "name": "ru.namaz.safadzhay.UiRegressionTest",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "timestamp": "2026-10-01T12:46:52",
+      "cases": [
+        "font100",
+        "font130",
+        "font150",
+        "font200"
+      ]
+    }
+  ]
+}

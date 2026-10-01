@@ -28,17 +28,35 @@ ns = '{http://schemas.android.com/apk/res/android}'
 permissions = {x.get(ns+'name') for x in manifest.findall('uses-permission')}
 for permission in ['POST_NOTIFICATIONS','VIBRATE','RECEIVE_BOOT_COMPLETED','SCHEDULE_EXACT_ALARM','ACCESS_FINE_LOCATION','ACCESS_COARSE_LOCATION']:
     assert 'android.permission.'+permission in permissions, permission
-assert 'android.permission.INTERNET' not in permissions
+assert 'android.permission.INTERNET' in permissions
+assert 'android.permission.ACCESS_NETWORK_STATE' in permissions
 assert 'android.permission.ACCESS_BACKGROUND_LOCATION' not in permissions
 app = manifest.find('application')
 assert app.get(ns+'allowBackup') == 'false'
+assert app.get(ns+'usesCleartextTraffic') == 'false'
 build = (ROOT / 'app/build.gradle.kts').read_text()
-for required in ['applicationId = "ru.namaz.safadzhay"','versionCode = 31','versionName = "1.2"','namaz-release.jks','isDebuggable = false']:
+for required in ['namespace = "ru.namaz.safadzhay"', 'applicationId = "ru.namaz.safadzhay"','versionCode = 33','versionName = "1.3"','isDebuggable = false']:
     assert required in build, required
-assert not (ROOT / 'app/namaz-test.jks').exists()
-assert (ROOT / 'app/namaz-release.jks').is_file()
+assert not any((ROOT / 'app').glob('*.jks'))
+tracked = subprocess.check_output(['git', 'ls-files', '-z'], cwd=ROOT).decode().split('\0')
+assert not any(p.endswith(('.jks', '.keystore')) for p in tracked if p), 'Signing key must not be tracked'
+assert not re.search(r'(?:storePassword|keyPassword)\s*=\s*[\"\']', build), 'Signing passwords must not be literals'
+for name in ['NAMAZ_KEYSTORE_PATH', 'NAMAZ_STORE_PASSWORD', 'NAMAZ_KEY_ALIAS', 'NAMAZ_KEY_PASSWORD']:
+    assert 'environmentVariable("' + name + '")' in build, 'Missing external signing input: ' + name
 for xml in (ROOT/'app/src/main/res').rglob('*.xml'): ET.parse(xml)
-assert 'ТЕСТ' not in (ROOT/'app/src/main/res/values/strings.xml').read_text()
+strings = ET.parse(ROOT/'app/src/main/res/values/strings.xml').getroot()
+assert strings.find("string[@name='app_name']").text == 'Намаз Вакытлары'
+assert '"ru.namaz.safadzhay.OPEN_PRAYER"' in s
+assert 'ru.namaz.safadzhay.test' not in s
+assert 'getBoolean(NOTIFICATIONS_ENABLED_KEY, false)' not in s
+assert 'val ramadanDay = HolidayCalendar.ramadanDay(todayDate)' in s
+assert not re.search(r'(?i)\b(fake|demo|forced)\w*', s), 'Temporary production override'
+assert not re.search(r'LocalDate\.(?:of\(2026,\s*8,\s*10\)|parse\("2026-08-10"\))', s)
+for name, expected in json.loads((ROOT/'verification/ramadan-resources.sha256.json').read_text()).items():
+    assert hashlib.sha256((ROOT/'app/src/main/res/drawable'/name).read_bytes()).hexdigest() == expected, name
+baseline = json.loads((ROOT/'verification/stable-baseline.json').read_text())
+assert 33 > baseline['versionCode']
+assert baseline['certificateSha256'] == (ROOT/'verification/release-certificate.sha256').read_text().strip()
 resources = {p.stem for p in (ROOT/'app/src/main/res').rglob('*') if p.is_file()}
 for code in SRC.glob('*.kt'):
     for res in re.findall(r'(?<!android\.)R\.(?:drawable|mipmap)\.(\w+)',code.read_text()):
@@ -48,9 +66,11 @@ for script in (ROOT/'scripts').glob('*.sh'):
 workflow=(ROOT/'.github/workflows/build-apk.yml').read_text()
 for marker in ['python3 scripts/preflight.py',':app:testReleaseUnitTest',':app:lintRelease',':app:assembleRelease','scripts/verify-apk.sh']:
     assert marker in workflow, marker
-assert workflow.index('python3 scripts/preflight.py') < workflow.index(':app:assembleRelease')
+assert workflow.index('python3 scripts/preflight.py') < workflow.index(':app:testReleaseUnitTest') < workflow.index(':app:lintRelease') < workflow.index(':app:assembleRelease')
+assert '  workflow_dispatch:' in workflow and not re.search(r'^\s*(push|pull_request|schedule):', workflow, re.M)
+assert "if: github.ref == 'refs/heads/main'" in workflow
 # Published Gradle 8.10.2 checksums: services.gradle.org/distributions/.
 assert hashlib.sha256((ROOT/'gradle/wrapper/gradle-wrapper.jar').read_bytes()).hexdigest() == '2db75c40782f5e8ba1fc278a5574bab070adccb2d21ca5a6e5ed840888448046'
 assert 'distributionSha256Sum=31c55713e40233a8303827ceb42ca48a47267a0ad4bab9177123121e71524c26' in (ROOT/'gradle/wrapper/gradle-wrapper.properties').read_text()
 subprocess.run(['bash','-n',str(ROOT/'gradlew')],check=True)
-print('PASS stable identity, original data fixture, permissions, XML, resources, shell syntax and CI gates')
+print('PASS stable 1.3/33 identity, notification defaults, real Ramadan dates, original Ramadan images, data, permissions, XML, shell syntax and manual CI gates')

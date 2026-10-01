@@ -18,5 +18,5 @@ dependencyResolutionManagement {
         mavenCentral()
     }
 }
-rootProject.name = "NamazVakytylaryTest"
+rootProject.name = "NamazVakytylary"
 include(":app")

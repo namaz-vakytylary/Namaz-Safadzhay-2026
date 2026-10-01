@@ -1,0 +1,12 @@
+{
+  "applicationId": "ru.namaz.safadzhay",
+  "versionName": "1.2",
+  "versionCode": 32,
+  "certificateSha256": "b7a6e8c97ee7ea53c18d5d89082628caa594428b18fb919bd4f3dd9ed7044e62",
+  "artifactRunUrl": "https://github.com/namaz-vakytylary/Namaz-Safadzhay-2026/actions/runs/34705939849",
+  "artifactId": 10301756595,
+  "apkSha256": "19be821aca21fd754555098dc80be02dc012f555b41b7b5f814a57cac60f90f1",
+  "latestMainArtifactRunUrl": "https://github.com/namaz-vakytylary/Namaz-Safadzhay-2026/actions/runs/35922755291",
+  "latestMainApkSha256": "5888bc91f5d89d42bfcbb5436f528f7adc930ab561ac865674bfd2b8a0237afd",
+  "note": "Identity verified from both existing stable APKs. RuStore public listing confirms 1.2 but does not expose versionCode."
+}

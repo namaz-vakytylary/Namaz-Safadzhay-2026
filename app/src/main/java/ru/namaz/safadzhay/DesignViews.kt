@@ -18,7 +18,9 @@ internal class CardProgressIndicator(context: Context) : View(context) {
     private val measure = PathMeasure()
     var progress: Float = 0f
         set(value) { field = value.coerceIn(0f, 1f); invalidate() }
-
+        
+    var goldMode: Boolean = false
+        set(value) { field = value; invalidate() }
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
         val inset = paint.strokeWidth / 2f + resources.displayMetrics.density
@@ -39,9 +41,19 @@ internal class CardProgressIndicator(context: Context) : View(context) {
     }
 
     override fun onDraw(canvas: Canvas) {
-        paint.color = Color.rgb(18, 72, 51)
+        paint.color = if (goldMode) {
+            Color.rgb(118, 88, 31)
+        } else {
+            Color.rgb(18, 72, 51)
+        }
         canvas.drawPath(outline, paint)
-        paint.color = Color.rgb(91, 224, 164)
+
+        paint.color = if (goldMode) {
+            Color.rgb(235, 202, 104)
+        } else {
+            Color.rgb(91, 224, 164)
+        }
+
         if (progress >= 1f) canvas.drawPath(outline, paint)
         else if (progress > 0f) {
             segment.reset()
@@ -57,11 +69,15 @@ internal class PrayerIconView(context: Context, private val name: String, privat
         val r = min(width, height) * .23f; val cx = width / 2f; val cy = height / 2f
         paint.color = tint; paint.strokeWidth = resources.displayMetrics.density * 1.5f; paint.style = Paint.Style.STROKE; paint.strokeCap = Paint.Cap.ROUND
         if (name == "Иша") {
-            val p = Path()
-            p.moveTo(cx + r * .7f, cy - r)
-            p.cubicTo(cx - r * 1.5f, cy - r * .7f, cx - r * 1.1f, cy + r * 1.6f, cx + r, cy + r * .6f)
-            p.cubicTo(cx - r * .3f, cy + r * .6f, cx - r * .4f, cy - r * .2f, cx + r * .7f, cy - r)
-            canvas.drawPath(p, paint)
+    val drawable = context.getDrawable(R.drawable.ic_isha_crescent)
+    drawable?.setBounds(
+        (cx - r * 1.7f).toInt(),
+        (cy - r * 1.7f).toInt(),
+        (cx + r * 1.7f).toInt(),
+        (cy + r * 1.7f).toInt()
+    )
+    drawable?.setTint(tint)
+    drawable?.draw(canvas)
         } else if (name == "Фаджр" || name == "Магриб") {
             val horizon = cy + r * .45f
             canvas.drawLine(cx-r*1.8f, horizon, cx+r*1.8f, horizon, paint)

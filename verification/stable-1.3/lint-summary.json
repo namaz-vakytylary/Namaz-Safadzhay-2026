@@ -1,0 +1,24 @@
+{
+  "command": "gradlew --no-daemon :app:lintRelease",
+  "result": "PASS",
+  "severityCounts": {
+    "Warning": 63
+  },
+  "issueCountsById": {
+    "ApplySharedPref": 1,
+    "DefaultLocale": 4,
+    "UnusedAttribute": 2,
+    "LockedOrientationActivity": 1,
+    "DiscouragedApi": 1,
+    "DataExtractionRules": 1,
+    "DrawAllocation": 6,
+    "ObsoleteSdkInt": 6,
+    "VectorPath": 1,
+    "UnusedResources": 4,
+    "IconLauncherShape": 11,
+    "IconLocation": 6,
+    "IconDuplicates": 5,
+    "ViewConstructor": 1,
+    "SetTextI18n": 13
+  }
+}
