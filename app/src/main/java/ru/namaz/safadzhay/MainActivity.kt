@@ -1013,6 +1013,7 @@ private fun dismissScheduleUpdateDialog() {
     val textLayer = LinearLayout(this@MainActivity).apply {
         orientation = LinearLayout.VERTICAL
         gravity = Gravity.CENTER
+        translationX = dp(20).toFloat()
         setPadding(dp(16), dp(10), dp(16), dp(10))
 
         addView(
