@@ -34,7 +34,7 @@ def file_errors(path, content):
 def workflow_errors(path, content):
     errors = []
     authorized_cleanup = (path == '.github/workflows/history-cleanup.yml'
-                          and hashlib.sha256(content.encode()).hexdigest() == 'a0fce3f5b1be78a91e89ad5be9c4233a21686a16fdb68e3bd5c773c6f4e6cb69')
+                          and hashlib.sha256(content.encode()).hexdigest() == '5aad6e390e9a869c124b22d2ff0e4d1823c44d9c7c40bef35920d105f861e87a')
     for action in re.findall(r'^\s*(?:-\s*)?uses:\s*([^\s#]+)', content, re.M):
         if not re.fullmatch(r'(?:actions/(?:checkout|setup-java|upload-artifact)|github/codeql-action/(?:init|analyze))@[0-9a-f]{40}', action):
             errors.append('unapproved or unpinned action')

@@ -21,7 +21,7 @@ jobs:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
         with:
           persist-credentials: false
-      - name: Verify reviewed bundle and perform atomic ref update
+      - name: Verify reviewed bundle and import sanitized objects
         env:
           GH_TOKEN: ${{ github.token }}
           EXPECTED_MAIN: ${{ github.sha }}
@@ -41,14 +41,17 @@ jobs:
           test "$(git rev-parse 'refs/cleanup/main^{tree}')" = 43296cb73306d4c87045287dda8087cc53d96c0f
           test "$(git rev-parse 'refs/cleanup/source^{tree}')" = bf653c4f5ec872653d367e7ab4a32836b824c6d2
           test "$(git rev-parse 'refs/cleanup/backup^{tree}')" = 207fbc3d7587957eda2f8c86aa82f5b0be5f2379
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$EXPECTED_MAIN"
+          test "$(git ls-remote origin refs/heads/test/1.2-test3-security | cut -f1)" = 64c41c270d776d660043cd3bc64a41a636e7e973
+          test "$(git ls-remote origin refs/heads/backup/main-before-stable-1.3-20261001 | cut -f1)" = cad84c8df708ffff9f894d366e14232ab129801f
           git -c credential.helper='!gh auth git-credential' push --atomic \
-            "--force-with-lease=refs/heads/main:$EXPECTED_MAIN" \
-            --force-with-lease=refs/heads/test/1.2-test3-security:64c41c270d776d660043cd3bc64a41a636e7e973 \
-            --force-with-lease=refs/heads/backup/main-before-stable-1.3-20261001:cad84c8df708ffff9f894d366e14232ab129801f \
+            --force-with-lease=refs/heads/security/sanitized-main-20261002: \
+            --force-with-lease=refs/heads/security/sanitized-source-20261002: \
+            --force-with-lease=refs/heads/security/sanitized-backup-20261002: \
             origin \
-            refs/cleanup/main:refs/heads/main \
-            refs/cleanup/source:refs/heads/test/1.2-test3-security \
-            refs/cleanup/backup:refs/heads/backup/main-before-stable-1.3-20261001
+            refs/cleanup/main:refs/heads/security/sanitized-main-20261002 \
+            refs/cleanup/source:refs/heads/security/sanitized-source-20261002 \
+            refs/cleanup/backup:refs/heads/security/sanitized-backup-20261002
           git ls-remote --heads origin > history-cleanup-result.txt
           cat history-cleanup-result.txt
       - name: Verification evidence
