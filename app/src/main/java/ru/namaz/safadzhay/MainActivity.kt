@@ -77,9 +77,12 @@ private fun prayerDisplayName(context: Context, russian: String, tatar: String):
 private fun selectedNotificationSound(context: Context): Uri {
     val prefs = context.getSharedPreferences(SETTINGS_PREFS, Context.MODE_PRIVATE)
     val saved = prefs.getString(SOUND_URI_KEY, null)
-    return saved?.let { runCatching { Uri.parse(it) }.getOrNull() }
+    return saved?.let { runCatching { Uri.parse(it) }.getOrNull() }?.takeIf(::isLocalNotificationSound)
         ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
 }
+
+internal fun isLocalNotificationSound(uri: Uri): Boolean =
+    uri.scheme == "content" && !uri.authority.isNullOrBlank() && uri.userInfo == null
 
 private fun notificationChannelId(context: Context): String {
     val sound = selectedNotificationSound(context).toString()
@@ -1463,7 +1466,7 @@ headerBox.addView(
         alarmExecutor.execute {
             val prefs = getSharedPreferences(SETTINGS_PREFS, Context.MODE_PRIVATE)
             val city = prefs.getString("city", "Сафаджай") ?: "Сафаджай"
-            runCatching { rebuildPrayerNotifications(dataForCity(city), city,
+            runCatching { rebuildPrayerNotifications(alarmDataForCity(city), city,
                 prefs.getBoolean(NOTIFICATIONS_ENABLED_KEY, true),
                 prefs.getInt(NOTIFY_BEFORE_MIN_KEY, 5).coerceIn(0, 180),
                 prayerKeys.filter { prefs.getBoolean("notify_$it", true) }.toSet()) }
@@ -1620,7 +1623,7 @@ headerBox.addView(
             @Suppress("DEPRECATION")
             data?.getParcelableExtra<Uri>(RingtoneManager.EXTRA_RINGTONE_PICKED_URI)
         }
-        if (picked != null) {
+        if (picked != null && isLocalNotificationSound(picked)) {
             getSharedPreferences(SETTINGS_PREFS, Context.MODE_PRIVATE)
                 .edit().putString(SOUND_URI_KEY, picked.toString()).apply()
             ensurePrayerNotificationChannel(this)
@@ -1635,7 +1638,7 @@ headerBox.addView(
         val signature = listOf(selectedCity, LocalDate.now(zone), scheduleRepository.revision(), prefs.getBoolean(NOTIFICATIONS_ENABLED_KEY, true), prefs.getInt(NOTIFY_BEFORE_MIN_KEY, 5), prefs.getString(SOUND_URI_KEY, ""), prayerKeys.map { prefs.getBoolean("notify_$it", true) }, if (Build.VERSION.SDK_INT >= 31) (getSystemService(Context.ALARM_SERVICE) as AlarmManager).canScheduleExactAlarms() else true).joinToString("|")
         if (signature == lastAlarmSignature) return
         lastAlarmSignature = signature
-        val days = currentData().toList()
+        val days = alarmDataForCity(selectedCity).toList()
         val city = selectedCity
         val enabled = prefs.getBoolean(NOTIFICATIONS_ENABLED_KEY, true)
         val before = prefs.getInt(NOTIFY_BEFORE_MIN_KEY, 5).coerceIn(0, 180)
@@ -1646,9 +1649,6 @@ headerBox.addView(
     }
 
     private fun rebuildPrayerNotifications(days: List<PrayerDay>, city: String, notificationsEnabled: Boolean, notifyBeforeMinutes: Int, selectedKeys: Set<String>) {
-            if (notificationsEnabled && days.isEmpty()) {
-        return
-    }
         val prefs = getSharedPreferences(SETTINGS_PREFS, Context.MODE_PRIVATE)
         val am = getSystemService(Context.ALARM_SERVICE) as AlarmManager
         val today = LocalDate.now(zone)
@@ -1727,7 +1727,7 @@ headerBox.addView(
     }
 
     private fun setPrayerAlarm(am: AlarmManager, triggerAtMillis: Long, pi: PendingIntent) {
-        if (Build.VERSION.SDK_INT >= 31 && am.canScheduleExactAlarms()) {
+        if (Build.VERSION.SDK_INT < 31 || am.canScheduleExactAlarms()) {
             am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis, pi)
         } else if (Build.VERSION.SDK_INT >= 23) {
             am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis, pi)
@@ -1735,6 +1735,11 @@ headerBox.addView(
             am.set(AlarmManager.RTC_WAKEUP, triggerAtMillis, pi)
         }
     }
+
+    // Calendar stays on the current year; alarm chaining retains verified future years.
+    private fun alarmDataForCity(city: String): List<PrayerDay> =
+        if (city == "Москва") scheduleRepository.merged("moscow", moscowData)
+        else scheduleRepository.merged("safadzhay", safadzhayData)
 
     private fun currentData(): List<PrayerDay> = dataForCity(selectedCity)
 
@@ -2456,11 +2461,12 @@ startScheduleUpdateCheck()
 
 class PrayerNotificationReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        val prayer = intent.getStringExtra("prayer") ?: return
-        val tatar = intent.getStringExtra("tatar") ?: ""
-        val time = intent.getStringExtra("time") ?: ""
-        val key = intent.getStringExtra("key") ?: return
-        val date = intent.getStringExtra("date") ?: return
+        val reminder = PrayerReminder.fromIntent(intent) ?: return
+        val prayer = reminder.prayer
+        val tatar = reminder.tatar
+        val time = reminder.time
+        val key = reminder.key
+        val date = reminder.date.toString()
 
         val prefs = context.getSharedPreferences(SETTINGS_PREFS, Context.MODE_PRIVATE)
         if (!prefs.getBoolean(NOTIFICATIONS_ENABLED_KEY, true) || !prefs.getBoolean("notify_$key", true)) {
@@ -2512,9 +2518,12 @@ private fun scheduleNextStoredPrayer(context: Context, firedDate: String, key: S
     val fired = runCatching { LocalDate.parse(firedDate) }.getOrNull() ?: return
     val next = lines.mapNotNull { line ->
         val p = line.split("|")
-        if (p.size < 6 || p[1] != key) return@mapNotNull null
-        val d = runCatching { LocalDate.parse(p[0]) }.getOrNull() ?: return@mapNotNull null
+        val reminder = PrayerReminder.stored(line) ?: return@mapNotNull null
+        if (reminder.key != key) return@mapNotNull null
+        val d = reminder.date
         if (!d.isAfter(fired)) return@mapNotNull null
+        val trigger = d.atTime(java.time.LocalTime.parse(reminder.time)).minusMinutes(notifyBeforeMinutes.toLong())
+        if (!trigger.isAfter(LocalDateTime.now(ZoneId.of("Europe/Moscow")))) return@mapNotNull null
         Triple(d, p[4], p)
     }.minByOrNull { it.first }
         ?: return
@@ -2534,7 +2543,7 @@ private fun scheduleNextStoredPrayer(context: Context, firedDate: String, key: S
     val flags = PendingIntent.FLAG_UPDATE_CURRENT or
         (if (Build.VERSION.SDK_INT >= 23) PendingIntent.FLAG_IMMUTABLE else 0)
     val pi = PendingIntent.getBroadcast(context, requestCode, piIntent, flags)
-    if (Build.VERSION.SDK_INT >= 31 && am.canScheduleExactAlarms()) {
+    if (Build.VERSION.SDK_INT < 31 || am.canScheduleExactAlarms()) {
         am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, dt.atZone(ZoneId.of("Europe/Moscow")).toInstant().toEpochMilli(), pi)
     } else if (Build.VERSION.SDK_INT >= 23) {
         am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, dt.atZone(ZoneId.of("Europe/Moscow")).toInstant().toEpochMilli(), pi)
@@ -2546,7 +2555,9 @@ private fun scheduleNextStoredPrayer(context: Context, firedDate: String, key: S
 class PrayerBootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action != Intent.ACTION_BOOT_COMPLETED && intent.action != Intent.ACTION_MY_PACKAGE_REPLACED &&
-            intent.action != AlarmManager.ACTION_SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED) return
+            intent.action != AlarmManager.ACTION_SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED &&
+            intent.action != Intent.ACTION_TIME_CHANGED && intent.action != Intent.ACTION_DATE_CHANGED &&
+            intent.action != Intent.ACTION_TIMEZONE_CHANGED) return
         val pending = goAsync()
         try {
             val prefs = context.getSharedPreferences(SETTINGS_PREFS, Context.MODE_PRIVATE)
@@ -2558,9 +2569,12 @@ class PrayerBootReceiver : BroadcastReceiver() {
             val am = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
             lines.forEach { line ->
                 val p = line.split("|")
-                if (p.size < 6) return@forEach
+                val reminder = PrayerReminder.stored(line) ?: return@forEach
+                val d = reminder.date
+                val identity = ((d.toEpochDay() % 100000L) * 10L + PrayerReminder.keys.indexOf(reminder.key)).toInt()
+                PendingIntent.getBroadcast(context, identity, Intent(context, PrayerNotificationReceiver::class.java),
+                    PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE)?.let { am.cancel(it); it.cancel() }
                 if (!prefs.getBoolean("notify_${p[1]}", true)) return@forEach
-                val d = runCatching { LocalDate.parse(p[0]) }.getOrNull() ?: return@forEach
                 val dt = runCatching { d.atTime(p[4].substringBefore(":").toInt(), p[4].substringAfter(":").toInt()).minusMinutes(notifyBeforeMinutes.toLong()) }.getOrNull() ?: return@forEach
                 if (!dt.isAfter(now) || dt.isAfter(now.plusDays(14))) return@forEach
                 val keys = listOf("fajr", "zuhr", "asr", "maghrib", "isha")
@@ -2571,7 +2585,7 @@ class PrayerBootReceiver : BroadcastReceiver() {
                 }
                 val flags = PendingIntent.FLAG_UPDATE_CURRENT or (if (Build.VERSION.SDK_INT >= 23) PendingIntent.FLAG_IMMUTABLE else 0)
                 val pi = PendingIntent.getBroadcast(context, rc, piIntent, flags)
-                if (Build.VERSION.SDK_INT >= 31 && am.canScheduleExactAlarms()) {
+                if (Build.VERSION.SDK_INT < 31 || am.canScheduleExactAlarms()) {
                     am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, dt.atZone(ZoneId.of("Europe/Moscow")).toInstant().toEpochMilli(), pi)
                 } else if (Build.VERSION.SDK_INT >= 23) {
                     am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, dt.atZone(ZoneId.of("Europe/Moscow")).toInstant().toEpochMilli(), pi)

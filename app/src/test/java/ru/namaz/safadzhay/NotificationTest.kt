@@ -199,4 +199,45 @@ class NotificationTest {
             assertNull(ReflectionHelpers.getField<Dialog?>(activity, "aboutDialog"))
         } finally { controller.destroy() }
     }
+    @Test fun malformedIntentAndUnknownPrayerAreIgnored() {
+        listOf("not-a-date" to "fajr", "2026-02-30" to "fajr", today.toString() to "tahajjud").forEach { (date, key) ->
+            PrayerNotificationReceiver().onReceive(app, Intent().putExtra("date", date).putExtra("key", key)
+                .putExtra("prayer", "name").putExtra("time", "04:10"))
+        }
+        PrayerNotificationReceiver().onReceive(app, Intent().putExtra("date", today.toString())
+            .putExtra("key", "fajr").putExtra("prayer", "name").putExtra("time", "25:99"))
+        assertTrue(shadowOf(nm).allNotifications.isEmpty())
+    }
+    @Test fun corruptStoredReminderAndTahajjudDoNotCreateAlarm() {
+        prefs.edit().putString("scheduled_prayers", listOf(stored(tomorrow, "tahajjud"),
+            stored(tomorrow, time = "25:90"), "bad|fajr|name|tatar|04:10|city").joinToString("\n")).apply()
+        app.sendBroadcast(Intent(Intent.ACTION_BOOT_COMPLETED).setPackage(app.packageName))
+        shadowOf(Looper.getMainLooper()).idle()
+        assertTrue(shadowOf(am).scheduledAlarms.isEmpty())
+    }
+    @Test fun clockAndTimezoneChangesRestoreWithoutDuplicateAlarms() {
+        checkRestore(Intent.ACTION_TIME_CHANGED)
+        checkRestore(Intent.ACTION_TIMEZONE_CHANGED)
+        checkRestore(Intent.ACTION_DATE_CHANGED)
+        assertTrue(shadowOf(am).scheduledAlarms.single().operation!!.isImmutable)
+        assertEquals(PrayerNotificationReceiver::class.java.name,
+            shadowOf(shadowOf(am).scheduledAlarms.single().operation).savedIntent.component!!.className)
+    }
+    @Test @Config(sdk = [23]) fun androidSixUsesExactAlarmWithoutSpecialPermission() {
+        prefs.edit().putString("scheduled_prayers", stored(tomorrow)).apply()
+        fire()
+        assertEquals(0L, shadowOf(am).scheduledAlarms.single().windowLengthMs)
+    }
+
+    @Test fun remoteAndFileRingtoneUrisAreRejected() {
+        listOf("http://evil.invalid/a.mp3", "https://evil.invalid/a.mp3", "file:///data/data/a", "content:///missing").forEach {
+            assertFalse(isLocalNotificationSound(Uri.parse(it)))
+        }
+        assertTrue(isLocalNotificationSound(Uri.parse("content://media/internal/audio/media/42")))
+        prefs.edit().putString("notification_sound_uri", "https://evil.invalid/a.mp3").apply()
+        fire()
+        val n = onlyNotification()
+        assertEquals(RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION), nm.getNotificationChannel(n.channelId).sound)
+    }
+
 }
