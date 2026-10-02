@@ -367,4 +367,73 @@ val newYear = oldYear + 1
     assertEquals("$newYear-01-01", days.first().date)
     assertEquals("06:10", days.first().fajr)
 }
+    @Test fun sameVersionDifferentHashAndMissingHashPreserveVerifiedData() {
+        publish(fixture()); val repo = repository(); assertTrue(repo.sync(true).changed)
+        val before = File(context.filesDir, "downloaded-schedules.json").readBytes()
+        publish(fixture(fajr = "06:01")); assertFalse(repo.sync(true).changed)
+        val missing = fixture(version = 2); missing.remove("sha256"); publish(missing)
+        assertFalse(repo.sync(true).changed)
+        assertArrayEquals(before, File(context.filesDir, "downloaded-schedules.json").readBytes())
+    }
+    @Test fun nonMonotonicAndNonCanonicalTimeAreRejected() {
+        listOf("12:01", "12:00", "6:00", "06:60", "-1:00").forEach { time ->
+            rejectsReplacement { body, _ -> body.getJSONArray("cities").getJSONObject(0)
+                .getJSONArray("days").getJSONObject(0).put("fajr", time) }
+        }
+    }
+    @Test fun duplicateRawKeyAndOverflowingVersionCannotReplaceSnapshot() {
+        publish(fixture()); val repo = repository(); assertTrue(repo.sync(true).changed)
+        val entry = fixture(version = 2); publish(entry)
+        responses["manifest.json"] = String(responses.getValue("manifest.json"))
+            .replace("\"version\":2", "\"version\":2,\"version\":3").toByteArray()
+        assertFalse(repo.sync(true).changed)
+        publish(entry.put("version", 4294967298L)); assertFalse(repo.sync(true).changed)
+    }
+
+    @Test fun aggregateRemotePayloadIsBoundedBeforeThirdDownload() {
+        val entries = (2027..2029).map { year ->
+            fixture(year)
+            val body = JSONObject(String(responses.getValue("$year.json"))).put("unused", "a".repeat(760000))
+            val bytes = body.toString().toByteArray(); responses["$year.json"] = bytes
+            entryFor(year, 1, bytes)
+        }
+        publish(*entries.toTypedArray())
+        assertFalse(repository().sync(true).changed)
+        assertEquals(listOf("manifest.json", "2027.json", "2028.json"), calls)
+        assertFalse(File(context.filesDir, "downloaded-schedules.json").exists())
+    }
+    @Test fun verifiedAtomicBackupRecoversAndCorruptPayloadFallsBack() {
+        publish(fixture()); assertTrue(repository().sync(true).changed)
+        val file = File(context.filesDir, "downloaded-schedules.json")
+        val original = file.readText(); file.delete()
+        File(file.path + ".bak").writeText(original)
+        assertEquals("06:00", repository().merged("moscow", emptyList()).single().fajr)
+        val snapshot = JSONObject(file.readText())
+        val bundle = snapshot.getJSONArray("bundles").getJSONObject(0)
+        bundle.put("payload", bundle.getString("payload").replace("06:00", "06:01"))
+        file.writeText(snapshot.toString())
+        assertEquals(listOf(this.original), repository().merged("moscow", listOf(this.original)))
+    }
+
+    @Test fun futureScheduleIsStoredForAlarmChainWhileCalendarRemainsCurrentYear() {
+        val nextYear = LocalDate.now(java.time.ZoneId.of("Europe/Moscow")).year + 1
+        publish(fixture(year = nextYear))
+        val repo = repository(); assertTrue(repo.sync(true).changed)
+        TestNetwork.offline(context)
+        context.getSharedPreferences("settings", Context.MODE_PRIVATE).edit().putBoolean("notifications_enabled", true).apply()
+        val controller = org.robolectric.Robolectric.buildActivity(MainActivity::class.java).create()
+        val activity = controller.get()
+        try {
+            val worker = org.robolectric.util.ReflectionHelpers.getField<java.util.concurrent.ExecutorService>(activity, "alarmExecutor")
+            worker.submit {}.get(15, java.util.concurrent.TimeUnit.SECONDS)
+            org.robolectric.util.ReflectionHelpers.setField(activity, "scheduleRepository", repo)
+            org.robolectric.util.ReflectionHelpers.setField(activity, "lastAlarmSignature", "")
+            org.robolectric.util.ReflectionHelpers.callInstanceMethod<Unit>(activity, "schedulePrayerNotifications")
+            worker.submit {}.get(15, java.util.concurrent.TimeUnit.SECONDS)
+            val stored = context.getSharedPreferences("settings", Context.MODE_PRIVATE).getString("scheduled_prayers", "")!!
+            assertTrue(stored.contains("$nextYear-01-01|fajr"))
+            assertTrue(repo.dataForYear("safadzhay", nextYear - 1, listOf(original)).none { it.date.startsWith(nextYear.toString()) })
+        } finally { controller.destroy() }
+    }
+
 }

@@ -37,6 +37,9 @@ jobs:
         run: bash ./gradlew --no-daemon :app:testReleaseUnitTest
       - name: Android lint
         run: bash ./gradlew --no-daemon :app:lintRelease
+      - name: Audit merged release manifest
+        run: python3 scripts/audit-merged-manifest.py
+
       - name: Verification reports
         if: always()
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5

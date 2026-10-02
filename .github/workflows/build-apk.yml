@@ -47,6 +47,9 @@ jobs:
       - name: Android lint
         run: ./gradlew --no-daemon :app:lintRelease
 
+      - name: Audit merged release manifest
+        run: python3 scripts/audit-merged-manifest.py
+
       # Keep the existing secret names and key; verify-apk.sh pins the stable certificate.
       - name: Build signed stable APK
         env:

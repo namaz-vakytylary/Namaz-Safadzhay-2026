@@ -37,7 +37,7 @@ class HolidayRepositoryTest {
         val bytes = body.toString().toByteArray()
         val sha = MessageDigest.getInstance("SHA-256").digest(bytes)
             .joinToString("") { "%02x".format(it.toInt() and 255) }
-        val entry = JSONObject().put("year", year).put("path", "holidays/$year.json")
+        val entry = JSONObject().put("year", year).put("version", 1).put("path", "holidays/$year.json")
             .put("bytes", bytes.size).put("sha256", sha)
         responses["holidays/$year.json"] = bytes
         manifest(entry)
@@ -130,4 +130,49 @@ class HolidayRepositoryTest {
         file(2026).writeBytes(ByteArray(65537))
         assertNull(repository().loadSaved(2026))
     }
+    @Test fun duplicateManifestYearsAndMissingHashAreRejected() {
+        val entry = publish()
+        responses["manifest.json"] = JSONObject().put("schemaVersion", 1)
+            .put("holidays", JSONArray().put(entry).put(entry)).toString().toByteArray()
+        assertNull(repository().download(2026))
+        entry.remove("sha256"); manifest(entry)
+        assertNull(repository().download(2026))
+    }
+    @Test fun downgradeAndSameVersionDifferentHashCannotReplaceSnapshot() {
+        val entry = publish().put("version", 2); manifest(entry)
+        assertNotNull(repository().download(2026))
+        val original = file(2026).readBytes()
+        manifest(entry.put("version", 1))
+        assertNull(repository().download(2026))
+        publish(body = fixture(2026).put("source", "changed")).also { manifest(it.put("version", 2)) }
+        assertNull(repository().download(2026))
+        assertArrayEquals(original, file(2026).readBytes())
+        val next = publish(body = fixture(2026).put("source", "changed")); manifest(next.put("version", 3))
+        assertNotNull(repository().download(2026))
+    }
+    @Test fun modifiedPayloadFailsHashOnRestartAndFallsBackToBuiltIn() {
+        publish(); assertNotNull(repository().download(2026))
+        val snapshot = JSONObject(file(2026).readText())
+        snapshot.put("payload", snapshot.getString("payload").replace("Начало Рамадана", "Подмена"))
+        file(2026).writeText(snapshot.toString())
+        assertNull(repository().loadSaved(2026))
+        assertEquals("Начало Рамадана", HolidayCalendar.holidayFor(LocalDate.of(2026, 2, 19))?.title)
+    }
+    @Test fun legacyValidatedCacheMigratesWithoutLosingOfflineCalendar() {
+        file(2026).writeText(fixture(2026).toString())
+        assertNotNull(repository().loadSaved(2026))
+        publish(); assertNotNull(repository().download(2026))
+        assertEquals(1, JSONObject(file(2026).readText()).getInt("cacheSchemaVersion"))
+    }
+    @Test fun wrongTypesDatesAndBoundedTextAreRejected() {
+        listOf("2026-02-30", "+2026-02-19", "2027-02-19").forEach { date ->
+            val body = fixture(2026); body.getJSONArray("holidays").getJSONObject(0).put("date", date)
+            publish(body = body); assertNull(repository().download(2026))
+        }
+        listOf("title" to 123, "night" to "true", "title" to "x".repeat(101), "description" to "x".repeat(1001)).forEach { (key, value) ->
+            val body = fixture(2026); body.getJSONArray("holidays").getJSONObject(0).put(key, value)
+            publish(body = body); assertNull(repository().download(2026))
+        }
+    }
+
 }
