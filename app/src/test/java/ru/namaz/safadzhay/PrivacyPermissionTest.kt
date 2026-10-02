@@ -3,7 +3,9 @@ package ru.namaz.safadzhay
 import android.Manifest
 import android.app.Activity
 import android.content.Context
+import android.content.pm.ApplicationInfo
 import android.os.Looper
+import org.xmlpull.v1.XmlPullParser
 import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -16,6 +18,35 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [33])
 class PrivacyPermissionTest {
+    @Test fun compiledBackupRulesExcludePrivateDataFromCloudAndDeviceTransfer() {
+        val app = RuntimeEnvironment.getApplication()
+        assertEquals(0, app.applicationInfo.flags and ApplicationInfo.FLAG_ALLOW_BACKUP)
+        val modes = mutableMapOf<String, MutableSet<String>>()
+        var mode: String? = null
+        app.resources.getXml(R.xml.data_extraction_rules).use { xml ->
+            while (xml.eventType != XmlPullParser.END_DOCUMENT) {
+                if (xml.eventType == XmlPullParser.START_TAG) {
+                    when (xml.name) {
+                        "cloud-backup", "device-transfer" -> {
+                            mode = xml.name
+                            assertNull(modes.put(mode!!, mutableSetOf()))
+                        }
+                        "exclude" -> {
+                            assertEquals(".", xml.getAttributeValue(null, "path"))
+                            assertTrue(modes.getValue(requireNotNull(mode)).add(xml.getAttributeValue(null, "domain")))
+                        }
+                        else -> assertEquals("data-extraction-rules", xml.name)
+                    }
+                } else if (xml.eventType == XmlPullParser.END_TAG && xml.name == mode) mode = null
+                xml.next()
+            }
+        }
+        assertEquals(setOf("cloud-backup", "device-transfer"), modes.keys)
+        val domains = setOf("root", "file", "database", "sharedpref", "external",
+            "device_root", "device_file", "device_database", "device_sharedpref")
+        modes.values.forEach { assertEquals(domains, it) }
+    }
+
     @Test fun offlineColdStartDoesNotRequestLocationOrLoseSettings() {
         val app = RuntimeEnvironment.getApplication()
         TestNetwork.offline(app)

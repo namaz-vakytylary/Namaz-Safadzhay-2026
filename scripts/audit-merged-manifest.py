@@ -12,6 +12,18 @@ app = root.find('application')
 assert app.get(A + 'debuggable', 'false') == 'false'
 assert app.get(A + 'testOnly', 'false') == 'false'
 assert app.get(A + 'allowBackup') == 'false'
+assert app.get(A + 'fullBackupContent') == 'false'
+assert app.get(A + 'dataExtractionRules') == '@xml/data_extraction_rules'
+assert app.get(A + 'backupAgent') is None
+extraction = ET.parse(ROOT / 'app/src/main/res/xml/data_extraction_rules.xml').getroot()
+assert extraction.tag == 'data-extraction-rules'
+assert [e.tag for e in extraction] == ['cloud-backup', 'device-transfer']
+domains = {'root', 'file', 'database', 'sharedpref', 'external',
+           'device_root', 'device_file', 'device_database', 'device_sharedpref'}
+for mode in extraction:
+    assert len(mode) == len(domains)
+    assert {e.get('domain') for e in mode} == domains
+    assert all(e.tag == 'exclude' and e.get('path') == '.' for e in mode)
 assert app.get(A + 'usesCleartextTraffic') == 'false'
 expected = {
     ('activity', 'ru.namaz.safadzhay.MainActivity'): ('true', None),
@@ -41,4 +53,4 @@ assert permissions == {'android.permission.' + name for name in (
 permission = root.find('permission')
 assert permission.get(A + 'name') == 'ru.namaz.safadzhay.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION'
 assert permission.get(A + 'protectionLevel') == 'signature'
-print('PASS merged release manifest: identity, private receivers/provider, permission-gated profile receiver, launcher, flags and permissions')
+print('PASS merged release manifest: identity, private receivers/provider, permission-gated profile receiver, launcher, flags, permissions and backup exclusions')
