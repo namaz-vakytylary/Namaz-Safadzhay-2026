@@ -1,4 +1,4 @@
-# Security audit — 2026-10-01
+# Security audit — 2026-10-01; cleanup update 2026-10-02
 
 Scope: `namaz-vakytylary/Namaz-Safadzhay-2026` only. No changes to
 `namaz-vakytylary/namaz-schedules`, organization-wide settings, signing certificate,
@@ -8,7 +8,26 @@ Baseline stable main: `6a796349e05d7ae59dac22bb4ec6e291110fd5a1`.
 The owner's stable build and phone installation already succeeded. No stable APK
 build or publication was launched for this audit.
 
-## Read-only baseline
+## Current status — 2026-10-02
+
+The owner separately approved cleanup of the three ordinary branches. The historical
+baseline below is retained as audit evidence, not a description of current exposure.
+History cleanup and the prevention changes in PR #3 are complete; GitHub PR refs and
+cached old objects still require Support cleanup. The Support request is prepared,
+not submitted. The exposed private key remains potentially compromised.
+
+Verified main after PR #3: `7604e6c34a0c0e3d6dd8587a8eb9b4ae5180d0c6`.
+Repository checks and CodeQL completed successfully on that commit. The recorded
+checks include 14 Python security tests, 77 Android unit tests and Android lint.
+Application sources/resources and Gradle configuration match the original stable
+1.3 baseline. The signing certificate and installed APK were not changed; no APK
+build, Release or publishing was dispatched.
+
+- [Repository checks](https://github.com/namaz-vakytylary/Namaz-Safadzhay-2026/actions/runs/36964969552)
+- [CodeQL](https://github.com/namaz-vakytylary/Namaz-Safadzhay-2026/actions/runs/36964969551)
+- [Prevention PR #3](https://github.com/namaz-vakytylary/Namaz-Safadzhay-2026/pull/3)
+
+## Read-only baseline — before hardening
 
 | Area | Observed state before hardening |
 |---|---|
@@ -55,7 +74,7 @@ Secret names (values neither retrieved nor printed):
   guard reports rule names and paths, never matching contents; it supplements, rather
   than replaces, GitHub scanning. It does not claim exhaustive detection of secrets.
 - The stable manual build retains its sequence, certificate guard and cleanup;
-  the only added step is the repository security guard before preflight.
+  security additions are the repository guard before preflight and full-history checkout.
 
 The final conversational report records actual check outcomes, final rules and main
 SHA. Enabling a scanner does not itself mean it has finished or found no issues.
@@ -83,7 +102,7 @@ Repository signing secrets remain usable by repository workflows, not restricted
 to one workflow by GitHub authorization. See SECURITY.md for owner-run Environment
 migration. GitHub cannot return their values, and this audit never requested them.
 
-## Historical signing exposure
+## Historical signing exposure — original baseline
 
 First key addition: `7aab359efc2c902c4dfb20e107b9d815f26818b7` (2026-09-18).
 Key removal from security lineage: `ed9a42444e236c7ec1578271e3884741a22ba0df`
@@ -95,9 +114,10 @@ Key removal from security lineage: `ed9a42444e236c7ec1578271e3884741a22ba0df`
 | test/1.2-test3-security | 64c41c270d776d660043cd3bc64a41a636e7e973 | 464 | 57 | 51 |
 | backup/main-before-stable-1.3-20261001 | cad84c8df708ffff9f894d366e14232ab129801f | 123 | 12 | 12 |
 
-Main and security source have clean current trees, but retain the key via ancestors.
-Backup contains the key and literal passwords **in its current tree**. It remains
-intentionally unchanged as the owner-requested rollback point. Full per-branch SHA
+At the original baseline, main and security source had clean current trees but
+retained the key through ancestors; backup contained it and literal passwords in
+its current tree. All three branch histories have since been sanitized with owner
+approval, including the retained backup. Full per-branch SHA
 lists are in [security-history-findings.json](security-history-findings.json), containing
 only metadata, no secret values. Counts overlap between branches and must not be summed.
 
@@ -108,59 +128,71 @@ policy now blocks floating Actions, but does not remove historical material.
 The heuristic tree/history scans and GitHub patterns cannot prove absence of every
 possible password, encoded secret, old log disclosure or externally retained copy.
 
-## Proposed history cleanup — NOT executed
+## Authorized history cleanup — completed 2026-10-02
 
-1. Owner retains an encrypted/offline backup of the current key and a private recovery
-   archive, verifies existing APK certificate and inventories all distribution channels.
-   Do not create a new public backup of contaminated history.
-2. Freeze repository writes and record all refs, PR refs, original heads and working
-   clones. Confirm a separate maintenance window and exact authorized ref scope.
-3. In an isolated mirror, remove `app/namaz-release.jks` and any renamed copies from
-   all affected history. Remove/redact literal `storePassword`/`keyPassword` values
-   in historical Gradle configurations and any other discovered credential copies.
-   Obtain replacement values privately without displaying them. Re-scan before push.
-4. Review an old-to-new commit map and unchanged production trees, signing configuration
-   and verification certificate before explicitly approving rewritten pushes.
-   All three remaining branch heads change. At least the introduced key commit and
-   its descendants are affected: baseline main 357, security source 353, backup 12.
-   Password remediation may affect additional commits. Exact new SHAs require the
-   approved local rewrite and are not guessed in advance. Commit/tag signatures may
-   be invalidated/removed by rewriting.
-5. The public backup ref must be sanitized too or it keeps the key reachable.
-   Its old SHA ceases to be the public rollback ref; record the sanitized replacement
-   and keep original recovery material only in owner-controlled secure storage.
-6. Owner temporarily adjusts protection only for the separately approved rewrite,
-   immediately restores it, and verifies main/PR/CI/manual build settings afterwards.
-   App identity and certificate are unchanged by source-history cleanup; workflows
-   pinned to external Action SHAs remain valid. Local refs and links to old commit
-   SHAs must be updated. Existing runs/artifacts remain tied to the old commit.
-7. Collaborators should freshly clone. Unpublished work must be rebased/cherry-picked
-   onto sanitized history; do not merge old history back. Review caches, PR refs,
-   archives, forks and artifacts with GitHub Support where necessary. No GitHub
-   Releases/tags were present in this audit; this does not exclude existing downloads.
-8. Rewriting does not revoke leaked key copies. Investigate an Android/RuStore-supported
-   certificate migration separately and test updates/data preservation across supported
-   devices before any owner-approved rotation or publication. A naive new certificate
-   can prevent updating already installed APKs. No new key is generated automatically.
+An isolated rewrite with git-filter-repo 2.47.0 removed the standalone JKS blob,
+redacted literal signing passwords and sanitized 22 historical ZIP versions. The
+recorded verification covered 470 original commits, preserving authors, dates and
+parent relationships. Git commit signatures were removed by rewriting; this does
+not change the Android signing certificate. No credentials are included in this report.
+
+Main and the test branch retained byte-identical current trees at the cleanup point.
+The sanitized backup differs only by removal of the JKS and replacement of literal
+signing passwords with external variables. A future rollback must retain the current
+safe signing scheme. Original recovery material must not be re-published.
+
+| Branch | Sanitized head at cleanup / prevention checkpoint |
+|---|---|
+| main immediately after cleanup | 088c73df958fa946cdd5c09be77bf3e9149a37f0 |
+| main after PR #3 | 7604e6c34a0c0e3d6dd8587a8eb9b4ae5180d0c6 |
+| test/1.2-test3-security | a7d46f43596b6b776151e9d9fdf64cc4e8a69a44 |
+| backup/main-before-stable-1.3-20261001 | 212e68680e77f5ebb55dbee2dbbe59ebddc709f4 |
+
+The one-time import workflow, uploaded bundle and temporary permission exception
+are absent from the resulting main. The active main ruleset was restored with the
+same rules, main-only target and empty bypass list. Temporary maintenance branches
+were removed. No blind mirror push, signing-secret migration or key rotation occurred.
+
+## Prevention and remaining cleanup
+
+PR #3 inspects tracked archives in memory, including nested/renamed ZIPs, credential
+filenames, literal signing passwords and JKS magic. Limits are 32 MiB expanded data,
+2000 entries and three levels; encrypted, malformed and excessive archives fail
+closed. Reports do not print file contents or internal archive entry names.
+
+The guard rejects the 23 known purged credential objects when reachable from HEAD.
+Repository checks and stable manual builds use `fetch-depth: 0`; shallow history
+fails the guard. The known-object list contains identifiers, not secret values.
+This is targeted prevention, not exhaustive detection of every possible credential.
+
+The read-only `refs/pull/1/head` and `refs/pull/2/head` still refer to the pre-cleanup
+history. GitHub Support must assess dereferencing the affected PRs, server garbage
+collection and cached-view removal. The prepared request includes the affected PR
+count and first changed commit; it has not been submitted. Ordinary branch cleanup
+cannot erase external clones or revoke an already obtained private key.
+
+Use fresh clones. Review and transfer unpublished work onto sanitized history without
+merging old ancestry. Any future signing migration needs separate owner approval,
+Android/distribution compatibility checks and update/data-preservation validation.
+No replacement certificate is generated automatically.
 
 ## Branch decision
 
-Keep `main`. Temporarily retain `test/1.2-test3-security` as verified source and
-`backup/main-before-stable-1.3-20261001` as the explicitly retained rollback point.
-No existing branch was deleted during the security audit. Prior owner-authorized
-release cleanup already removed the old 20260923 backup, patch-1, test2, test3,
-test3-silent-updates and duplicate backup-before-stable-2026-10-01 refs.
-Deleting a Git ref does not delete a repository or organization and does not erase
-reachable signing secrets from history. The new backup requires a separately
-approved replacement/removal plan, not deletion merely because the phone works.
+Retain `main`, `test/1.2-test3-security` as the verified source and sanitized
+`backup/main-before-stable-1.3-20261001` as the authorized rollback point. The
+original baseline table and JSON findings are historical records, not live branch
+inventories. Temporary history-cleanup and merged prevention branches were removed;
+no repository or organization was deleted. Any new documentation PR branch is
+maintenance work based on sanitized main.
 
 ## Owner follow-up
 
 Enable account 2FA/passkeys and keep recovery codes privately; inspect sessions and
 organization-wide hooks. Consider a separately authorized selected-repository scope
 for Codex Connector without disrupting the schedules repository. Migrate signing
-inputs into a main-only Environment. Approve history cleanup and a compatible signing
-key migration separately after reviewing their consequences. Do not assume scanners
+inputs into a main-only Environment without deleting working secrets before a
+verified migration. Submit the prepared GitHub Support cleanup request. Assess a
+compatible signing key migration separately after reviewing its consequences. Do not assume scanners
 detect a JKS binary or revoke its private key.
 
 References:
