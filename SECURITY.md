@@ -22,7 +22,9 @@ Dependency/security updates create reviewable PRs, not automatic releases or mer
 
 ## Stable signing
 
-`build-apk.yml` remains a manual `workflow_dispatch` on `main`. It runs preflight,
+`build-apk.yml` remains a manual `workflow_dispatch` on `main`. Its build job uses
+the `stable-signing` Environment, restricted to `main`, with owner approval required
+and administrator bypass disabled. It runs preflight,
 unit tests and lint before signing, restores the existing keystore in a temporary
 directory, removes it with `always()`, and verifies the APK's stable certificate.
 There is no unsigned/debug fallback and no automatic publishing.
@@ -34,10 +36,12 @@ must never be logged, downloaded for audit, or committed.
 These are currently **repository secrets**: the stable workflow passes them only
 to its signing step, but a person able to change repository workflows can reference
 them elsewhere. Step-level injection is not an authorization boundary. For stronger
-isolation, the owner should separately migrate the same values into an Environment
-limited to `main` and optionally require owner approval. Update the stable signing
-job to use that Environment, verify it manually, then remove duplicate repository
-secrets. Do not delete working secrets before migration or change the signing key.
+isolation, the owner must migrate the same values into `stable-signing`, verify
+the Environment-scoped signing inputs, then remove duplicate repository secrets.
+The Environment is currently empty; the approval gate protects the current stable
+job but does not isolate repository secrets from other authorized workflows.
+Do not delete working secrets before verified migration or change the signing key.
+See [the migration procedure](docs/signing-security-migration.md).
 
 ## Known signing incident — status as of 2026-10-02
 
@@ -54,7 +58,8 @@ do not prove that every possible secret or externally retained copy is absent.
 
 Cleanup of ordinary branch history is complete. GitHub's read-only refs for PR #1
 and PR #2 still retain the old history; server-side object/cache removal requires
-GitHub Support. A request has been prepared but has not been sent. Do not describe
+GitHub Support. Request #4815381 has been submitted and remains open without a
+Support response at the latest check. Do not describe
 the incident as fully erased or the exposed key as safe.
 
 Treat the production private key as potentially compromised. Keeping the same
