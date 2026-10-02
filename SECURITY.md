@@ -39,14 +39,34 @@ limited to `main` and optionally require owner approval. Update the stable signi
 job to use that Environment, verify it manually, then remove duplicate repository
 secrets. Do not delete working secrets before migration or change the signing key.
 
-## Known signing incident
+## Known signing incident — status as of 2026-10-02
 
-The old `app/namaz-release.jks` and literal signing passwords remain in Git history.
-Treat the old production private key as potentially compromised. Keeping the same
+With explicit owner approval, the production keystore and literal signing passwords
+were removed from the history of `main`, `test/1.2-test3-security` and
+`backup/main-before-stable-1.3-20261001`. The cleanup also sanitized 22 historical
+ZIP versions. Current application sources, identity and APK certificate were preserved.
+The main protection rules were immediately restored after the authorized rewrite.
+
+PR #3 adds bounded scanning of tracked ZIPs, including nested/renamed archives,
+and rejects known purged credential objects reachable from HEAD. CI and manual
+stable builds use full Git history; these guards supplement GitHub scanning and
+do not prove that every possible secret or externally retained copy is absent.
+
+Cleanup of ordinary branch history is complete. GitHub's read-only refs for PR #1
+and PR #2 still retain the old history; server-side object/cache removal requires
+GitHub Support. A request has been prepared but has not been sent. Do not describe
+the incident as fully erased or the exposed key as safe.
+
+Treat the production private key as potentially compromised. Keeping the same
 key in Secrets, changing its password, deleting branches, or rewriting history
 does not invalidate copies someone already obtained.
 
-See [the audit and proposed remediation](docs/security-audit-20261001.md).
-History rewriting and signing certificate rotation require separate explicit owner
-approval. They must preserve the ability to update existing installations and data.
+See [the audit and cleanup status](docs/security-audit-20261001.md).
+Any additional history rewriting or signing certificate rotation requires separate
+explicit owner approval. They must preserve the ability to update existing installations and data.
 The schedules repository is outside the scope of these repository controls.
+
+Use a fresh clone of the sanitized repository. Review and transfer unpublished changes
+without merging old history. Preserve the safe signing configuration when using the
+sanitized backup as a rollback point. No APK release or publishing was launched by
+this incident cleanup.
