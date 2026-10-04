@@ -2225,6 +2225,8 @@ cell.addView(
             ramadanDay != null &&
             previousEvent?.prayer?.name == "Магриб" &&
             Duration.between(previousEvent.time, now).toMinutes() < 10
+        ramadanCountdownBackground.scaleType = if (iftarJustStarted)
+            ImageView.ScaleType.CENTER_CROP else ImageView.ScaleType.FIT_CENTER
 
         if (nextEvent != null) {
             val previousTime = previousEvent?.time

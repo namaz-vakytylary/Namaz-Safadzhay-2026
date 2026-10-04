@@ -25,6 +25,7 @@ import org.robolectric.util.ReflectionHelpers
 import java.io.File
 import java.time.LocalDate
 import java.time.LocalDateTime
+import kotlin.math.roundToInt
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [33], qualifiers = "w360dp-h800dp-mdpi")
@@ -252,7 +253,8 @@ class ThemeAndRamadanTest {
             for (widthDp in listOf(328, 480)) {
                 for (asset in listOf(R.drawable.ramadan_suhoor, R.drawable.ramadan_iftar, R.drawable.ramadan_iftar_started)) {
                     val image = RamadanCountdownImageView(app).apply {
-                        scaleType = ImageView.ScaleType.FIT_CENTER
+                        scaleType = if (asset == R.drawable.ramadan_iftar_started)
+                            ImageView.ScaleType.CENTER_CROP else ImageView.ScaleType.FIT_CENTER
                         setImageResource(asset)
                     }
                     val width = (widthDp * density).toInt()
@@ -316,7 +318,7 @@ class ThemeAndRamadanTest {
         assertTrue(image.isShown)
         assertEquals(expected, org.robolectric.Shadows.shadowOf(image.drawable).createdFromResId)
         assertNull(image.colorFilter)
-        assertEquals(ImageView.ScaleType.FIT_CENTER, image.scaleType)
+        assertEquals(if (scene == "after") ImageView.ScaleType.CENTER_CROP else ImageView.ScaleType.FIT_CENTER, image.scaleType)
         val card = ReflectionHelpers.getField<View>(a, "countdownCard")
         assertEquals(card.width / 3, card.height)
         assertEquals(card.width, image.width)
@@ -326,6 +328,20 @@ class ThemeAndRamadanTest {
         val timer = ReflectionHelpers.getField<TextView>(a, "countdown")
         val subtitle = ReflectionHelpers.getField<TextView>(a, "countdownStart")
         if (scene == "after") {
+            assertNotEquals(org.robolectric.Shadows.shadowOf(header.drawable).createdFromResId,
+                org.robolectric.Shadows.shadowOf(image.drawable).createdFromResId)
+            val matrix = FloatArray(9)
+            image.imageMatrix.getValues(matrix)
+            val source = image.drawable
+            val scale = maxOf(image.width.toFloat() / source.intrinsicWidth,
+                image.height.toFloat() / source.intrinsicHeight)
+            assertEquals(scale, matrix[android.graphics.Matrix.MSCALE_X], 0.001f)
+            assertEquals(scale, matrix[android.graphics.Matrix.MSCALE_Y], 0.001f)
+            assertEquals(((image.width - source.intrinsicWidth * scale) / 2f).roundToInt().toFloat(),
+                matrix[android.graphics.Matrix.MTRANS_X], 1f)
+            assertEquals(((image.height - source.intrinsicHeight * scale) / 2f).roundToInt().toFloat(),
+                matrix[android.graphics.Matrix.MTRANS_Y], 1f)
+            assertTrue(ReflectionHelpers.getField<CardProgressIndicator>(a, "progress").goldMode)
             assertEquals("", timer.text.toString())
             assertEquals("", subtitle.text.toString())
             val prayers = ReflectionHelpers.getField<LinearLayout>(a, "prayerList")
