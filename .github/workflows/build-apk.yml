@@ -39,7 +39,7 @@ jobs:
           python3 -m unittest discover -s scripts -p 'test_*.py'
 
       - name: Unit tests and lint
-        run: ./gradlew --no-daemon clean :app:testReleaseUnitTest :app:lintRelease
+        run: ./gradlew --no-daemon clean :app:assembleDebug :app:testDebugUnitTest :app:testReleaseUnitTest :app:lintDebug :app:lintRelease
 
       - name: Build signed TEST APK
         env:
@@ -116,8 +116,12 @@ jobs:
         with:
           name: Namaz-TEST-verification
           path: |
+            app/build/reports/tests/testDebugUnitTest
             app/build/reports/tests/testReleaseUnitTest
+            app/build/reports/lint-results-debug.html
             app/build/reports/lint-results-release.html
+            app/build/reports/theme-ui
+            app/build/test-results/testDebugUnitTest
             app/build/test-results/testReleaseUnitTest
           if-no-files-found: ignore
 
@@ -126,5 +130,13 @@ jobs:
         with:
           name: Namaz-Vakytylary-TEST-1.2-test3.1
           path: app/build/outputs/apk/release/app-release.apk
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload DEBUG APK for Ramadan UI preview
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: Namaz-DEBUG-theme-Ramadan-UI
+          path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30

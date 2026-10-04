@@ -134,9 +134,10 @@ class MainActivity : Activity() {
     private lateinit var headerBox: LinearLayout
     private lateinit var ramadanCard: LinearLayout
     private lateinit var heroCopy: LinearLayout
-    private val mint = Color.rgb(70, 218, 145)
-    private val muted = Color.rgb(173, 203, 189)
-    private val ink = Color.rgb(235, 247, 240)
+    private lateinit var palette: AppColors
+    private val mint get() = palette.primary
+    private val muted get() = palette.secondaryText
+    private val ink get() = palette.onBackground
     private var settingsPanel: android.app.Dialog? = null
     private var aboutDialog: android.app.Dialog? = null
     private var scheduleUpdateDialog: android.app.Dialog? = null
@@ -520,6 +521,8 @@ class MainActivity : Activity() {
     )
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        palette = ThemeSettings.colors(this)
+        setTheme(if (palette.isDark) R.style.AppTheme else R.style.AppThemeLight)
         super.onCreate(savedInstanceState)
         scheduleRepository = ScheduleRepository.get(applicationContext)
         scheduleUpdateChecker = (lastNonConfigurationInstance as? ScheduleUpdateChecker)
@@ -530,12 +533,14 @@ class MainActivity : Activity() {
             }
         WindowCompat.setDecorFitsSystemWindows(window, false)
         val openedFromReminder = intent?.action == OPEN_PRAYER_ACTION
-        selectedDate = savedInstanceState?.getString("selected_date")?.let { runCatching { LocalDate.parse(it) }.getOrNull() } ?: LocalDate.now(zone)
+        selectedDate = savedInstanceState?.getString("selected_date")?.let { runCatching { LocalDate.parse(it) }.getOrNull() } ?: uiNow().toLocalDate()
         val prefs = getSharedPreferences(SETTINGS_PREFS, Context.MODE_PRIVATE)
         selectedCity = prefs.getString("city", "Сафаджай") ?: "Сафаджай"
         scheduleTabSelected = savedInstanceState?.getBoolean("schedule_tab") ?: false
         if (openedFromReminder) { selectedDate = LocalDate.now(zone); scheduleTabSelected = false }
-        calendarMonth = java.time.YearMonth.from(selectedDate)
+        calendarMonth = savedInstanceState?.getString("calendar_month")?.let {
+            runCatching { java.time.YearMonth.parse(it) }.getOrNull()
+        } ?: java.time.YearMonth.from(selectedDate)
         createNotificationChannel()
         buildUi()
         update()
@@ -558,7 +563,15 @@ if (needsNotificationPermission) {
             "notifications" -> showNotificationsScreen { showSettingsDialog() }
             "settings" -> showSettingsDialog()
             "qibla" -> showQiblaCompass()
+            "theme" -> showThemeSelector()
+            "city" -> showCityChoice { showSettingsDialog() }
+            "lead" -> showNotifyBeforeDialog { showNotificationsScreen { showSettingsDialog() } }
+            "prayers" -> showPrayerSelectionDialog { showNotificationsScreen { showSettingsDialog() } }
+            "sound" -> showSoundScreen()
+            "calibration" -> showCalibration()
+            "ramadan_preview" -> showRamadanPreviewSelector()
         }
+        if (savedInstanceState?.getBoolean("show_about") == true) showAboutDialog()
         
                 
     
@@ -613,8 +626,8 @@ private fun startScheduleUpdateCheck() {
 
     private fun surface(selected: Boolean = false, radius: Int = 18): GradientDrawable = GradientDrawable().apply {
         cornerRadius = dp(radius).toFloat()
-        setColor(if (selected) Color.rgb(10, 78, 54) else Color.rgb(8, 52, 39))
-        setStroke(dp(1), if (selected) mint else Color.rgb(21, 83, 60))
+        setColor(if (selected) palette.activePrayer else palette.surface)
+        setStroke(dp(1), if (selected) mint else palette.outline)
     }
     private fun showScheduleUpdateDialog(year: Int, value: Int) {
     handler.post {
@@ -623,9 +636,9 @@ private fun startScheduleUpdateCheck() {
         val safeValue = value.coerceIn(0, 100)
 
         if (scheduleUpdateDialog == null) {
-            val gold = Color.rgb(214, 178, 77)
-            val brightGreen = Color.rgb(67, 230, 145)
-            val progressTrack = Color.rgb(20, 75, 56)
+            val gold = palette.gold
+            val brightGreen = palette.brightProgress
+            val progressTrack = palette.progressTrack
 
             val root = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
@@ -640,8 +653,8 @@ private fun startScheduleUpdateCheck() {
                 background = GradientDrawable(
                     GradientDrawable.Orientation.TOP_BOTTOM,
                     intArrayOf(
-                        Color.rgb(7, 73, 50),
-                        Color.rgb(3, 48, 34)
+                        palette.updateTop,
+                        palette.updateBottom
                     )
                 ).apply {
                     cornerRadius = dp(26).toFloat()
@@ -784,10 +797,10 @@ private fun startScheduleUpdateCheck() {
 
                 background = GradientDrawable().apply {
                     cornerRadius = dp(24).toFloat()
-                    setColor(Color.rgb(5, 61, 44))
+                    setColor(palette.noticeSurface)
                     setStroke(
                         dp(1),
-                        Color.rgb(32, 126, 88)
+                        palette.noticeOutline
                     )
                 }
             }
@@ -811,6 +824,7 @@ private fun startScheduleUpdateCheck() {
             dialog.setContentView(root)
 
             dialog.show()
+            dialog.window?.let { prepareThemedWindow(it) }
 
             val dialogWidth = minOf(
                 resources.displayMetrics.widthPixels - dp(32),
@@ -914,13 +928,13 @@ private fun dismissScheduleUpdateDialog() {
 
     private fun iftarPrayerBackground(): GradientDrawable = GradientDrawable().apply {
         cornerRadius = dp(18).toFloat()
-        setColor(Color.rgb(42, 35, 20))
-        setStroke(dp(2), Color.rgb(235, 202, 104))
+        setColor(palette.iftarSurface)
+        setStroke(dp(2), palette.ramadanAccent)
     }
     private fun label(value: String, size: Float = 15f, color: Int = ink, bold: Boolean = false): TextView = text(value, size, color, bold).apply {
         includeFontPadding = false
     }
-    private fun button(value: String, action: () -> Unit): TextView = label(value, 16f, Color.rgb(1, 38, 25), true).apply {
+    private fun button(value: String, action: () -> Unit): TextView = label(value, 16f, palette.onAction, true).apply {
         gravity = Gravity.CENTER
         minHeight = dp(48)
         setPadding(dp(12), dp(10), dp(12), dp(10))
@@ -931,22 +945,23 @@ private fun dismissScheduleUpdateDialog() {
 
     private fun tabBackground(selected: Boolean): GradientDrawable = GradientDrawable().apply {
         cornerRadius = dp(24).toFloat()
-        setColor(if (selected) Color.rgb(32, 194, 127) else Color.TRANSPARENT)
+        setColor(if (selected) palette.tabSelected else Color.TRANSPARENT)
     }
 
     private fun updateTabStyles() {
         if (!::todayButtonView.isInitialized || !::scheduleButtonView.isInitialized) return
         todayButtonView.background = tabBackground(!scheduleTabSelected)
         scheduleButtonView.background = tabBackground(scheduleTabSelected)
-        todayButtonView.setTextColor(if (!scheduleTabSelected) Color.WHITE else Color.rgb(188, 204, 197))
-        scheduleButtonView.setTextColor(if (scheduleTabSelected) Color.WHITE else Color.rgb(188, 204, 197))
+        todayButtonView.setTextColor(if (!scheduleTabSelected) palette.onPrimary else palette.tabInactiveText)
+        scheduleButtonView.setTextColor(if (scheduleTabSelected) palette.onPrimary else palette.tabInactiveText)
     }
 
     private fun buildUi() {
         window.statusBarColor = Color.TRANSPARENT
         window.navigationBarColor = Color.TRANSPARENT
+        prepareThemedWindow(window)
         val scroll = ScrollView(this).apply {
-            setBackgroundColor(Color.rgb(2, 30, 22)); isFillViewport = true
+            setBackgroundColor(palette.background); isFillViewport = true
             overScrollMode = View.OVER_SCROLL_NEVER
         }
         val root = LinearLayout(this).apply {
@@ -965,7 +980,7 @@ private fun dismissScheduleUpdateDialog() {
         top.addView(label("Намаз", 28f, ink, true).apply { gravity = Gravity.CENTER; minHeight = dp(44) }, android.widget.FrameLayout.LayoutParams(-1, -2))
         fun shortcut(res: Int, desc: String, side: Int, action: () -> Unit) {
             top.addView(ImageView(this).apply {
-                setImageResource(res); setPadding(dp(11), dp(11), dp(11), dp(11))
+                setImageResource(res); if (!palette.isDark) setColorFilter(mint); setPadding(dp(11), dp(11), dp(11), dp(11))
                 contentDescription = desc; isFocusable = true; setOnClickListener { action() }
             }, android.widget.FrameLayout.LayoutParams(dp(48), dp(44), side))
         }
@@ -991,8 +1006,10 @@ private fun dismissScheduleUpdateDialog() {
     orientation = LinearLayout.VERTICAL
     gravity = Gravity.CENTER
     visibility = View.GONE
+    if (!palette.isDark) background = surface(true, 16)
 
     val backgroundImage = ImageView(this@MainActivity).apply {
+    visibility = if (palette.isDark) View.VISIBLE else View.GONE
     setImageResource(R.drawable.ramadan_header)
     scaleType = ImageView.ScaleType.CENTER_CROP
 
@@ -1013,11 +1030,11 @@ private fun dismissScheduleUpdateDialog() {
     val textLayer = LinearLayout(this@MainActivity).apply {
         orientation = LinearLayout.VERTICAL
         gravity = Gravity.CENTER
-        translationX = dp(20).toFloat()
+        translationX = if (palette.isDark) dp(20).toFloat() else 0f
         setPadding(dp(16), dp(10), dp(16), dp(10))
 
         addView(
-            label("Рамадан", 18f, Color.rgb(235, 202, 104), true).apply {
+            label("Рамадан", 18f, palette.ramadanAccent, true).apply {
                 gravity = Gravity.CENTER
             },
             LinearLayout.LayoutParams(-1, -2)
@@ -1058,7 +1075,7 @@ headerBox.addView(
         modeRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; background = surface(false, 24); setPadding(dp(2), dp(2), dp(2), dp(2)) }
         todayButtonView = label("Сегодня", 13f, ink, true).apply {
             gravity = Gravity.CENTER; isFocusable = true
-            setOnClickListener { scheduleTabSelected = false; selectedDate = LocalDate.now(zone); update() }
+            setOnClickListener { scheduleTabSelected = false; selectedDate = uiNow().toLocalDate(); update() }
         }
         scheduleButtonView = label("Расписание", 13f, muted, true).apply {
             gravity = Gravity.CENTER; isFocusable = true
@@ -1088,8 +1105,8 @@ headerBox.addView(
 
     background = GradientDrawable().apply {
         cornerRadius = dp(16).toFloat()
-        setColor(Color.rgb(8, 52, 39))
-        setStroke(dp(1), Color.rgb(214, 178, 77))
+        setColor(palette.surface)
+        setStroke(dp(1), palette.gold)
     }
 
     val holidayHeader = LinearLayout(this@MainActivity).apply {
@@ -1099,6 +1116,7 @@ headerBox.addView(
     addView(
         ImageView(this@MainActivity).apply {
             setImageResource(R.drawable.ic_holiday_crescent)
+            if (!palette.isDark) setColorFilter(palette.gold)
             scaleType = ImageView.ScaleType.FIT_CENTER
         },
         LinearLayout.LayoutParams(dp(22), dp(22)).apply {
@@ -1107,13 +1125,13 @@ headerBox.addView(
     )
 
     addView(
-        text("Мусульманский праздник", 13f, Color.rgb(214, 178, 77), true)
+        text("Мусульманский праздник", 13f, palette.gold, true)
     )
 }
 addView(holidayHeader)
 
     addView(
-        text("", 18f, Color.WHITE, true).apply {
+        text("", 18f, palette.onSurface, true).apply {
             tag = "holiday_title"
         },
         LinearLayout.LayoutParams(-1, -2).apply {
@@ -1122,7 +1140,7 @@ addView(holidayHeader)
     )
 
     addView(
-        text("", 13f, Color.rgb(190, 205, 198)).apply {
+        text("", 13f, palette.holidaySecondaryText).apply {
             tag = "holiday_hijri"
         },
         LinearLayout.LayoutParams(-1, -2).apply {
@@ -1205,6 +1223,16 @@ headerBox.addView(
         ViewCompat.requestApplyInsets(scroll)
     }
 
+    private fun prepareThemedWindow(target: android.view.Window) {
+        if (Build.VERSION.SDK_INT >= 29) target.decorView.isForceDarkAllowed = false
+        WindowCompat.getInsetsController(target, target.decorView).apply {
+            isAppearanceLightStatusBars = !palette.isDark
+            isAppearanceLightNavigationBars = !palette.isDark
+        }
+        // Android 6/7 cannot draw dark navigation icons on a light background.
+        if (!palette.isDark && Build.VERSION.SDK_INT < 26) target.navigationBarColor = palette.onBackground
+    }
+
     private fun notifyBeforeLabel(minutes: Int): String = when (minutes) {
         0 -> "В момент начала"
         60 -> "За 1 час"
@@ -1222,7 +1250,7 @@ headerBox.addView(
     }
 
     private fun screenRow(icon: String, title: String, value: String = "", onClick: () -> Unit): LinearLayout = makeScreenRow(label(icon, 22f, muted).apply { setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, 22f); gravity = Gravity.CENTER; importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO }, title, value, onClick)
-    private fun screenRow(iconRes: Int, title: String, value: String = "", onClick: () -> Unit): LinearLayout = makeScreenRow(ImageView(this).apply { setImageResource(iconRes); setPadding(dp(7), dp(7), dp(7), dp(7)) }, title, value, onClick)
+    private fun screenRow(iconRes: Int, title: String, value: String = "", onClick: () -> Unit): LinearLayout = makeScreenRow(ImageView(this).apply { setImageResource(iconRes); if (!palette.isDark) setColorFilter(mint); setPadding(dp(7), dp(7), dp(7), dp(7)) }, title, value, onClick)
     private fun makeScreenRow(icon: View, title: String, value: String, onClick: () -> Unit): LinearLayout {
         return LinearLayout(this).apply {
             gravity = Gravity.CENTER_VERTICAL; background = surface(); minimumHeight = dp(64); setPadding(dp(10), dp(5), dp(9), dp(5))
@@ -1238,7 +1266,7 @@ headerBox.addView(
 
     private fun fullScreenPanel(titleText: String, onBack: () -> Unit): Pair<android.app.Dialog, LinearLayout> {
         // Keep one window throughout settings navigation so the home screen is never exposed.
-        val dialog = settingsPanel ?: object : android.app.Dialog(this, android.R.style.Theme_Black_NoTitleBar_Fullscreen) {
+        val dialog = settingsPanel ?: object : android.app.Dialog(this, if (palette.isDark) R.style.AppPanelTheme else R.style.AppPanelThemeLight) {
             override fun cancel() {
                 // System Back navigates inside the panel instead of dismissing its window.
                 settingsPanelBack()
@@ -1258,7 +1286,7 @@ headerBox.addView(
         activeQiblaLocation?.stop(); activeQiblaLocation = null
         activeCompass?.stop(); activeCompass = null
         settingsPanelBack = onBack
-        val scroll = ScrollView(this).apply { setBackgroundColor(Color.rgb(2, 30, 22)); isFillViewport = true }
+        val scroll = ScrollView(this).apply { setBackgroundColor(palette.background); isFillViewport = true }
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(18), dp(10), dp(18), dp(24)) }
         scroll.addView(root, ViewGroup.LayoutParams(-1, -1))
         ViewCompat.setOnApplyWindowInsetsListener(scroll) { _, insets ->
@@ -1266,16 +1294,18 @@ headerBox.addView(
             root.setPadding(dp(18), bars.top + dp(10), dp(18), bars.bottom + dp(24)); insets
         }
         val bar = android.widget.FrameLayout(this)
-        val back = text("‹", 38f, Color.WHITE, false).apply { setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, 38f); contentDescription = "Назад"; isFocusable = true; gravity = Gravity.CENTER; setOnClickListener { onBack() } }
+        val back = text("‹", 38f, palette.onSurface, false).apply { setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, 38f); contentDescription = "Назад"; isFocusable = true; gravity = Gravity.CENTER; setOnClickListener { onBack() } }
         bar.addView(label(titleText, 20f, ink, true).apply { gravity = Gravity.CENTER; minHeight = dp(58); maxLines = Int.MAX_VALUE; setPadding(dp(46), 0, dp(46), 0) }, android.widget.FrameLayout.LayoutParams(-1, -2, Gravity.CENTER))
         bar.addView(back, android.widget.FrameLayout.LayoutParams(dp(48), dp(52), Gravity.START or Gravity.CENTER_VERTICAL))
         root.addView(bar, LinearLayout.LayoutParams(-1, -2))
         dialog.setContentView(scroll)
+        dialog.window?.let { prepareThemedWindow(it) }
         ViewCompat.requestApplyInsets(scroll)
         return dialog to root
     }
 
     private fun showNotifyBeforeDialog(onBack: () -> Unit = {}) {
+        panelRoute = "lead"
         val prefs = getSharedPreferences(SETTINGS_PREFS, Context.MODE_PRIVATE)
         lateinit var dialog: android.app.Dialog
         val pair = fullScreenPanel("Когда напоминать", onBack)
@@ -1284,13 +1314,13 @@ headerBox.addView(
         val values = intArrayOf(0, 5, 10, 15, 20, 30, 45, 60)
         val group = RadioGroup(this).apply {
             orientation = RadioGroup.VERTICAL
-            background = GradientDrawable().apply { cornerRadius = dp(16).toFloat(); setColor(Color.rgb(8, 52, 39)) }
+            background = GradientDrawable().apply { cornerRadius = dp(16).toFloat(); setColor(palette.surface) }
             setPadding(dp(10), dp(8), dp(10), dp(8))
         }
         val current = prefs.getInt(NOTIFY_BEFORE_MIN_KEY, 5)
         values.forEach { minutes ->
             group.addView(RadioButton(this).apply {
-                text = notifyBeforeLabel(minutes); textSize = 16f; setTextColor(Color.WHITE); isChecked = minutes == current
+                text = notifyBeforeLabel(minutes); textSize = 16f; setTextColor(palette.onSurface); isChecked = minutes == current
                 setPadding(dp(8), 0, dp(8), 0)
                 setOnClickListener {
                     prefs.edit().putInt(NOTIFY_BEFORE_MIN_KEY, minutes).apply()
@@ -1304,6 +1334,7 @@ headerBox.addView(
     }
 
     private fun showPrayerSelectionDialog(onBack: () -> Unit = {}) {
+        panelRoute = "prayers"
         val prefs = getSharedPreferences(SETTINGS_PREFS, Context.MODE_PRIVATE)
         lateinit var dialog: android.app.Dialog
         val pair = fullScreenPanel("Намазы для уведомлений", onBack)
@@ -1312,21 +1343,21 @@ headerBox.addView(
         val checked = BooleanArray(prayerKeys.size) { prefs.getBoolean("notify_${prayerKeys[it]}", true) }
         val list = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            background = GradientDrawable().apply { cornerRadius = dp(16).toFloat(); setColor(Color.rgb(8, 52, 39)) }
+            background = GradientDrawable().apply { cornerRadius = dp(16).toFloat(); setColor(palette.surface) }
             setPadding(dp(14), dp(6), dp(14), dp(6))
         }
         prayerKeys.indices.forEach { i ->
             val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
-            row.addView(text(prayerDisplayName(this, prayerRussian[i], prayerTatar[i]), 16f, Color.WHITE, false).apply { gravity = Gravity.CENTER_VERTICAL }, LinearLayout.LayoutParams(0, dp(58), 1f))
+            row.addView(text(prayerDisplayName(this, prayerRussian[i], prayerTatar[i]), 16f, palette.onSurface, false).apply { gravity = Gravity.CENTER_VERTICAL }, LinearLayout.LayoutParams(0, dp(58), 1f))
             val sw = Switch(this).apply { isChecked = checked[i]; setOnCheckedChangeListener { _, v -> checked[i] = v } }
             row.setOnClickListener { sw.isChecked = !sw.isChecked }
             row.addView(sw, LinearLayout.LayoutParams(dp(58), dp(58)))
             list.addView(row, LinearLayout.LayoutParams(-1, dp(58)))
         }
         root.addView(list, LinearLayout.LayoutParams(-1, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(16) })
-        val save = text("Сохранить", 16f, Color.rgb(1, 45, 29), true).apply {
+        val save = text("Сохранить", 16f, palette.onSaveAction, true).apply {
             gravity = Gravity.CENTER
-            background = GradientDrawable().apply { cornerRadius = dp(24).toFloat(); setColor(Color.rgb(70, 218, 145)) }
+            background = GradientDrawable().apply { cornerRadius = dp(24).toFloat(); setColor(palette.primary) }
             setOnClickListener {
                 val editor = prefs.edit(); prayerKeys.indices.forEach { editor.putBoolean("notify_${prayerKeys[it]}", checked[it]) }; editor.apply()
                 schedulePrayerNotifications()
@@ -1362,6 +1393,7 @@ headerBox.addView(
 }
 
     private fun showCityChoice(refreshSettings: () -> Unit) {
+        panelRoute = "city"
         val pair = fullScreenPanel("Город") { refreshSettings() }
         pair.second.addView(label("Выберите город для расписания", 14f, muted).apply { setPadding(0, dp(16), 0, dp(16)) })
         listOf("Сафаджай", "Москва").forEach { city ->
@@ -1389,14 +1421,15 @@ headerBox.addView(
         dialog = pair.first; val root = pair.second
         val master = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(dp(16), dp(4), dp(12), dp(4))
-            background = GradientDrawable().apply { cornerRadius = dp(16).toFloat(); setColor(Color.rgb(8, 52, 39)) }
+            background = GradientDrawable().apply { cornerRadius = dp(16).toFloat(); setColor(palette.surface) }
         }
         master.addView(ImageView(this).apply {
             setImageResource(R.drawable.ic_notification)
+            if (!palette.isDark) setColorFilter(mint)
             setPadding(dp(7), dp(16), dp(7), dp(16))
             contentDescription = "Уведомления"
         }, LinearLayout.LayoutParams(dp(36), dp(58)))
-        master.addView(text("Уведомления", 16f, Color.WHITE, true).apply { gravity = Gravity.CENTER_VERTICAL; minHeight = dp(58) }, LinearLayout.LayoutParams(0, -2, 1f))
+        master.addView(text("Уведомления", 16f, palette.onSurface, true).apply { gravity = Gravity.CENTER_VERTICAL; minHeight = dp(58) }, LinearLayout.LayoutParams(0, -2, 1f))
         master.addView(Switch(this).apply {
             contentDescription = "Уведомления"
             isChecked = prefs.getBoolean(NOTIFICATIONS_ENABLED_KEY, false)
@@ -1407,7 +1440,7 @@ headerBox.addView(
         }, LinearLayout.LayoutParams(dp(60), dp(58)))
         master.minimumHeight = dp(66)
         root.addView(master, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(12) })
-        root.addView(text("Приложение будет напоминать о выбранных намазах в указанное вами время.", 13f, Color.rgb(170, 198, 186), false).apply { maxLines = Int.MAX_VALUE; setPadding(dp(8), dp(12), dp(8), dp(12)) })
+        root.addView(text("Приложение будет напоминать о выбранных намазах в указанное вами время.", 13f, palette.notificationText, false).apply { maxLines = Int.MAX_VALUE; setPadding(dp(8), dp(12), dp(8), dp(12)) })
         root.addView(screenRow("◷", "Когда напоминать", notifyBeforeLabel(prefs.getInt(NOTIFY_BEFORE_MIN_KEY, 5))) { showNotifyBeforeDialog { showNotificationsScreen(onBack) } }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(6) })
         root.addView(screenRow("✓", "Намазы для уведомлений", selectedPrayerSummary(prefs)) { showPrayerSelectionDialog { showNotificationsScreen(onBack) } }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
         val sound = runCatching { RingtoneManager.getRingtone(this, selectedNotificationSound(this))?.getTitle(this) }.getOrNull() ?: "Системный звук"
@@ -1429,6 +1462,15 @@ headerBox.addView(
 
         root.addView(screenRow(R.drawable.ic_notification, "Уведомления", if (prefs.getBoolean(NOTIFICATIONS_ENABLED_KEY, false)) "Включены" else "Выключены") { showNotificationsScreen { showSettingsDialog() } }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(12) })
         root.addView(screenRow(R.drawable.ic_location, "Город", selectedCity) { showCityChoice { showSettingsDialog() } }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
+
+        root.addView(screenRow("◐", "Тема приложения", ThemeSettings.read(this).title) {
+            showThemeSelector()
+        }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
+        if (RamadanUiPreview.available) {
+            root.addView(screenRow("☪", "Проверка Рамадана", "Только тестовый интерфейс") {
+                showRamadanPreviewSelector()
+            }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
+        }
 
         val languageRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
@@ -1454,6 +1496,80 @@ headerBox.addView(
             showAboutDialog()
         }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
         dialog.show()
+    }
+
+    private fun showThemeSelector() {
+        panelRoute = "theme"
+        val pair = fullScreenPanel("Тема приложения") { showSettingsDialog() }
+        val current = ThemeSettings.read(this)
+        val group = RadioGroup(this).apply { orientation = RadioGroup.VERTICAL }
+        ThemeMode.entries.forEach { mode ->
+            val copy = android.text.SpannableString("${mode.title}\n${mode.subtitle}").apply {
+                val start = mode.title.length + 1
+                setSpan(android.text.style.RelativeSizeSpan(0.8f), start, length, 0)
+                setSpan(android.text.style.ForegroundColorSpan(muted), start, length, 0)
+            }
+            group.addView(RadioButton(this).apply {
+                id = View.generateViewId()
+                text = copy; textSize = 17f; setTextColor(ink)
+                contentDescription = "${mode.title}. ${mode.subtitle}"
+                isChecked = mode == current
+                buttonTintList = android.content.res.ColorStateList(
+                    arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf()), intArrayOf(mint, muted)
+                )
+                background = surface(isChecked)
+                setPadding(dp(15), dp(12), dp(15), dp(12))
+                minHeight = dp(76)
+                setOnClickListener {
+                    if (mode != current) {
+                        ThemeSettings.save(this@MainActivity, mode)
+                        recreate()
+                    }
+                }
+            }, RadioGroup.LayoutParams(-1, -2).apply { bottomMargin = dp(10) })
+        }
+        pair.second.addView(group, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(16) })
+        pair.first.show()
+    }
+
+    private fun showRamadanPreviewSelector() {
+        if (!RamadanUiPreview.available) return
+        panelRoute = "ramadan_preview"
+        val pair = fullScreenPanel("Проверка Рамадана") { showSettingsDialog() }
+        pair.second.addView(label(
+            "Искусственные дата и время только для проверки интерфейса. Реальный исламский календарь и уведомления не меняются.",
+            14f, muted
+        ).apply { maxLines = Int.MAX_VALUE; setPadding(0, dp(16), 0, dp(16)) })
+        val current = RamadanUiPreview.selected(this)
+        RamadanUiPreview.scenes.forEach { scene ->
+            pair.second.addView(RadioButton(this).apply {
+                text = scene.title; textSize = 16f; setTextColor(ink)
+                isChecked = scene.key == current.key
+                background = surface(isChecked); minHeight = dp(64)
+                setPadding(dp(15), dp(8), dp(15), dp(8))
+                setOnClickListener {
+                    RamadanUiPreview.select(this@MainActivity, scene)
+                    selectedDate = uiNow().toLocalDate()
+                    calendarMonth = java.time.YearMonth.from(selectedDate)
+                    scheduleTabSelected = false
+                    lastCalendarRender = ""; lastPrayerRender = ""
+                    settingsPanel?.dismiss()
+                    update()
+                    mainScroll.scrollTo(0, 0)
+                }
+            }, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(10) })
+        }
+        pair.first.show()
+    }
+
+    private fun uiNow(): LocalDateTime {
+        val now = RamadanUiPreview.now(this, LocalDateTime.now(zone))
+        // The two cities have different Maghrib times: preview the first three
+        // minutes of iftar using the existing timetable, never change its values.
+        if (RamadanUiPreview.available && RamadanUiPreview.selected(this).key == "after" && ::scheduleRepository.isInitialized) {
+            dayFor(now.toLocalDate())?.let { return dateTime(now.toLocalDate(), it.maghrib).plusMinutes(3) }
+        }
+        return now
     }
 
     override fun onRetainNonConfigurationInstance(): Any = scheduleUpdateChecker
@@ -1504,6 +1620,7 @@ headerBox.addView(
         dialog.setOnDismissListener { if (aboutDialog === dialog) aboutDialog = null }
         aboutDialog = dialog
         dialog.show()
+        dialog.window?.let { prepareThemedWindow(it) }
         dialog.window?.setLayout(minOf(dp(360), resources.displayMetrics.widthPixels-dp(40)), ViewGroup.LayoutParams.WRAP_CONTENT)
     }
 
@@ -1563,6 +1680,7 @@ headerBox.addView(
     }
 
     private fun showCalibration() {
+        panelRoute = "calibration"
         val pair = fullScreenPanel("Калибровка компаса") { showQiblaCompass() }
         pair.second.addView(label("∞", 110f, mint).apply { gravity = Gravity.CENTER }, LinearLayout.LayoutParams(-1, dp(170)))
         pair.second.addView(label("1. Отойдите от металла и магнитов.\n\n2. Плавно опишите телефоном восьмёрку несколько раз.\n\n3. Вернитесь к компасу и проверьте направление.", 17f, ink).apply { maxLines = Int.MAX_VALUE; setPadding(dp(16), dp(16), dp(16), dp(16)); background = surface() })
@@ -1571,10 +1689,11 @@ headerBox.addView(
     }
 
     private fun showThemedMessage(title: String, message: String, positive: String, negative: String? = null, action: () -> Unit) {
-        val builder = android.app.AlertDialog.Builder(this).setTitle(title).setMessage(message).setPositiveButton(positive) { _, _ -> action() }
+        val builder = android.app.AlertDialog.Builder(this, if (palette.isDark) R.style.AppDialogTheme else R.style.AppDialogThemeLight).setTitle(title).setMessage(message).setPositiveButton(positive) { _, _ -> action() }
         if (negative != null) builder.setNegativeButton(negative, null)
         val dialog = builder.create()
         dialog.setOnShowListener {
+            dialog.window?.let { prepareThemedWindow(it) }
             dialog.window?.setBackgroundDrawable(surface(false, 22))
             dialog.findViewById<TextView>(android.R.id.message)?.setTextColor(ink)
             dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE).setTextColor(mint)
@@ -1588,6 +1707,7 @@ headerBox.addView(
     }
 
     private fun showSoundScreen() {
+        panelRoute = "sound"
         val pair = fullScreenPanel("Звук уведомления") { showNotificationsScreen { showSettingsDialog() } }
         val selected = runCatching { RingtoneManager.getRingtone(this, selectedNotificationSound(this))?.getTitle(this) }.getOrNull() ?: "Системный звук"
         pair.second.addView(label("Выбранный звук\n$selected", 18f, ink).apply { gravity = Gravity.CENTER; setPadding(dp(16), dp(24), dp(16), dp(24)); background = surface() }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(20) })
@@ -1779,7 +1899,7 @@ private fun calendarMaxMonth(): java.time.YearMonth {
     private fun renderInlineCalendar() {
         calendarMonth = calendarMonth.coerceIn(calendarMinMonth(), calendarMaxMonth())
         if (!::calendarGrid.isInitialized) return
-        val renderKey = "$calendarMonth|$selectedDate|${LocalDate.now(zone)}"
+        val renderKey = "$calendarMonth|$selectedDate|${uiNow().toLocalDate()}"
         if (lastCalendarRender == renderKey) return
         lastCalendarRender = renderKey
 
@@ -1792,7 +1912,7 @@ private fun calendarMaxMonth(): java.time.YearMonth {
 
         val weekdays = listOf("ПН", "ВТ", "СР", "ЧТ", "ПТ", "СБ", "ВС")
         weekdays.forEach { name ->
-            val dayName = text(name, 11f, Color.rgb(150, 175, 164), true).apply {
+            val dayName = text(name, 11f, palette.calendarWeekday, true).apply {
                 gravity = Gravity.CENTER
                 setIncludeFontPadding(false)
             }
@@ -1807,7 +1927,7 @@ private fun calendarMaxMonth(): java.time.YearMonth {
         val first = calendarMonth.atDay(1)
         val leading = first.dayOfWeek.value - 1
         val startDate = first.minusDays(leading.toLong())
-        val today = LocalDate.now(zone)
+        val today = uiNow().toLocalDate()
         val selected = selectedDate ?: today
 
         val cells = ((leading + calendarMonth.lengthOfMonth() + 6) / 7) * 7
@@ -1841,7 +1961,7 @@ private fun calendarMaxMonth(): java.time.YearMonth {
             val dayNumber = text(
                 d.dayOfMonth.toString(),
                 15f,
-                if (!inMonth) Color.rgb(88, 105, 98) else Color.WHITE,
+                if (!inMonth) palette.calendarOutsideMonth else if (isSelected && !hasHoliday) palette.onPrimary else palette.onSurface,
                 isSelected
             ).apply {
                 gravity = Gravity.CENTER
@@ -1851,7 +1971,7 @@ private fun calendarMaxMonth(): java.time.YearMonth {
         shape = GradientDrawable.OVAL
 
        if (isSelected && !hasHoliday) {
-    setColor(Color.rgb(32, 194, 127))
+    setColor(palette.tabSelected)
 } else {
     setColor(Color.TRANSPARENT)
 }
@@ -1871,7 +1991,7 @@ private fun calendarMaxMonth(): java.time.YearMonth {
         background = GradientDrawable().apply {
             shape = GradientDrawable.OVAL
             setColor(Color.TRANSPARENT)
-            setStroke(dp(1), Color.rgb(246, 196, 83))
+            setStroke(dp(1), palette.holidayOutline)
         }
     }
 }
@@ -1886,6 +2006,7 @@ dayContent.addView(
             val marker = ImageView(this).apply {
     if (hasHoliday && inMonth) {
         setImageResource(R.drawable.ic_holiday_crescent)
+            if (!palette.isDark) setColorFilter(palette.gold)
         visibility = View.VISIBLE
     } else {
         visibility = View.INVISIBLE
@@ -1917,8 +2038,8 @@ val fridayDot = TextView(this).apply {
     text = if (isFriday && inMonth) "•" else ""
     textSize = 12f
     setTextColor(
-        if (isToday) Color.rgb(48, 228, 161)
-        else Color.rgb(100, 190, 150)
+        if (isToday) palette.fridayToday
+        else palette.friday
     )
     setIncludeFontPadding(false)
 }
@@ -1961,7 +2082,7 @@ cell.addView(
         val minDate = calendarMinMonth().atDay(1)
         val maxDate = calendarMaxMonth().atEndOfMonth()
         val initial = selectedDate?.coerceIn(minDate, maxDate) ?: LocalDate.now(zone).coerceIn(minDate, maxDate)
-        val dialog = DatePickerDialog(this, { _, year, month, dayOfMonth ->
+        val dialog = DatePickerDialog(this, if (palette.isDark) R.style.AppDialogTheme else R.style.AppDialogThemeLight, { _, year, month, dayOfMonth ->
             selectedDate = LocalDate.of(year, month + 1, dayOfMonth)
             scheduleTabSelected = true
             updateTabStyles()
@@ -1970,6 +2091,7 @@ cell.addView(
         dialog.datePicker.minDate = minDate.atStartOfDay(zone).toInstant().toEpochMilli()
         dialog.datePicker.maxDate = maxDate.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli() - 1L
         dialog.show()
+        dialog.window?.let { prepareThemedWindow(it) }
     }
 
     private fun getPrayers(day: PrayerDay): List<Prayer> = listOf(
@@ -1986,10 +2108,13 @@ cell.addView(
     }
 
     private fun update() {
-        val now = LocalDateTime.now(zone).withNano(0)
+        val now = uiNow().withNano(0)
         val todayDate = now.toLocalDate()
+        countdown.visibility = View.VISIBLE
+        countdownStart.visibility = View.VISIBLE
 
-        val ramadanDay = HolidayCalendar.ramadanDay(todayDate)
+        val ramadanDate = if (scheduleTabSelected) selectedDate ?: todayDate else todayDate
+        val ramadanDay = RamadanUiPreview.ramadanDay(ramadanDate) ?: HolidayCalendar.ramadanDay(ramadanDate)
         val ramadanDayText = ramadanCard.findViewWithTag<TextView>("ramadan_day")
         if (ramadanDay != null) {
             ramadanCard.visibility = View.VISIBLE
@@ -2001,7 +2126,8 @@ cell.addView(
                     ramadanCard.layoutParams = params
                 }
             }
-            ramadanDayText.text = "Сегодня $ramadanDay-й день поста"
+            ramadanDayText.text = if (RamadanUiPreview.isArtificial(ramadanDate))
+                "Тест UI · $ramadanDay-й день поста" else "Сегодня $ramadanDay-й день поста"
         } else {
             ramadanCard.visibility = View.GONE
             ramadanDayText.text = ""
@@ -2019,7 +2145,8 @@ cell.addView(
         placeText.text = selectedCity
         dateText.text = "${formatRussianDate(selected)}\n${hijriText(selected)}"
         dateText.contentDescription = "${dateText.text}. Открыть календарь"
-        currentTimeText.text = "Сейчас " + now.format(DateTimeFormatter.ofPattern("HH:mm"))
+        currentTimeText.text = (if (RamadanUiPreview.selected(this).time != null) "Тест UI · " else "Сейчас ") +
+            now.format(DateTimeFormatter.ofPattern("HH:mm"))
         updateTodayEventBanner(if (scheduleTabSelected) selected else todayDate)
         if (scheduleTabSelected) {
             countdownCard.visibility = View.GONE
@@ -2117,15 +2244,15 @@ cell.addView(
                
                     
                 ramadanCountdownBackground.setImageResource(R.drawable.ramadan_iftar_started)
-                ramadanCountdownBackground.visibility = View.VISIBLE
+                ramadanCountdownBackground.visibility = if (palette.isDark) View.VISIBLE else View.GONE
                 countdownCard.post {
-                    val targetHeight = countdownCard.width / 3
+                    val targetHeight = if (palette.isDark) countdownCard.width / 3 else dp(174)
                     countdownCard.layoutParams =
                         (countdownCard.layoutParams as LinearLayout.LayoutParams).apply {
                             height = targetHeight
                         }
                 }
-                nextName.setTextColor(Color.rgb(244, 241, 232))
+                nextName.setTextColor(palette.onRamadanImage)
                 nextName.setShadowLayer(4f, 0f, 2f, Color.BLACK)
                 nextName.text = "Время ифтара наступило"
                 countdownLabel.visibility = View.GONE
@@ -2134,46 +2261,46 @@ cell.addView(
                 progress.progress = 1f
             } else if (ramadanDay != null && nextEvent.prayer.name == "Фаджр") {
                 ramadanCountdownBackground.setImageResource(R.drawable.ramadan_suhoor)
-                ramadanCountdownBackground.visibility = View.VISIBLE
+                ramadanCountdownBackground.visibility = if (palette.isDark) View.VISIBLE else View.GONE
                 countdownCard.post {
-                    val targetHeight = countdownCard.width / 3
+                    val targetHeight = if (palette.isDark) countdownCard.width / 3 else dp(174)
                     countdownCard.layoutParams =
                         (countdownCard.layoutParams as LinearLayout.LayoutParams).apply {
                             height = targetHeight
                         }
                 }
-                countdown.setTextColor(Color.rgb(244, 241, 232))
+                countdown.setTextColor(palette.onRamadanImage)
                 countdown.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 43f)
 
-                nextName.setTextColor(Color.rgb(244, 241, 232))
+                nextName.setTextColor(palette.onRamadanImage)
                 nextName.setShadowLayer(4f, 0f, 2f, Color.BLACK)
                 nextName.text = "До окончания сухура"
                 countdownLabel.visibility = View.GONE
 
-                countdownStart.setTextColor(Color.rgb(244, 241, 232))
+                countdownStart.setTextColor(palette.onRamadanImage)
                 countdownStart.setShadowLayer(3f, 0f, 1f, Color.BLACK)
                 countdownStart.text =
                     "Сухур заканчивается с началом Фаджра · ${nextEvent.prayer.time}"
              
             } else if (ramadanDay != null && nextEvent.prayer.name == "Магриб") {
                 ramadanCountdownBackground.setImageResource(R.drawable.ramadan_iftar)
-                ramadanCountdownBackground.visibility = View.VISIBLE
+                ramadanCountdownBackground.visibility = if (palette.isDark) View.VISIBLE else View.GONE
                 countdownCard.post {
-                    val targetHeight = countdownCard.width / 3
+                    val targetHeight = if (palette.isDark) countdownCard.width / 3 else dp(174)
                     countdownCard.layoutParams =
                         (countdownCard.layoutParams as LinearLayout.LayoutParams).apply {
                             height = targetHeight
                         }
                 }
-                countdown.setTextColor(Color.rgb(244, 241, 232))
+                countdown.setTextColor(palette.onRamadanImage)
                 countdown.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 43f)
                 
-                nextName.setTextColor(Color.rgb(244, 241, 232))
+                nextName.setTextColor(palette.onRamadanImage)
                 nextName.setShadowLayer(4f, 0f, 2f, Color.BLACK)
                 nextName.text = "До ифтара"
                 countdownLabel.visibility = View.GONE
                 
-                countdownStart.setTextColor(Color.rgb(244, 241, 232))
+                countdownStart.setTextColor(palette.onRamadanImage)
                 countdownStart.setShadowLayer(3f, 0f, 1f, Color.BLACK)
                 countdownStart.text =
                     "Ифтар с наступлением Магриба · ${nextEvent.prayer.time}"
@@ -2259,6 +2386,17 @@ cell.addView(
                 progress.progress = 0f
             }
         }
+        if (!palette.isDark && ramadanDay != null) {
+            nextName.setTextColor(ink)
+            nextName.setShadowLayer(0f, 0f, 0f, Color.TRANSPARENT)
+            countdown.setTextColor(mint)
+            countdownStart.setTextColor(muted)
+            countdownStart.setShadowLayer(0f, 0f, 0f, Color.TRANSPARENT)
+            if (iftarJustStarted) {
+                countdown.visibility = View.GONE
+                countdownStart.visibility = View.GONE
+            }
+        }
         val nextIndex = if (iftarJustStarted) {
             prayers.indexOfFirst { it.name == "Магриб" }
         } else {
@@ -2294,7 +2432,7 @@ cell.addView(
     }
 
     private fun updateTodayEventBanner(today: LocalDate) {
-        val now = LocalDateTime.now(zone)
+        val now = uiNow()
         val asr = dayFor(today)?.asr?.let { runCatching { java.time.LocalTime.parse(it) }.getOrNull() }
         val items = HolidayCalendar.bannerLabels(today, now, asr)
         if (items.isEmpty()) { eventBanner.text = ""; eventBanner.visibility = View.GONE; return }
@@ -2321,10 +2459,10 @@ cell.addView(
                 setPadding(dp(12), dp(8), dp(12), dp(8))
                 minimumHeight = dp(66)
                 background = if (isIftar) iftarPrayerBackground() else cardBackground(isNext, passed)
-                alpha = if (passed && displayDate == now.toLocalDate()) 0.70f else 1f
+                alpha = if (palette.isDark && passed && displayDate == now.toLocalDate()) 0.70f else 1f
             }
 
-            row.addView(PrayerIconView(this, p.name, if (isIftar) Color.rgb(235, 202, 104) else if (isNext) mint else muted), LinearLayout.LayoutParams(dp(34), dp(42)).apply { rightMargin = dp(8) })
+            row.addView(PrayerIconView(this, p.name, if (isIftar) palette.ramadanAccent else if (isNext) mint else muted), LinearLayout.LayoutParams(dp(34), dp(42)).apply { rightMargin = dp(8) })
             
             val nameBox = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
@@ -2335,7 +2473,7 @@ cell.addView(
                 setIncludeFontPadding(false)
                 maxLines = 2
             }
-            val tt = text("(${p.tatar})", 13f, Color.rgb(171, 202, 190), false).apply {
+            val tt = text("(${p.tatar})", 13f, palette.tatarText, false).apply {
                 visibility = if (showTatar) View.VISIBLE else View.GONE
                 gravity = Gravity.START
                 setIncludeFontPadding(false)
@@ -2343,7 +2481,7 @@ cell.addView(
             }
             nameBox.addView(ru, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
             nameBox.addView(tt, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(3) })
-            val time = text(p.time, 25f, if (isIftar) Color.rgb(235, 202, 104) else if (isNext) Color.rgb(91, 224, 164) else Color.WHITE, true).apply {
+            val time = text(p.time, 25f, if (isIftar) palette.ramadanAccent else if (isNext) palette.activeTime else palette.onSurface, true).apply {
                 gravity = Gravity.CENTER
                 typeface = Typeface.create("monospace", Typeface.BOLD)
                 setIncludeFontPadding(false)
@@ -2435,6 +2573,8 @@ startScheduleUpdateCheck()
     override fun onSaveInstanceState(outState: Bundle) {
         outState.putString("selected_date", selectedDate?.toString())
         outState.putBoolean("schedule_tab", scheduleTabSelected)
+        outState.putString("calendar_month", calendarMonth.toString())
+        outState.putBoolean("show_about", aboutDialog?.isShowing == true)
         outState.putString("panel_route", panelRoute)
         super.onSaveInstanceState(outState)
     }

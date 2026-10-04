@@ -1,0 +1,26 @@
+<resources>
+    <style name="AppThemeLight" parent="android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:colorAccent">@color/light_primary</item>
+        <item name="android:colorControlActivated">@color/light_primary</item>
+        <item name="android:colorControlNormal">@color/light_secondary</item>
+        <item name="android:windowBackground">@color/light_background</item>
+        <item name="android:navigationBarColor">@color/light_background</item>
+        <item name="android:statusBarColor">@color/light_background</item>
+        <item name="android:windowLightStatusBar">true</item>
+    </style>
+    <style name="AppPanelTheme" parent="AppTheme">
+        <item name="android:windowFullscreen">true</item>
+        <item name="android:windowNoTitle">true</item>
+    </style>
+    <style name="AppPanelThemeLight" parent="AppThemeLight">
+        <item name="android:windowFullscreen">true</item>
+        <item name="android:windowNoTitle">true</item>
+    </style>
+    <style name="AppDialogTheme" parent="android:style/Theme.Material.Dialog.Alert">
+        <item name="android:colorAccent">@color/green_light</item>
+    </style>
+    <style name="AppDialogThemeLight" parent="android:style/Theme.Material.Light.Dialog.Alert">
+        <item name="android:colorAccent">@color/light_primary</item>
+    </style>
+</resources>
