@@ -1006,10 +1006,8 @@ private fun dismissScheduleUpdateDialog() {
     orientation = LinearLayout.VERTICAL
     gravity = Gravity.CENTER
     visibility = View.GONE
-    if (!palette.isDark) background = surface(true, 16)
 
     val backgroundImage = ImageView(this@MainActivity).apply {
-    visibility = if (palette.isDark) View.VISIBLE else View.GONE
     setImageResource(R.drawable.ramadan_header)
     scaleType = ImageView.ScaleType.CENTER_CROP
 
@@ -1030,18 +1028,18 @@ private fun dismissScheduleUpdateDialog() {
     val textLayer = LinearLayout(this@MainActivity).apply {
         orientation = LinearLayout.VERTICAL
         gravity = Gravity.CENTER
-        translationX = if (palette.isDark) dp(20).toFloat() else 0f
+        translationX = dp(20).toFloat()
         setPadding(dp(16), dp(10), dp(16), dp(10))
 
         addView(
-            label("Рамадан", 18f, palette.ramadanAccent, true).apply {
+            label("Рамадан", 18f, palette.ramadanImageAccent, true).apply {
                 gravity = Gravity.CENTER
             },
             LinearLayout.LayoutParams(-1, -2)
         )
 
         addView(
-            label("", 14f, ink, true).apply {
+            label("", 14f, palette.ramadanHeaderText, true).apply {
                 gravity = Gravity.CENTER
                 tag = "ramadan_day"
             },
@@ -2244,9 +2242,9 @@ cell.addView(
                
                     
                 ramadanCountdownBackground.setImageResource(R.drawable.ramadan_iftar_started)
-                ramadanCountdownBackground.visibility = if (palette.isDark) View.VISIBLE else View.GONE
+                ramadanCountdownBackground.visibility = View.VISIBLE
                 countdownCard.post {
-                    val targetHeight = if (palette.isDark) countdownCard.width / 3 else dp(174)
+                    val targetHeight = countdownCard.width / 3
                     countdownCard.layoutParams =
                         (countdownCard.layoutParams as LinearLayout.LayoutParams).apply {
                             height = targetHeight
@@ -2261,9 +2259,9 @@ cell.addView(
                 progress.progress = 1f
             } else if (ramadanDay != null && nextEvent.prayer.name == "Фаджр") {
                 ramadanCountdownBackground.setImageResource(R.drawable.ramadan_suhoor)
-                ramadanCountdownBackground.visibility = if (palette.isDark) View.VISIBLE else View.GONE
+                ramadanCountdownBackground.visibility = View.VISIBLE
                 countdownCard.post {
-                    val targetHeight = if (palette.isDark) countdownCard.width / 3 else dp(174)
+                    val targetHeight = countdownCard.width / 3
                     countdownCard.layoutParams =
                         (countdownCard.layoutParams as LinearLayout.LayoutParams).apply {
                             height = targetHeight
@@ -2284,9 +2282,9 @@ cell.addView(
              
             } else if (ramadanDay != null && nextEvent.prayer.name == "Магриб") {
                 ramadanCountdownBackground.setImageResource(R.drawable.ramadan_iftar)
-                ramadanCountdownBackground.visibility = if (palette.isDark) View.VISIBLE else View.GONE
+                ramadanCountdownBackground.visibility = View.VISIBLE
                 countdownCard.post {
-                    val targetHeight = if (palette.isDark) countdownCard.width / 3 else dp(174)
+                    val targetHeight = countdownCard.width / 3
                     countdownCard.layoutParams =
                         (countdownCard.layoutParams as LinearLayout.LayoutParams).apply {
                             height = targetHeight
@@ -2384,17 +2382,6 @@ cell.addView(
                 countdownLabel.text = "Период расписания завершён"
                 countdownStart.text = ""
                 progress.progress = 0f
-            }
-        }
-        if (!palette.isDark && ramadanDay != null) {
-            nextName.setTextColor(ink)
-            nextName.setShadowLayer(0f, 0f, 0f, Color.TRANSPARENT)
-            countdown.setTextColor(mint)
-            countdownStart.setTextColor(muted)
-            countdownStart.setShadowLayer(0f, 0f, 0f, Color.TRANSPARENT)
-            if (iftarJustStarted) {
-                countdown.visibility = View.GONE
-                countdownStart.visibility = View.GONE
             }
         }
         val nextIndex = if (iftarJustStarted) {

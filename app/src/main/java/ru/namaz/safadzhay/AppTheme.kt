@@ -75,7 +75,9 @@ internal class AppColors(val isDark: Boolean) {
     val compassText = tone("#E4F3EA", "#172B23")
     val compassTail = tone("#1F5941", "#175B40")
     val compassHubOutline = tone("#134B34", "#007C4D")
-    // Illustration colours stay fixed: these are drawn on the existing dark Ramadan photos.
+    // Ramadan artwork and its overlay colours belong to both themes.
+    val ramadanImageAccent = Color.rgb(235, 202, 104)
+    val ramadanHeaderText = Color.rgb(235, 247, 240)
     val onRamadanImage = Color.rgb(244, 241, 232)
     val kaabaBody = Color.rgb(20, 28, 24)
     val kaabaLid = Color.rgb(40, 49, 44)

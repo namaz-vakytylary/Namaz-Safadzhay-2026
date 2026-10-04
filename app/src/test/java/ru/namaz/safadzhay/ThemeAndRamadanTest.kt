@@ -9,6 +9,7 @@ import android.graphics.drawable.GradientDrawable
 import android.view.View
 import android.view.ViewGroup
 import android.widget.LinearLayout
+import android.widget.ImageView
 import android.widget.RadioButton
 import android.widget.TextView
 import org.junit.Assert.*
@@ -212,8 +213,8 @@ class ThemeAndRamadanTest {
                     if (key == "suhoor") assertEquals("До окончания сухура", next.text)
                     if (key == "iftar") assertEquals("До ифтара", next.text)
                     if (key == "after") assertEquals("Время ифтара наступило", next.text)
-                    if (key != "before" && !dark) assertEquals(AppColors(false).onBackground, next.currentTextColor)
                     screenshot(a.findViewById(android.R.id.content), "ramadan-$key-${mode.storedValue}-$dark")
+                    if (key != "before") assertRamadanArtwork(a, key, dark)
                     if (key == "iftar") {
                         ReflectionHelpers.setField(a, "scheduleTabSelected", true); invoke(a, "update")
                         screenshot(a.findViewById(android.R.id.content), "ramadan-schedule-${mode.storedValue}-$dark")
@@ -221,6 +222,57 @@ class ThemeAndRamadanTest {
                     }
                 } finally { c.pause().stop().destroy() }
             }
+        }
+    }
+
+    private fun assertRamadanArtwork(a: MainActivity, scene: String, dark: Boolean) {
+        val colors = AppColors(dark)
+        val banner = ReflectionHelpers.getField<LinearLayout>(a, "ramadanCard")
+        val header = walk(banner).filterIsInstance<ImageView>().single()
+        assertTrue(header.isShown)
+        assertEquals(R.drawable.ramadan_header, org.robolectric.Shadows.shadowOf(header.drawable).createdFromResId)
+        assertNull(header.colorFilter)
+        assertEquals(ImageView.ScaleType.CENTER_CROP, header.scaleType)
+        assertEquals(colors.ramadanImageAccent,
+            walk(banner).filterIsInstance<TextView>().single { it.text == "Рамадан" }.currentTextColor)
+        val day = banner.findViewWithTag<TextView>("ramadan_day")
+        assertEquals("Тест UI · 1-й день поста", day.text.toString())
+        assertEquals(colors.ramadanHeaderText, day.currentTextColor)
+
+        val image = ReflectionHelpers.getField<ImageView>(a, "ramadanCountdownBackground")
+        val expected = when (scene) {
+            "suhoor" -> R.drawable.ramadan_suhoor
+            "iftar" -> R.drawable.ramadan_iftar
+            else -> R.drawable.ramadan_iftar_started
+        }
+        assertTrue(image.isShown)
+        assertEquals(expected, org.robolectric.Shadows.shadowOf(image.drawable).createdFromResId)
+        assertNull(image.colorFilter)
+        assertEquals(ImageView.ScaleType.FIT_CENTER, image.scaleType)
+        val card = ReflectionHelpers.getField<View>(a, "countdownCard")
+        assertEquals(card.width / 3, card.height)
+        assertEquals(card.width, image.width)
+        assertEquals(card.height, image.height)
+        val title = ReflectionHelpers.getField<TextView>(a, "nextName")
+        assertEquals(colors.onRamadanImage, title.currentTextColor)
+        val timer = ReflectionHelpers.getField<TextView>(a, "countdown")
+        val subtitle = ReflectionHelpers.getField<TextView>(a, "countdownStart")
+        if (scene == "after") {
+            assertEquals("", timer.text.toString())
+            assertEquals("", subtitle.text.toString())
+            val prayers = ReflectionHelpers.getField<LinearLayout>(a, "prayerList")
+            val maghrib = (0 until prayers.childCount).map { prayers.getChildAt(it) }.single { row ->
+                walk(row).filterIsInstance<TextView>().any { it.text == "Магриб" }
+            }
+            assertEquals(colors.iftarSurface, (maghrib.background as GradientDrawable).color!!.defaultColor)
+            assertTrue(walk(maghrib).filterIsInstance<TextView>().any { it.currentTextColor == colors.ramadanAccent })
+        } else {
+            assertTrue(timer.isShown)
+            assertTrue(timer.text.matches(Regex("\\d{2}:\\d{2}:\\d{2}")))
+            assertEquals(colors.onRamadanImage, timer.currentTextColor)
+            assertEquals(colors.onRamadanImage, subtitle.currentTextColor)
+            val prefix = if (scene == "suhoor") "Сухур заканчивается с началом Фаджра" else "Ифтар с наступлением Магриба"
+            assertTrue(subtitle.text.startsWith("$prefix · "))
         }
     }
 
