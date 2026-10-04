@@ -214,7 +214,10 @@ class ThemeAndRamadanTest {
                     if (key == "iftar") assertEquals("До ифтара", next.text)
                     if (key == "after") assertEquals("Время ифтара наступило", next.text)
                     screenshot(a.findViewById(android.R.id.content), "ramadan-$key-${mode.storedValue}-$dark")
-                    if (key != "before") assertRamadanArtwork(a, key, dark)
+                    if (key != "before") {
+                        assertRamadanArtwork(a, key, dark)
+                        assertArtworkClipping(a, "ramadan-$key-${mode.storedValue}-$dark")
+                    }
                     if (key == "iftar") {
                         ReflectionHelpers.setField(a, "scheduleTabSelected", true); invoke(a, "update")
                         screenshot(a.findViewById(android.R.id.content), "ramadan-schedule-${mode.storedValue}-$dark")
@@ -223,6 +226,71 @@ class ThemeAndRamadanTest {
                 } finally { c.pause().stop().destroy() }
             }
         }
+    }
+
+    private fun assertArtworkClipping(a: MainActivity, name: String) {
+        val image = ReflectionHelpers.getField<ImageView>(a, "ramadanCountdownBackground")
+        val card = ReflectionHelpers.getField<View>(a, "countdownCard")
+        assertClippedImage(image, name)
+        val position = IntArray(2)
+        card.getLocationInWindow(position)
+        File("build/reports/theme-ui").resolve("$name-bounds.txt").writeText(
+            "${position[0]},${position[1]},${card.width},${card.height}"
+        )
+        val composite = Bitmap.createBitmap(card.width, card.height, Bitmap.Config.ARGB_8888)
+        card.draw(Canvas(composite))
+        File("build/reports/theme-ui").resolve("$name-card.png").outputStream().use {
+            composite.compress(Bitmap.CompressFormat.PNG, 100, it)
+        }
+        composite.recycle()
+    }
+
+    @Test fun artworkClipRespectsInnerBorderAcrossDensitiesAndSizes() {
+        for (qualifier in listOf("mdpi", "hdpi", "xhdpi", "xxxhdpi")) {
+            RuntimeEnvironment.setQualifiers("w360dp-h800dp-notnight-$qualifier")
+            val density = app.resources.displayMetrics.density
+            for (widthDp in listOf(328, 480)) {
+                for (asset in listOf(R.drawable.ramadan_suhoor, R.drawable.ramadan_iftar, R.drawable.ramadan_iftar_started)) {
+                    val image = RamadanCountdownImageView(app).apply {
+                        scaleType = ImageView.ScaleType.FIT_CENTER
+                        setImageResource(asset)
+                    }
+                    val width = (widthDp * density).toInt()
+                    image.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
+                        View.MeasureSpec.makeMeasureSpec(width / 3, View.MeasureSpec.EXACTLY))
+                    image.layout(0, 0, width, width / 3)
+                    assertClippedImage(image, "clip-$qualifier-$widthDp-$asset")
+                }
+            }
+        }
+    }
+
+    private fun assertClippedImage(image: ImageView, name: String) {
+        val bitmap = Bitmap.createBitmap(image.width, image.height, Bitmap.Config.ARGB_8888)
+        image.draw(Canvas(bitmap))
+        val density = image.resources.displayMetrics.density
+        val inset = density * 3.5f
+        val radius = minOf(density * 14.5f, (image.width - 2f * inset) / 2f,
+            (image.height - 2f * inset) / 2f).coerceAtLeast(0f)
+        // Independently check the inner stroke contour at every pixel centre,
+        // including all four arcs. This catches rectangular/outer-only clipping.
+        var visible = 0
+        for (y in 0 until bitmap.height) for (x in 0 until bitmap.width) {
+            val px = x + 0.5f; val py = y + 0.5f
+            val inBounds = px >= inset && px < image.width - inset &&
+                py >= inset && py < image.height - inset
+            val cx = px.coerceIn(inset + radius, image.width - inset - radius)
+            val cy = py.coerceIn(inset + radius, image.height - inset - radius)
+            val inside = inBounds && (px - cx) * (px - cx) + (py - cy) * (py - cy) <= radius * radius
+            val alpha = Color.alpha(bitmap.getPixel(x, y))
+            if (!inside) assertEquals("$name artwork outside inner border at ($x,$y)", 0, alpha)
+            if (alpha > 0) visible++
+        }
+        assertTrue("Artwork must remain visible inside the border", visible > bitmap.width * bitmap.height / 2)
+        File("build/reports/theme-ui").apply { mkdirs() }.resolve("$name-artwork.png").outputStream().use {
+            bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)
+        }
+        bitmap.recycle()
     }
 
     private fun assertRamadanArtwork(a: MainActivity, scene: String, dark: Boolean) {

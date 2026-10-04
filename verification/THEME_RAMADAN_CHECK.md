@@ -4,6 +4,37 @@
 Единственная изменяемая ветка: `test/1.2-test3-security`.
 Исходный коммит: `a7d46f43596b6b776151e9d9fdf64cc4e8a69a44`.
 
+## Исправление clipping Ramadan countdown
+
+Актуальная проверка продолжает ветку с коммита `061c4d6313122e13200d098bfc88b7c31019f6c1`.
+
+Причина: `countdownCard.clipToOutline` ограничивал фон только внешним контуром карточки. Progress border рисуется с отступом внутрь, поэтому изображение оставалось снаружи stroke и выступало в углах.
+
+`RamadanCountdownImageView.kt` добавляет отдельный `Canvas.clipPath` только для artwork. Кэшируемая маска пересчитывается при изменении размера и следует внутреннему контуру существующего индикатора: stroke 2.5dp, centre inset 2.25dp, внутренний отступ 3.5dp, внутренний радиус 14.5dp при обычных размерах. Дополнительный запас 1 физический пиксель удерживает полупрозрачное сглаживание углов внутри stroke. Он изменяет только маску изображения, а не размер ImageView, карточки или рамки.
+
+В `MainActivity.kt` изменён только тип ImageView для countdown. `FIT_CENTER`, resource IDs, размеры, текст, padding и порядок слоёв сохранены. Верхний Ramadan banner не менялся. `DesignViews.kt`, включая весь `CardProgressIndicator`, побайтно совпадает с исходным коммитом: прогресс, направление, цвета, толщина, форма и вычисление по оставшемуся времени не модифицированы.
+
+Проверены сухур, ожидание ифтара и наступивший ифтар в Light, Dark, System+Android Light и System+Android Dark — 12 комбинаций, включая все 9 запрошенных. Автоматическая проверка каждого пикселя отдельного слоя изображения не допускает ненулевой alpha вне внутреннего контура. Все 48 углов дополнительно просмотрены при увеличении ×4. Новый тест `artworkClipRespectsInnerBorderAcrossDensitiesAndSizes` проверяет три исходных фона при mdpi/hdpi/xhdpi/xxxhdpi и двух размерах — ещё 24 комбинации, также в release unit tests.
+
+Сравнение 12 полных экранов с отрисовкой до clipping: изменения строго внутри countdown card, центральные области с artwork/text и все пиксели вне карточки идентичны. Верхний banner, размеры и расположение UI сохранены. Золотой стиль после ифтара сохранён.
+
+Проверки: debug APK собран; 79 debug и 79 release unit tests прошли без failures/errors/skipped. Lint в обоих вариантах: 0 errors / 62 warnings, без новых предупреждений. Preflight и 7 Python security tests прошли; все 1530 исходных времён намазов неизменны. Debug fixture и release source set побайтно сохранены; искусственная дата и `TEST_RAMADAN_START_DATE` отсутствуют в скомпилированном release-классе.
+
+Отрисовка выполнена через Robolectric native graphics, API 33. Устройства/эмулятора нет, instrumentation-проверка на устройстве не выполнялась.
+
+Файлы исправления clipping:
+
+```text
+app/src/main/java/ru/namaz/safadzhay/MainActivity.kt
+app/src/main/java/ru/namaz/safadzhay/RamadanCountdownImageView.kt
+app/src/test/java/ru/namaz/safadzhay/ThemeAndRamadanTest.kt
+verification/THEME_RAMADAN_CHECK.md
+verification/theme-ui/ramadan.webp
+verification/theme-ui/ramadan-corners.webp
+```
+
+![Все четыре угла в каждом состоянии и режиме, увеличение ×4](theme-ui/ramadan-corners.webp)
+
 ## Реализация
 
 - `AppTheme.kt`: режимы System/Light/Dark, семантическая палитра. Все прежние тёмные значения сохранены; геометрия обычных экранов не менялась.
@@ -24,7 +55,7 @@
 
 `ramadanLightDarkAndSystemScenes` расширен проверками видимости и исходного resource ID каждого фона, отсутствия color filter, размеров изображения и карточки, светлых подписей/таймера и золотистого выделения Магриба. Проверены три состояния 10.08.2026 в Light, Dark, System+Light и System+Dark — 12 комбинаций; 09.08 остаётся обычным режимом.
 
-Сравнение с сохранённой отрисовкой до исправления: Dark Suhoor, before Iftar, after Iftar и Schedule полностью идентичны пиксель в пиксель. Новая контактная таблица ниже показывает три состояния в Light и Dark. Это реальные Android Views, отрисованные через Robolectric native graphics; физического устройства/эмулятора нет, повторного instrumentation-запуска в этом исправлении не было.
+На этапе восстановления artwork в коммите `061c4d6` Dark Suhoor, before Iftar, after Iftar и Schedule полностью совпали с предыдущей отрисовкой. Последующее исправление clipping выше намеренно меняет только границу artwork внутри countdown в обеих темах. Контактная таблица ниже показывает актуальные три состояния в Light и Dark; это реальные Android Views, отрисованные через Robolectric native graphics.
 
 Повторная проверка исправления: `assembleDebug`, все 78 debug и 78 release unit tests, `lintDebug` и `lintRelease` прошли. Lint: 0 errors / 62 warnings для каждого варианта, без роста относительно предыдущего коммита. Preflight проверил все 1530 исходных значений расписаний; 7 Python security tests прошли. В скомпилированном release-классе нет искусственной даты и `TEST_RAMADAN_START_DATE`; debug fixture и release-реализация не изменялись.
 
@@ -60,15 +91,15 @@ Debug APK: «Настройки → Проверка Рамадана». Дос�
 |---|---|
 | `:app:assembleDebug` | PASS; debug APK собран и подпись v1/v2 проверена |
 | `:app:compileReleaseKotlin` | PASS; release-код скомпилирован |
-| `:app:testDebugUnitTest` | 78 tests, 0 failures, 0 errors |
-| `:app:testReleaseUnitTest` | 78 tests, 0 failures, 0 errors |
+| `:app:testDebugUnitTest` | 79 tests, 0 failures, 0 errors |
+| `:app:testReleaseUnitTest` | 79 tests, 0 failures, 0 errors |
 | `:app:lintDebug` / `:app:lintRelease` | PASS; 0 errors, 62 warnings в каждом варианте; lint не отключён |
 | `scripts/preflight.py` | PASS, включая точные исходные таблицы обоих городов, 1530 времён |
 | Python security tests | 7 tests, PASS |
 | Compiled fixture isolation | PASS; искусственная дата исключена из release-класса |
 | `:app:verifyReleaseSigning` без секретов | Ожидаемый отказ: `Release signing is not configured`; защита сохранена |
 | `:app:connectedDebugAndroidTest` | Задача завершилась успешно; instrumentation-тестов и подключённого устройства нет, фактический запуск тестов на Android не выполнен |
-| Native UI screenshots | 40 изображений, Robolectric native graphics, API 33, 360×800 |
+| Native UI screenshots | 40 экранов + 24 слоя image/card + 24 density/size fixture renders; Robolectric native graphics, API 33 |
 
 Подписанный release APK локально не создавался: signing inputs не предоставлены и не извлекались. CI сохраняет прежний защищённый шаг release-подписи и добавляет debug unit tests, lint и отдельный debug UI APK. GitHub Actions в этой сессии не запускался.
 
@@ -94,7 +125,7 @@ Debug APK: «Настройки → Проверка Рамадана». Дос�
 | Release с сохранённой debug-настройкой | Настоящие часы, fixture не включается, PASS |
 | Настоящий Ramadan 19.02–19.03.2026 | Исходная логика сохранена и проверена |
 
-Новые проверки находятся в `ThemeAndRamadanTest.kt` (14 тестовых методов для обоих вариантов) и `scripts/test_theme_security.py` (3 проверки изоляции и сохранения CI/signing gates). Существующие regression, notification, calendar, schedule validation/cache, update checker, compass math и font-scale тесты прошли.
+Новые проверки находятся в `ThemeAndRamadanTest.kt` (15 тестовых методов для обоих вариантов) и `scripts/test_theme_security.py` (3 проверки изоляции и сохранения CI/signing gates). Существующие regression, notification, calendar, schedule validation/cache, update checker, compass math и font-scale тесты прошли.
 
 ## Снимки отрисовки
 
