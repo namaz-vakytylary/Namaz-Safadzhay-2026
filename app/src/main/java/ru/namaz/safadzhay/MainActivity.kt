@@ -1512,6 +1512,17 @@ headerBox.addView(
                 text = copy; textSize = 17f; setTextColor(ink)
                 contentDescription = "${mode.title}. ${mode.subtitle}"
                 isChecked = mode == current
+                val iconRes = when (mode) {
+                    ThemeMode.SYSTEM -> R.drawable.ic_theme_system
+                    ThemeMode.LIGHT -> R.drawable.ic_theme_light
+                    ThemeMode.DARK -> R.drawable.ic_theme_dark
+                }
+                val icon = getDrawable(iconRes)!!.mutate().apply {
+                    setTint(if (isChecked) mint else muted)
+                    setBounds(0, 0, dp(22), dp(22))
+                }
+                setCompoundDrawablesRelative(icon, null, null, null)
+                compoundDrawablePadding = dp(10)
                 buttonTintList = android.content.res.ColorStateList(
                     arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf()), intArrayOf(mint, muted)
                 )
