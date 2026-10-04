@@ -2135,8 +2135,7 @@ cell.addView(
                     ramadanCard.layoutParams = params
                 }
             }
-            ramadanDayText.text = if (RamadanUiPreview.isArtificial(ramadanDate))
-                "Тест UI · $ramadanDay-й день поста" else "Сегодня $ramadanDay-й день поста"
+            ramadanDayText.text = "Сегодня $ramadanDay-й день поста"
         } else {
             ramadanCard.visibility = View.GONE
             ramadanDayText.text = ""
@@ -2154,7 +2153,7 @@ cell.addView(
         placeText.text = selectedCity
         dateText.text = "${formatRussianDate(selected)}\n${hijriText(selected)}"
         dateText.contentDescription = "${dateText.text}. Открыть календарь"
-        currentTimeText.text = (if (RamadanUiPreview.selected(this).time != null) "Тест UI · " else "Сейчас ") +
+        currentTimeText.text = "Сейчас " +
             now.format(DateTimeFormatter.ofPattern("HH:mm"))
         updateTodayEventBanner(if (scheduleTabSelected) selected else todayDate)
         if (scheduleTabSelected) {

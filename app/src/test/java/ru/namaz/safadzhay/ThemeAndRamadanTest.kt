@@ -222,7 +222,7 @@ class ThemeAndRamadanTest {
                     if (key == "iftar") {
                         ReflectionHelpers.setField(a, "scheduleTabSelected", true); invoke(a, "update")
                         screenshot(a.findViewById(android.R.id.content), "ramadan-schedule-${mode.storedValue}-$dark")
-                        assertTrue(card.findViewWithTag<TextView>("ramadan_day").text.contains("Тест UI"))
+                        assertEquals("Сегодня 1-й день поста", card.findViewWithTag<TextView>("ramadan_day").text.toString())
                     }
                 } finally { c.pause().stop().destroy() }
             }
@@ -306,7 +306,11 @@ class ThemeAndRamadanTest {
         assertEquals(colors.ramadanImageAccent,
             walk(banner).filterIsInstance<TextView>().single { it.text == "Рамадан" }.currentTextColor)
         val day = banner.findViewWithTag<TextView>("ramadan_day")
-        assertEquals("Тест UI · 1-й день поста", day.text.toString())
+        assertEquals("Сегодня 1-й день поста", day.text.toString())
+        assertFalse(walk(a.findViewById(android.R.id.content)).filterIsInstance<TextView>()
+            .any { it.text.contains("Тест UI") })
+        val clock = ReflectionHelpers.getField<TextView>(a, "currentTimeText")
+        assertTrue(clock.text.matches(Regex("Сейчас \\d{2}:\\d{2}")))
         assertEquals(colors.ramadanHeaderText, day.currentTextColor)
 
         val image = ReflectionHelpers.getField<ImageView>(a, "ramadanCountdownBackground")
