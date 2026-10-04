@@ -51,8 +51,6 @@ private fun rf(date: String, title: String, text: String, night: Boolean = false
     val items = listOf(
         rf("2026-01-16", "Ночь Мирадж", "Памятная ночь Исра и Мирадж.", true),
         rf("2026-02-03", "Ночь Бараат", "Памятная ночь середины месяца Шаабан.", true),
-        rf("2026-02-19", "Начало Рамадана", "Начало месяца поста."),
-        rf("2026-03-20", "Ураза-байрам", "Праздник окончания поста Рамадана."),
         rf("2026-05-26", "День Арафа", "День перед Курбан-байрамом."),
         rf("2026-05-27", "Курбан-байрам", "Праздник жертвоприношения."),
         rf("2026-06-16", "Начало года по Хиджре", "Начало 1448 года по Хиджре."),
@@ -64,7 +62,8 @@ private fun rf(date: String, title: String, text: String, night: Boolean = false
     holidaysFor(date.year).firstOrNull { it.date == date }
 
     fun ramadanDay(date: LocalDate): Int? {
-        val holidays = holidaysFor(date.year)
+        // Ramadan is activated only by validated remote events, never by built-in dates.
+        val holidays = remoteByYear[date.year] ?: return null
 
         val start = holidays
             .firstOrNull { it.title == "Начало Рамадана" }

@@ -2,17 +2,26 @@ package ru.namaz.safadzhay
 
 import org.junit.Assert.*
 import org.junit.Test
+import org.junit.Before
+import org.junit.After
 import java.time.LocalDate
 
 class CalendarTest {
+    @Before fun downloadedEvents() {
+        HolidayCalendar.setRemote(2026, listOf(
+            Holiday(LocalDate.of(2026, 2, 19), "Начало Рамадана", "", "Unit test"),
+            Holiday(LocalDate.of(2026, 3, 20), "Ураза-байрам", "", "Unit test")
+        ))
+    }
+    @After fun clearEvents() = HolidayCalendar.setRemote(2026, null)
+
     @Test fun august10IsAnOrdinaryDayWithoutRamadanOverride() {
         HolidayCalendar.setRemote(2026, null)
         assertNull(HolidayCalendar.ramadanDay(LocalDate.of(2026, 8, 10)))
         assertTrue(HolidayCalendar.labels(LocalDate.of(2026, 8, 10)).isEmpty())
     }
 
-    @Test fun realRamadanStartsOnFirstDayAndEndsBeforeEid() {
-        HolidayCalendar.setRemote(2026, null)
+    @Test fun remoteRamadanStartsOnFirstDayAndEndsBeforeEid() {
         assertNull(HolidayCalendar.ramadanDay(LocalDate.of(2026, 2, 18)))
         assertEquals(1, HolidayCalendar.ramadanDay(LocalDate.of(2026, 2, 19)))
         assertEquals(2, HolidayCalendar.ramadanDay(LocalDate.of(2026, 2, 20)))
@@ -23,7 +32,6 @@ class CalendarTest {
     @Test fun holidayRemainsInCalendarWhenFridayBannerEnds() {
         val date = LocalDate.of(2026, 3, 20)
         val asr = java.time.LocalTime.of(15, 30)
-        HolidayCalendar.setRemote(2026, null)
         assertTrue(HolidayCalendar.bannerLabels(date, date.atTime(asr), asr).isEmpty())
         assertEquals("Ураза-байрам", HolidayCalendar.holidayFor(date)?.title)
         assertEquals(listOf("Джума-намаз", "Ураза-байрам"), HolidayCalendar.labels(date))
