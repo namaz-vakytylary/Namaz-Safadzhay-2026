@@ -8,6 +8,7 @@ import kotlin.math.*
 
 /** Clockwise elapsed progress along the card edge, starting at top centre. */
 internal class CardProgressIndicator(context: Context) : View(context) {
+    private val colors = ThemeSettings.colors(context)
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
         strokeCap = Paint.Cap.ROUND
@@ -42,16 +43,16 @@ internal class CardProgressIndicator(context: Context) : View(context) {
 
     override fun onDraw(canvas: Canvas) {
         paint.color = if (goldMode) {
-            Color.rgb(118, 88, 31)
+            colors.goldProgressTrack
         } else {
-            Color.rgb(18, 72, 51)
+            colors.progressOutline
         }
         canvas.drawPath(outline, paint)
 
         paint.color = if (goldMode) {
-            Color.rgb(235, 202, 104)
+            colors.ramadanAccent
         } else {
-            Color.rgb(91, 224, 164)
+            colors.activeTime
         }
 
         if (progress >= 1f) canvas.drawPath(outline, paint)
@@ -103,6 +104,7 @@ internal class PrayerIconView(context: Context, private val name: String, privat
 }
 
 internal class QiblaCompassView(context: Context) : View(context), SensorEventListener {
+    private val colors = ThemeSettings.colors(context)
     private val sensors = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
     private val rotation = sensors.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR)
     private val accelerometer = sensors.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
@@ -185,7 +187,7 @@ internal class QiblaCompassView(context: Context) : View(context), SensorEventLi
     override fun onDraw(canvas: Canvas) {
         val cx = width / 2f; val cy = height / 2f; val radius = min(width, height) * .46f
         val density = resources.displayMetrics.density
-        paint.style = Paint.Style.STROKE; paint.strokeWidth = density; paint.color = Color.rgb(66, 130, 103)
+        paint.style = Paint.Style.STROKE; paint.strokeWidth = density; paint.color = colors.compassOutline
         canvas.drawCircle(cx, cy, radius, paint)
         val north = if (initialized) heading else 0f
         for (i in 0 until 12) {
@@ -196,44 +198,44 @@ internal class QiblaCompassView(context: Context) : View(context), SensorEventLi
         // Never show a north reading until orientation data has arrived.
         if (initialized) {
             paint.style = Paint.Style.FILL; paint.textSize = radius*.13f; paint.textAlign = Paint.Align.CENTER
-            paint.typeface = Typeface.DEFAULT; paint.color = Color.rgb(228, 243, 234)
+            paint.typeface = Typeface.DEFAULT; paint.color = colors.compassText
             listOf("С", "В", "Ю", "З").forEachIndexed { i, letter ->
                 val a = Math.toRadians((i*90 - north - 90).toDouble())
                 canvas.drawText(letter, cx+cos(a).toFloat()*radius*.82f,
                     cy+sin(a).toFloat()*radius*.82f+paint.textSize*.34f, paint)
             }
         }
-        paint.style = Paint.Style.FILL; paint.color = Color.rgb(91, 224, 164)
+        paint.style = Paint.Style.FILL; paint.color = colors.activeTime
         canvas.drawRoundRect(cx-density*2, cy-radius-density*4, cx+density*2, cy-radius+density*10, density*2, density*2, paint)
         val target = bearing
         if (target != null && initialized) {
             val angle = target - heading
             canvas.save(); canvas.rotate(angle, cx, cy)
-            paint.color = Color.rgb(31, 89, 65)
+            paint.color = colors.compassTail
             val tail = Path().apply { moveTo(cx-radius*.045f, cy); lineTo(cx, cy+radius*.40f); lineTo(cx+radius*.045f, cy); close() }
             canvas.drawPath(tail, paint)
-            paint.color = Color.rgb(91, 224, 164)
+            paint.color = colors.activeTime
             val needle = Path().apply { moveTo(cx, cy-radius*.54f); lineTo(cx-radius*.065f, cy-radius*.05f); lineTo(cx, cy+radius*.035f); lineTo(cx+radius*.065f, cy-radius*.05f); close() }
             canvas.drawPath(needle, paint); canvas.restore()
             // The Kaaba follows the needle but its small icon stays upright and clear of the letters.
             val a = Math.toRadians((angle-90).toDouble())
             val kx = cx + cos(a).toFloat()*radius*.66f; val ky = cy + sin(a).toFloat()*radius*.66f
             val k = radius*.074f
-            paint.color = Color.rgb(20, 28, 24)
+            paint.color = colors.kaabaBody
             val cube = Path().apply { moveTo(kx-k, ky-k*.55f); lineTo(kx, ky-k); lineTo(kx+k, ky-k*.55f); lineTo(kx+k, ky+k*.8f); lineTo(kx, ky+k*1.15f); lineTo(kx-k, ky+k*.8f); close() }
             canvas.drawPath(cube, paint)
-            paint.color = Color.rgb(40, 49, 44)
+            paint.color = colors.kaabaLid
             val lid = Path().apply { moveTo(kx-k, ky-k*.55f); lineTo(kx, ky-k); lineTo(kx+k, ky-k*.55f); lineTo(kx, ky-k*.15f); close() }
             canvas.drawPath(lid, paint)
-            paint.color = Color.rgb(178, 232, 204); paint.style = Paint.Style.STROKE; paint.strokeWidth = k*.20f
+            paint.color = colors.kaabaBand; paint.style = Paint.Style.STROKE; paint.strokeWidth = k*.20f
             val band = Path().apply { moveTo(kx-k, ky-k*.25f); lineTo(kx, ky+k*.10f); lineTo(kx+k, ky-k*.25f) }
             canvas.drawPath(band, paint)
             paint.style = Paint.Style.FILL
             canvas.drawRect(kx-k*.48f, ky+k*.32f, kx-k*.15f, ky+k*.85f, paint)
         }
-        paint.style = Paint.Style.FILL; paint.color = Color.rgb(228, 243, 234)
+        paint.style = Paint.Style.FILL; paint.color = colors.compassText
         canvas.drawCircle(cx, cy, radius*.032f, paint)
-        paint.style = Paint.Style.STROKE; paint.strokeWidth = density*1.5f; paint.color = Color.rgb(19, 75, 52)
+        paint.style = Paint.Style.STROKE; paint.strokeWidth = density*1.5f; paint.color = colors.compassHubOutline
         canvas.drawCircle(cx, cy, radius*.042f, paint)
     }
 }

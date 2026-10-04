@@ -42,10 +42,10 @@ jobs:
           python3 -m unittest discover -s scripts -p 'test_*.py'
 
       - name: Unit tests
-        run: ./gradlew --no-daemon :app:testReleaseUnitTest
+        run: ./gradlew --no-daemon :app:testDebugUnitTest :app:testReleaseUnitTest
 
       - name: Android lint
-        run: ./gradlew --no-daemon :app:lintRelease
+        run: ./gradlew --no-daemon :app:lintDebug :app:lintRelease
 
       - name: Audit merged release manifest
         run: python3 scripts/audit-merged-manifest.py
@@ -129,6 +129,10 @@ jobs:
             app/build/reports/tests/testReleaseUnitTest
             app/build/reports/lint-results-release.html
             app/build/test-results/testReleaseUnitTest
+            app/build/reports/tests/testDebugUnitTest
+            app/build/reports/lint-results-debug.html
+            app/build/test-results/testDebugUnitTest
+            app/build/reports/theme-ui
             app/build/reports/ui
             apk-badging.txt
             apk-manifest.txt

@@ -49,7 +49,7 @@ assert strings.find("string[@name='app_name']").text == 'Намаз Вакытл
 assert '"ru.namaz.safadzhay.OPEN_PRAYER"' in s
 assert 'ru.namaz.safadzhay.test' not in s
 assert 'getBoolean(NOTIFICATIONS_ENABLED_KEY, false)' not in s
-assert 'val ramadanDay = HolidayCalendar.ramadanDay(todayDate)' in s
+assert 'val ramadanDay = HolidayCalendar.ramadanDay(ramadanDate)' in s
 assert not re.search(r'(?i)\b(fake|demo|forced)\w*', s), 'Temporary production override'
 assert not re.search(r'LocalDate\.(?:of\(2026,\s*8,\s*10\)|parse\("2026-08-10"\))', s)
 for name, expected in json.loads((ROOT/'verification/ramadan-resources.sha256.json').read_text()).items():

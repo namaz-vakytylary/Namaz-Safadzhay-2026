@@ -104,7 +104,9 @@ class HolidayRepositoryTest {
         assertNull(repository().download(2026))
         file(2026).writeText("{broken}")
         assertNull(repository().loadSaved(2026))
-        assertEquals("Начало Рамадана", HolidayCalendar.holidayFor(LocalDate.of(2026, 2, 19))?.title)
+        assertNull(HolidayCalendar.ramadanDay(LocalDate.of(2026, 2, 19)))
+        assertNull(HolidayCalendar.holidayFor(LocalDate.of(2026, 2, 19)))
+        assertEquals("Ночь Мирадж", HolidayCalendar.holidayFor(LocalDate.of(2026, 1, 16))?.title)
     }
 
     @Test fun atomicBackupIsRecoveredWhenBaseFileIsMissing() {
@@ -156,7 +158,9 @@ class HolidayRepositoryTest {
         snapshot.put("payload", snapshot.getString("payload").replace("Начало Рамадана", "Подмена"))
         file(2026).writeText(snapshot.toString())
         assertNull(repository().loadSaved(2026))
-        assertEquals("Начало Рамадана", HolidayCalendar.holidayFor(LocalDate.of(2026, 2, 19))?.title)
+        assertNull(HolidayCalendar.ramadanDay(LocalDate.of(2026, 2, 19)))
+        assertNull(HolidayCalendar.holidayFor(LocalDate.of(2026, 2, 19)))
+        assertEquals("Ночь Мирадж", HolidayCalendar.holidayFor(LocalDate.of(2026, 1, 16))?.title)
     }
     @Test fun legacyValidatedCacheMigratesWithoutLosingOfflineCalendar() {
         file(2026).writeText(fixture(2026).toString())

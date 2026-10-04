@@ -25,6 +25,10 @@ with zipfile.ZipFile(sys.argv[1]) as apk:
         # Certificates in META-INF are public. Private key markers must never be present.
         if not item.is_dir():
             data = apk.read(item)
+            for marker in ['RamadanUiPreview', 'UiPreviewScene', 'TEST_RAMADAN',
+                           'debug_ramadan_ui_scene', 'Тест UI', 'Проверка Рамадана']:
+                assert marker.encode('utf-8') not in data, 'Packaged manual Ramadan preview'
+                assert marker.encode('utf-16le') not in data, 'Packaged manual Ramadan preview'
             assert not re.search(rb'-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----', data)
             assert not re.search(rb'gh[pousr]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{60,}', data)
 print('PASS APK contents and upgrade identity/version prerequisites')
