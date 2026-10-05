@@ -970,8 +970,12 @@ private fun dismissScheduleUpdateDialog() {
         }
         scroll.addView(root, ViewGroup.LayoutParams(-1, -2))
         ViewCompat.setOnApplyWindowInsetsListener(scroll) { _, insets ->
-            scroll.contentInsets = insets.getInsets(
+            val bars = insets.getInsets(
                 WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout()
+            )
+            val gestures = insets.getInsets(WindowInsetsCompat.Type.mandatorySystemGestures())
+            scroll.contentInsets = androidx.core.graphics.Insets.of(
+                bars.left, bars.top, bars.right, maxOf(bars.bottom, gestures.bottom)
             )
             insets
         }
@@ -1179,7 +1183,7 @@ headerBox.addView(
         countdownCard.addView(progress, android.widget.FrameLayout.LayoutParams(-1, -1))
         heroCopy = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER }
         countdownLabel = label("", 13f, muted).apply { gravity = Gravity.CENTER; visibility = View.GONE }
-        nextName = label("", 18f, ink, true).apply { gravity = Gravity.CENTER; maxLines = 2 }
+        nextName = label("", 18f, ink, true).apply { gravity = Gravity.CENTER; maxLines = Int.MAX_VALUE }
         countdown = label("00:00:00", 48f, mint).apply {
             gravity = Gravity.CENTER; typeface = Typeface.create("sans-serif-light", Typeface.NORMAL); maxLines = 1
             fontFeatureSettings = "tnum"; includeFontPadding = false

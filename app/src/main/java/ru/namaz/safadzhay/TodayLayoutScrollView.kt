@@ -1,18 +1,24 @@
 package ru.namaz.safadzhay
 
 import android.content.Context
+import android.view.KeyEvent
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
+import android.view.ViewConfiguration
+import android.view.accessibility.AccessibilityEvent
+import android.view.accessibility.AccessibilityNodeInfo
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import androidx.core.graphics.Insets
+import kotlin.math.roundToInt
 
-/** Fits Today to its measured window, including bars/cutouts, without hiding text.
- * Calendar and enlarged accessibility text retain the existing scroll container.
- * Artwork and the progress layer are never modified here.
+/** Fits the measured Today content, then enables scrolling only for real overflow.
+ * Geometry is resolved synchronously in one bounded measure pass; themes, artwork,
+ * text sizes (except the existing timer autosize), and progress are left untouched.
  */
 internal class TodayLayoutScrollView(context: Context) : ScrollView(context) {
     private data class Content(
@@ -21,11 +27,38 @@ internal class TodayLayoutScrollView(context: Context) : ScrollView(context) {
         val prayers: LinearLayout, val city: TextView, val date: TextView,
         val clock: TextView, val isToday: () -> Boolean
     )
+    // Ordered reductions: empty space, padding, large blocks, prayer rows, timer.
+    private data class Geometry(
+        val top: Int, val bottom: Int, val bannerGap: Int, val tabTop: Int,
+        val tabBottom: Int, val cardGap: Int, val prayerGap: Int, val timerGap: Int,
+        val datePadding: Int, val cityHeight: Int, val clockHeight: Int,
+        val rowPadding: Int, val copyPadding: Int, val bannerHeight: Int,
+        val cardHeight: Int, val rowHeight: Int, val iconHeight: Int, val timerHeight: Int
+    )
+    private val geometry = listOf(
+        Geometry(6,8,7,8,7,7,6,6, 3,29,29,8,32,95,200,66,42,60),
+        Geometry(2,4,1,1,1,2,1,1, 3,29,29,8,32,95,200,66,42,60),
+        Geometry(2,4,1,1,1,2,1,1, 0,23,22,4,12,95,200,66,42,60),
+        Geometry(2,4,1,1,1,2,1,1, 0,23,22,4,12,64,0,66,42,60),
+        Geometry(2,4,1,1,1,2,1,1, 0,23,22,1,12,64,0,40,34,60),
+        Geometry(1,4,1,1,1,1,1,0, 0,23,22,1,12,64,0,40,34,44)
+    )
     private var content: Content? = null
-    private var layoutKey: List<Any?>? = null
+    private var fitting = false
+    private var fittedHeight: Int? = null
+    private var possibleClick = false
+    private var touchX = 0f
+    private var touchY = 0f
+    private val touchSlop = ViewConfiguration.get(context).scaledTouchSlop
     var contentInsets: Insets = Insets.NONE
         set(value) { if (field != value) { field = value; requestLayout() } }
     var compactLevel: Int = 0
+        private set
+    var geometryPosition: Float = 0f
+        private set
+    var scrollingEnabled: Boolean = true
+        private set
+    var measuredContentHeight: Int = 0
         private set
 
     fun bind(root: LinearLayout, mode: LinearLayout, banner: LinearLayout,
@@ -35,119 +68,180 @@ internal class TodayLayoutScrollView(context: Context) : ScrollView(context) {
         content = Content(root, mode, banner, card, artwork, copy, prayers, city, date, clock, isToday)
     }
 
-    private fun dp(value: Int) = (value * resources.displayMetrics.density + 0.5f).toInt()
+    private fun dp(value: Int) = (value * resources.displayMetrics.density).roundToInt()
     private fun height(view: View, value: Int) {
-        if (view.layoutParams.height != value) {
-            view.layoutParams = view.layoutParams.apply { height = value }
-        }
+        // Avoid scheduling a second pass while applying a candidate inside measure.
+        view.layoutParams.height = value
     }
     private fun margins(view: View, top: Int, bottom: Int) {
-        val params = view.layoutParams as LinearLayout.LayoutParams
-        if (params.topMargin != top || params.bottomMargin != bottom) {
-            params.topMargin = top; params.bottomMargin = bottom; view.layoutParams = params
-        }
+        (view.layoutParams as LinearLayout.LayoutParams).apply { topMargin = top; bottomMargin = bottom }
     }
     private fun padding(view: View, left: Int, top: Int, right: Int, bottom: Int) {
         if (view.paddingLeft != left || view.paddingTop != top || view.paddingRight != right || view.paddingBottom != bottom)
             view.setPadding(left, top, right, bottom)
     }
+    private fun forceTree(view: View) {
+        view.forceLayout()
+        if (view is ViewGroup) for (index in 0 until view.childCount) forceTree(view.getChildAt(index))
+    }
+    override fun requestLayout() { if (!fitting) super.requestLayout() }
 
-    private fun configure(c: Content, level: Int) {
-        val compact = level > 0
-        val tight = level >= 2
-        val small = level >= 4
-        val shortest = level >= 5
-        padding(c.root, contentInsets.left + dp(16), contentInsets.top + dp(if (shortest) 2 else if (level >= 3) 3 else if (compact) 4 else 6),
-            contentInsets.right + dp(16), contentInsets.bottom + dp(if (level >= 3) 4 else if (compact) 6 else 8))
-        c.city.minHeight = dp(if (shortest) 23 else if (level >= 3) 24 else if (tight) 26 else 29)
-        c.clock.minHeight = if (shortest) dp(22) else c.city.minHeight
-        padding(c.date, 0, dp(if (shortest) 0 else if (tight) 1 else 3), 0, dp(if (shortest) 0 else if (tight) 1 else 3))
-        margins(c.banner, dp(if (shortest) 1 else if (compact) 4 else 7), 0)
-        margins(c.mode, dp(if (shortest) 1 else if (compact) 4 else 8), dp(if (shortest) 1 else if (compact) 4 else 7))
-        margins(c.card, 0, dp(if (level >= 3) 2 else if (compact) 4 else 7))
-        height(c.banner, dp(95))
+    private fun configure(c: Content, position: Float, width: Int) {
+        val index = position.toInt().coerceIn(0, geometry.lastIndex)
+        val from = geometry[index]
+        val to = geometry[minOf(index + 1, geometry.lastIndex)]
+        val fraction = position - index
+        fun px(value: (Geometry) -> Int) = ((value(from) + (value(to) - value(from)) * fraction) * resources.displayMetrics.density).roundToInt()
+        padding(c.root, contentInsets.left + dp(16), contentInsets.top + px { it.top },
+            contentInsets.right + dp(16), contentInsets.bottom + px { it.bottom })
+        c.city.minHeight = px { it.cityHeight }; c.clock.minHeight = px { it.clockHeight }
+        padding(c.date, 0, px { it.datePadding }, 0, px { it.datePadding })
+        margins(c.banner, px { it.bannerGap }, 0)
+        margins(c.mode, px { it.tabTop }, px { it.tabBottom })
+        margins(c.card, 0, px { it.cardGap })
+        for (i in 0 until c.prayers.childCount) {
+            val row = c.prayers.getChildAt(i) as ViewGroup
+            height(row.getChildAt(0), px { it.iconHeight })
+            padding(row, dp(12), px { it.rowPadding }, dp(12), px { it.rowPadding })
+            row.minimumHeight = px { it.rowHeight }
+            margins(row, 0, if (i == c.prayers.childCount - 1) 0 else px { it.prayerGap })
+        }
         val timer = c.copy.getChildAt(2)
         @Suppress("DEPRECATION")
-        val timerHeight = if (shortest && resources.configuration.fontScale <= 1f) dp(40)
-            else maxOf(dp(if (tight) 56 else 60), (58 * resources.displayMetrics.scaledDensity).toInt())
-        height(timer, timerHeight)
-        margins(timer, dp(if (shortest) 1 else if (level >= 3) 2 else if (compact) 4 else 6), dp(if (shortest) 1 else if (level >= 3) 2 else if (compact) 4 else 6))
-        val rowPadding = dp(if (shortest) 1 else if (small) 2 else if (level >= 3) 4 else if (tight) 6 else 8)
-        val rowMinimum = dp(if (shortest) 41 else if (small) 46 else if (level >= 3) 50 else if (tight) 58 else 66)
-        for (index in 0 until c.prayers.childCount) {
-            val row = c.prayers.getChildAt(index)
-            // The icon keeps its 34 dp artwork size; remove only vertical slack.
-            height((row as ViewGroup).getChildAt(0), dp(if (shortest) 34 else if (small) 38 else 42))
-            padding(row, dp(12), rowPadding, dp(12), rowPadding)
-            row.minimumHeight = rowMinimum
-            margins(row, 0, if (index == c.prayers.childCount - 1) 0 else dp(if (small) 1 else if (level >= 3) 2 else if (tight) 3 else if (compact) 4 else 6))
+        val readableTimer = if (resources.configuration.fontScale > 1f) (58 * resources.displayMetrics.scaledDensity).roundToInt() else 0
+        height(timer, maxOf(px { it.timerHeight }, readableTimer))
+        margins(timer, px { it.timerGap }, px { it.timerGap })
+        val innerWidth = (width - c.root.paddingLeft - c.root.paddingRight).coerceAtLeast(1)
+        val copyWidth = (innerWidth - dp(40)).coerceAtLeast(1)
+        forceTree(c.copy)
+        c.copy.measure(MeasureSpec.makeMeasureSpec(copyWidth, MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED))
+        val image = c.artwork.visibility == View.VISIBLE
+        // Never force copy into a height smaller than its actual text layout.
+        // Match the artwork mask's 3.5dp stroke clearance + one physical
+        // antialias pixel on EACH side. Rounding a total 8dp can leave one side
+        // a pixel short at fractional density (e.g. 420dpi).
+        val contourClearance = maxOf(dp(4), kotlin.math.ceil(3.5f * resources.displayMetrics.density + 1f).toInt())
+        val minimum = c.copy.measuredHeight + if (image) 2 * contourClearance else px { it.copyPadding }
+        val imagePreferred = if (index < 2) innerWidth / 3 else {
+            val amount = ((position - 2f) / 1f).coerceIn(0f, 1f)
+            (innerWidth / 3 * (1f - amount)).roundToInt()
         }
+        height(c.card, maxOf(minimum, if (image) imagePreferred else px { it.cardHeight }))
+        // Preserve banner text, including padding, at large accessibility scales.
+        val text = (c.banner.getChildAt(0) as FrameLayout).getChildAt(1)
+        forceTree(text)
+        text.measure(MeasureSpec.makeMeasureSpec(innerWidth, MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED))
+        height(c.banner, maxOf(px { it.bannerHeight }, text.measuredHeight))
     }
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
         val c = content
-        val width = MeasureSpec.getSize(widthMeasureSpec) - paddingLeft - paddingRight
-        val available = MeasureSpec.getSize(heightMeasureSpec) - paddingTop - paddingBottom
-        if (c != null && width > 0 && available > 0 && MeasureSpec.getMode(heightMeasureSpec) != MeasureSpec.UNSPECIFIED) {
-            // Timer digits do not change geometry. Refit only for a changed window,
-            // content/state, font scale, or newly rendered prayer rows.
-            val key = listOf(width, available, resources.configuration.fontScale, contentInsets,
-                c.isToday(), c.banner.visibility, c.card.visibility, c.artwork.visibility,
-                c.city.text.toString(), c.date.text.toString(), c.prayers.getChildAt(0)) +
-                (c.card.parent as ViewGroup).let { header ->
-                    (0 until header.childCount).map { index ->
-                        val child = header.getChildAt(index)
-                        child.visibility to (child as? TextView)?.text?.toString()
+        val width = (MeasureSpec.getSize(widthMeasureSpec) - paddingLeft - paddingRight).coerceAtLeast(0)
+        val available = (MeasureSpec.getSize(heightMeasureSpec) - paddingTop - paddingBottom).coerceAtLeast(0)
+        fittedHeight = null
+        if (c != null && width > 0 && MeasureSpec.getMode(heightMeasureSpec) != MeasureSpec.UNSPECIFIED) {
+            fitting = true
+            try {
+                val widthSpec = MeasureSpec.makeMeasureSpec(width, MeasureSpec.EXACTLY)
+                fun candidate(position: Float): Int {
+                    configure(c, position, width)
+                    forceTree(c.root)
+                    c.root.measure(widthSpec, MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED))
+                    return c.root.measuredHeight
+                }
+                geometryPosition = 0f
+                var naturalHeight = candidate(0f)
+                if (c.isToday() && naturalHeight > available) {
+                    for (level in 1..geometry.lastIndex) {
+                        naturalHeight = candidate(level.toFloat())
+                        geometryPosition = level.toFloat()
+                        if (naturalHeight <= available) {
+                            // Smallest sufficient reduction within this stage, down to pixels.
+                            var low = level - 1f; var high = level.toFloat()
+                            repeat(8) {
+                                val middle = (low + high) / 2f
+                                if (candidate(middle) <= available) high = middle else low = middle
+                            }
+                            geometryPosition = high
+                            naturalHeight = candidate(high)
+                            break
+                        }
                     }
-                } + (0 until c.copy.childCount).map { index ->
-                    val child = c.copy.getChildAt(index) as TextView
-                    child.visibility to if (index == 2) child.text.length.toString() else child.text.toString()
                 }
-            if (key == layoutKey) {
+                compactLevel = kotlin.math.ceil(geometryPosition.toDouble()).toInt()
+                measuredContentHeight = naturalHeight
+                fittedHeight = naturalHeight
+                // The final ScrollView measure must use the SAME intrinsic height as
+                // fitting. Its unspecified-height hints/caches cannot add a few pixels.
                 super.onMeasure(widthMeasureSpec, heightMeasureSpec)
-                return
-            }
-            layoutKey = key
-            val widthSpec = MeasureSpec.makeMeasureSpec(width, MeasureSpec.EXACTLY)
-            fun measureContent() = c.root.measure(widthSpec, MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED))
-            val image = c.artwork.visibility == View.VISIBLE
-            var minimumCard = 0
-            compactLevel = 0
-            for (level in 0..if (c.isToday()) 5 else 0) {
-                configure(c, level)
-                val copyWidth = (width - c.root.paddingLeft - c.root.paddingRight - dp(40)).coerceAtLeast(1)
-                (0 until c.copy.childCount).forEach { c.copy.getChildAt(it).forceLayout() }
-                c.copy.forceLayout()
-                c.copy.measure(MeasureSpec.makeMeasureSpec(copyWidth, MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED))
-                minimumCard = c.copy.measuredHeight + dp(if (image) 8 else if (level >= 3) 12 else if (level > 0) 24 else 32)
-                val preferred = if (image) (width - c.root.paddingLeft - c.root.paddingRight) / 3 else dp(174)
-                height(c.card, maxOf(preferred, minimumCard))
-                measureContent()
-                if (!c.isToday() || c.root.measuredHeight <= available) { compactLevel = level; break }
-                // Exhaust spare space inside the ordinary countdown before reducing rows.
-                if (level > 0 && !image) {
-                    val room = available - c.root.measuredHeight + c.card.layoutParams.height
-                    height(c.card, maxOf(minimumCard, room.coerceAtMost(dp(174))))
-                    measureContent()
-                    if (c.root.measuredHeight <= available) { compactLevel = level; break }
-                }
-                compactLevel = level
-                if (level >= 3 && c.root.measuredHeight > available && c.banner.visibility == View.VISIBLE) {
-                    // Try excess banner space before the extra-small-window profiles.
-                    val overflow = c.root.measuredHeight - available
-                    val text = (c.banner.getChildAt(0) as FrameLayout).getChildAt(1)
-                    text.measure(MeasureSpec.makeMeasureSpec((width - c.root.paddingLeft - c.root.paddingRight).coerceAtLeast(1), MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED))
-                    height(c.banner, maxOf(dp(64), text.measuredHeight, dp(95) - overflow))
-                    measureContent()
-                    if (c.root.measuredHeight <= available) break
-                }
-            }
-            if (c.isToday() && !image && c.card.visibility == View.VISIBLE && c.root.measuredHeight < available) {
-                // Preserve the spacious existing countdown on taller windows.
-                val room = c.card.layoutParams.height + available - c.root.measuredHeight
-                height(c.card, maxOf(minimumCard, minOf(dp(200), room)))
+            } finally { fitting = false; fittedHeight = null }
+            updateScrolling(!c.isToday() || c.root.measuredHeight > measuredHeight - paddingTop - paddingBottom)
+        } else {
+            super.onMeasure(widthMeasureSpec, heightMeasureSpec)
+            updateScrolling(true)
+        }
+    }
+
+    override fun measureChildWithMargins(child: View, parentWidthMeasureSpec: Int, widthUsed: Int,
+                                         parentHeightMeasureSpec: Int, heightUsed: Int) {
+        val resolved = fittedHeight
+        if (child === content?.root && resolved != null) {
+            val lp = child.layoutParams as ViewGroup.MarginLayoutParams
+            child.measure(getChildMeasureSpec(parentWidthMeasureSpec, paddingLeft + paddingRight + lp.leftMargin + lp.rightMargin + widthUsed, lp.width),
+                MeasureSpec.makeMeasureSpec(resolved, MeasureSpec.EXACTLY))
+        } else super.measureChildWithMargins(child, parentWidthMeasureSpec, widthUsed, parentHeightMeasureSpec, heightUsed)
+    }
+
+    private fun updateScrolling(enabled: Boolean) {
+        if (scrollingEnabled != enabled) {
+            scrollingEnabled = enabled
+            isVerticalScrollBarEnabled = enabled
+            isNestedScrollingEnabled = enabled
+            if (!enabled) {
+                possibleClick = false
+                // ScrollView has no public abort API. The first ordinary zero
+                // scroll replaces any fling; the immediate second one takes
+                // its documented rapid-call path and aborts the animation.
+                // Never use fling(0): its spline can have a zero duration.
+                super.smoothScrollBy(0, 0)
+                super.smoothScrollBy(0, 0)
+                super.scrollTo(0, 0)
             }
         }
-        super.onMeasure(widthMeasureSpec, heightMeasureSpec)
+    }
+    override fun onInterceptTouchEvent(ev: MotionEvent) = scrollingEnabled && super.onInterceptTouchEvent(ev)
+    override fun onTouchEvent(ev: MotionEvent): Boolean {
+        if (!scrollingEnabled) return false
+        // Delegate dragging to ScrollView. If a click listener is ever supplied,
+        // distinguish a tap from a drag before invoking the accessibility click.
+        when (ev.actionMasked) {
+            MotionEvent.ACTION_DOWN -> { touchX = ev.x; touchY = ev.y; possibleClick = isClickable }
+            MotionEvent.ACTION_MOVE -> if (kotlin.math.abs(ev.x - touchX) > touchSlop || kotlin.math.abs(ev.y - touchY) > touchSlop) possibleClick = false
+            MotionEvent.ACTION_CANCEL, MotionEvent.ACTION_POINTER_DOWN -> possibleClick = false
+            MotionEvent.ACTION_UP -> { if (possibleClick) performClick(); possibleClick = false }
+        }
+        return super.onTouchEvent(ev)
+    }
+    override fun performClick() = super.performClick()
+    override fun onGenericMotionEvent(event: MotionEvent) = scrollingEnabled && super.onGenericMotionEvent(event)
+    override fun executeKeyEvent(event: KeyEvent) = scrollingEnabled && super.executeKeyEvent(event)
+    override fun fling(velocityY: Int) { if (scrollingEnabled) super.fling(velocityY) }
+    override fun scrollTo(x: Int, y: Int) { if (scrollingEnabled) super.scrollTo(x,y) else super.scrollTo(0,0) }
+    override fun onOverScrolled(scrollX: Int, scrollY: Int, clampedX: Boolean, clampedY: Boolean) {
+        if (scrollingEnabled) super.onOverScrolled(scrollX,scrollY,clampedX,clampedY)
+        else super.onOverScrolled(0,0,true,true)
+    }
+    override fun canScrollVertically(direction: Int) = scrollingEnabled && super.canScrollVertically(direction)
+    override fun onInitializeAccessibilityNodeInfo(info: AccessibilityNodeInfo) {
+        super.onInitializeAccessibilityNodeInfo(info)
+        if (!scrollingEnabled) {
+            info.isScrollable = false
+            info.removeAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_SCROLL_FORWARD)
+            info.removeAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_SCROLL_BACKWARD)
+        }
+    }
+    override fun onInitializeAccessibilityEvent(event: AccessibilityEvent) {
+        super.onInitializeAccessibilityEvent(event)
+        if (!scrollingEnabled) event.isScrollable = false
     }
 }
