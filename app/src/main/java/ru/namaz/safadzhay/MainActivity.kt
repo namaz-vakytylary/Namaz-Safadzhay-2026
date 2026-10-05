@@ -960,7 +960,7 @@ private fun dismissScheduleUpdateDialog() {
         window.statusBarColor = Color.TRANSPARENT
         window.navigationBarColor = Color.TRANSPARENT
         prepareThemedWindow(window)
-        val scroll = ScrollView(this).apply {
+        val scroll = TodayLayoutScrollView(this).apply {
             setBackgroundColor(palette.background); isFillViewport = true
             overScrollMode = View.OVER_SCROLL_NEVER
         }
@@ -970,8 +970,9 @@ private fun dismissScheduleUpdateDialog() {
         }
         scroll.addView(root, ViewGroup.LayoutParams(-1, -2))
         ViewCompat.setOnApplyWindowInsetsListener(scroll) { _, insets ->
-            val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
-            root.setPadding(dp(16), bars.top + dp(6), dp(16), bars.bottom + dp(8))
+            scroll.contentInsets = insets.getInsets(
+                WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout()
+            )
             insets
         }
         headerBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
@@ -1196,26 +1197,8 @@ headerBox.addView(
         headerBox.addView(countdownCard, LinearLayout.LayoutParams(-1, dp(174)).apply { bottomMargin = dp(7) })
         prayerList = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         root.addView(prayerList, LinearLayout.LayoutParams(-1, -2))
-        root.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
-            if (
-                countdownCard.visibility == View.VISIBLE &&
-                ramadanCountdownBackground.visibility != View.VISIBLE &&
-                scroll.height > 0
-            ) {
-                // Fit five readable rows; allow scrolling if larger text or events need more room.
-                val occupied = root.paddingTop + root.paddingBottom + headerBox.height - countdownCard.height + prayerList.height
-                // Measure the full text, not the height already clipped by the current card.
-                heroCopy.measure(
-                    View.MeasureSpec.makeMeasureSpec((countdownCard.width - dp(40)).coerceAtLeast(1), View.MeasureSpec.EXACTLY),
-                    View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
-                )
-                val minimum = heroCopy.measuredHeight + dp(32)
-                val target = maxOf(minimum, minOf(dp(200), scroll.height - occupied))
-                if (countdownCard.layoutParams.height != target) {
-                    countdownCard.layoutParams = (countdownCard.layoutParams as LinearLayout.LayoutParams).apply { height = target }
-                }
-            }
-        }
+        scroll.bind(root, modeRow, ramadanCard, countdownCard, ramadanCountdownBackground,
+            heroCopy, prayerList, placeText, dateText, currentTimeText) { !scheduleTabSelected }
         mainScroll = scroll
         setContentView(scroll)
         ViewCompat.requestApplyInsets(scroll)
@@ -2127,14 +2110,6 @@ cell.addView(
         val ramadanDayText = ramadanCard.findViewWithTag<TextView>("ramadan_day")
         if (ramadanDay != null) {
             ramadanCard.visibility = View.VISIBLE
-            ramadanCard.post {
-                val targetHeight = dp(95)
-                val params = ramadanCard.layoutParams as LinearLayout.LayoutParams
-                if (params.height != targetHeight) {
-                    params.height = targetHeight
-                    ramadanCard.layoutParams = params
-                }
-            }
             ramadanDayText.text = "Сегодня $ramadanDay-й день поста"
         } else {
             ramadanCard.visibility = View.GONE
@@ -2168,13 +2143,6 @@ cell.addView(
         val selectedDay = dayFor(selected)
         if (selectedDay == null) {
             ramadanCountdownBackground.visibility = View.GONE
-            countdownCard.post {
-                val params = countdownCard.layoutParams as LinearLayout.LayoutParams
-                if (params.height != dp(174)) {
-                    params.height = dp(174)
-                    countdownCard.layoutParams = params
-                }
-            }
             nextName.text = "Расписание пока недоступно"
             countdownLabel.visibility = View.VISIBLE
             countdown.text = "—"
@@ -2255,13 +2223,6 @@ cell.addView(
                     
                 ramadanCountdownBackground.setImageResource(R.drawable.ramadan_iftar_started)
                 ramadanCountdownBackground.visibility = View.VISIBLE
-                countdownCard.post {
-                    val targetHeight = countdownCard.width / 3
-                    countdownCard.layoutParams =
-                        (countdownCard.layoutParams as LinearLayout.LayoutParams).apply {
-                            height = targetHeight
-                        }
-                }
                 nextName.setTextColor(palette.onRamadanImage)
                 nextName.setShadowLayer(4f, 0f, 2f, Color.BLACK)
                 nextName.text = "Время ифтара наступило"
@@ -2272,13 +2233,6 @@ cell.addView(
             } else if (ramadanDay != null && nextEvent.prayer.name == "Фаджр") {
                 ramadanCountdownBackground.setImageResource(R.drawable.ramadan_suhoor)
                 ramadanCountdownBackground.visibility = View.VISIBLE
-                countdownCard.post {
-                    val targetHeight = countdownCard.width / 3
-                    countdownCard.layoutParams =
-                        (countdownCard.layoutParams as LinearLayout.LayoutParams).apply {
-                            height = targetHeight
-                        }
-                }
                 countdown.setTextColor(palette.onRamadanImage)
                 countdown.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 43f)
 
@@ -2295,13 +2249,6 @@ cell.addView(
             } else if (ramadanDay != null && nextEvent.prayer.name == "Магриб") {
                 ramadanCountdownBackground.setImageResource(R.drawable.ramadan_iftar)
                 ramadanCountdownBackground.visibility = View.VISIBLE
-                countdownCard.post {
-                    val targetHeight = countdownCard.width / 3
-                    countdownCard.layoutParams =
-                        (countdownCard.layoutParams as LinearLayout.LayoutParams).apply {
-                            height = targetHeight
-                        }
-                }
                 countdown.setTextColor(palette.onRamadanImage)
                 countdown.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 43f)
                 
@@ -2325,13 +2272,6 @@ cell.addView(
 
                 countdownStart.setTextColor(ink)
                 countdownStart.setShadowLayer(0f, 0f, 0f, Color.TRANSPARENT)
-                countdownCard.post {
-                    val params = countdownCard.layoutParams as LinearLayout.LayoutParams
-                    if (params.height != dp(174)) {
-                        params.height = dp(174)
-                        countdownCard.layoutParams = params
-                    }
-                }
                 nextName.text =
                     prayerDisplayName(
                         this,
@@ -2353,13 +2293,6 @@ cell.addView(
             nextName.setShadowLayer(0f, 0f, 0f, Color.TRANSPARENT)
             countdownStart.setTextColor(ink)
             countdownStart.setShadowLayer(0f, 0f, 0f, Color.TRANSPARENT)
-            countdownCard.post {
-                val params = countdownCard.layoutParams as LinearLayout.LayoutParams
-                if (params.height != dp(174)) {
-                    params.height = dp(174)
-                    countdownCard.layoutParams = params
-                }
-            }
             val tomorrow = todayDate.plusDays(1)
             val tomorrowDay = dayFor(tomorrow)
 
