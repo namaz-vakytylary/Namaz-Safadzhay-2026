@@ -34,7 +34,7 @@ class TodayLayoutTest {
     @Test fun allContentFitsMeasuredWindowsWithoutScrolling() {
         val report = File("build/reports/today-layout").apply { mkdirs() }
         val rows = mutableListOf("theme,systemDark,tatar,state,width,height,navInset,compact,content,ishaBottom,safeBottom")
-        val windows = listOf(Triple(320,720,24), Triple(360,720,48), Triple(360,800,48), Triple(390,844,24), Triple(412,915,48))
+        val windows = listOf(Triple(320,640,24), Triple(360,640,48), Triple(320,720,24), Triple(360,720,48), Triple(360,800,48), Triple(390,844,24), Triple(412,915,48))
         for ((mode, dark) in listOf(ThemeMode.LIGHT to true, ThemeMode.DARK to false, ThemeMode.SYSTEM to false, ThemeMode.SYSTEM to true)) {
             RuntimeEnvironment.setQualifiers("w360dp-h800dp-${if (dark) "night" else "notnight"}-mdpi")
             val app = RuntimeEnvironment.getApplication()
@@ -73,7 +73,7 @@ class TodayLayoutTest {
                             assertTrue("$name countdown text outside border",copy.top>=4 && copy.bottom<=card.height-4)
                             assertFalse("$name visible test label",walk(root).filterIsInstance<TextView>().any { it.text.contains("Тест UI") })
                             rows += "$mode,$dark,$tatar,$state,$width,$height,$nav,${scroll.compactLevel},${root.height},${position[1]+isha.height},${height-nav}"
-                            if (width==360 && height==720 && tatar) snapshot(a,"$state-${mode.storedValue}-$dark",width,height)
+                            if (width==360 && height in listOf(640,720) && tatar) snapshot(a,"$state-${mode.storedValue}-$dark-$height",width,height)
                         }
                     }
                 } finally { controller.pause().stop().destroy() }

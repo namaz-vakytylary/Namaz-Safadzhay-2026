@@ -39,7 +39,7 @@ class TodayPreviewLayoutTest {
                 try {
                     val a=c.get()
                     val scroll=ReflectionHelpers.getField<TodayLayoutScrollView>(a,"mainScroll")
-                    for((width,height,nav) in listOf(Triple(320,720,24),Triple(360,720,48),Triple(360,800,48),Triple(390,844,24),Triple(412,915,48))) {
+                    for((width,height,nav) in listOf(Triple(320,640,24), Triple(360,640,48), Triple(320,720,24),Triple(360,720,48),Triple(360,800,48),Triple(390,844,24),Triple(412,915,48))) {
                         ViewCompat.dispatchApplyWindowInsets(scroll,WindowInsetsCompat.Builder()
                             .setInsets(WindowInsetsCompat.Type.systemBars(),Insets.of(0,24,0,nav))
                             .setInsets(WindowInsetsCompat.Type.displayCutout(),Insets.of(0,32,0,0)).build())
@@ -64,7 +64,7 @@ class TodayPreviewLayoutTest {
                         assertFalse(clock.text.contains("Тест UI"))
                         if(scene=="after") assertEquals("Сейчас 19:50",clock.text.toString())
                         rows+="$mode,$dark,$tatar,$scene,$width,$height,${scroll.compactLevel},${root.height},${position[1]+isha.height},${height-nav}"
-                        if(width==360 && height==720 && tatar) helper.snapshot(a,"preview-$scene-${mode.storedValue}-$dark",width,height)
+                        if(width==360 && height in listOf(640,720) && tatar) helper.snapshot(a,"preview-$scene-${mode.storedValue}-$dark-$height",width,height)
                     }
                 } finally {c.pause().stop().destroy()}
             }
