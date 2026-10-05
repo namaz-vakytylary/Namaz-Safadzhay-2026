@@ -153,9 +153,14 @@ class TodayLayoutTest {
         }
     }
     internal fun snapshot(a: MainActivity,name: String,width: Int,height: Int) {
+        val directory=File("build/reports/today-layout")
+        check(directory.isDirectory || directory.mkdirs()) {
+            "Cannot create layout report directory: $directory"
+        }
+        val destination=directory.resolve("$name.png")
         val bitmap=Bitmap.createBitmap(width,height,Bitmap.Config.ARGB_8888)
         a.findViewById<View>(android.R.id.content).draw(Canvas(bitmap))
-        File("build/reports/today-layout/$name.png").outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG,100,it) }
+        destination.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG,100,it) }
         bitmap.recycle()
     }
 }

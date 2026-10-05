@@ -70,7 +70,8 @@ class TodayPreviewLayoutTest {
                 }
             }
         } finally { ReflectionHelpers.setField(scene, "time", originalTime) }
-        File("build/reports/today-layout/ordinary-matrix.csv").writeText(rows.joinToString("\n"))
+        File("build/reports/today-layout").apply { mkdirs() }
+            .resolve("ordinary-matrix.csv").writeText(rows.joinToString("\n"))
     }
 
     @Test fun actualPreviewStatesFitWithInsetsInEveryTheme() {
@@ -120,6 +121,7 @@ class TodayPreviewLayoutTest {
                 } finally {c.pause().stop().destroy()}
             }
         }
-        File("build/reports/today-layout/preview-matrix.csv").writeText(rows.joinToString("\n"))
+        File("build/reports/today-layout").apply { mkdirs() }
+            .resolve("preview-matrix.csv").writeText(rows.joinToString("\n"))
     }
 }
