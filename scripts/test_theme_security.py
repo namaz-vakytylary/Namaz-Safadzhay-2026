@@ -1,4 +1,4 @@
-"""Ensure the artificial Ramadan date is excluded from release source inputs."""
+"""Keep production release fixture-free while signed TEST retains UI previews."""
 from pathlib import Path
 import unittest
 
@@ -6,7 +6,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class RamadanIsolationTest(unittest.TestCase):
-    def test_fixture_exists_only_in_debug_source_set(self):
+    def test_production_release_source_set_has_no_fixture(self):
         relative = 'java/ru/namaz/safadzhay/RamadanUiPreview.kt'
         debug = (ROOT / 'app/src/debug' / relative).read_text()
         release = (ROOT / 'app/src/release' / relative).read_text()
@@ -19,6 +19,15 @@ class RamadanIsolationTest(unittest.TestCase):
         for source in (ROOT / 'app/src/main').rglob('*'):
             if source.suffix in ('.kt', '.xml'):
                 self.assertNotIn('TEST_RAMADAN_START_DATE', source.read_text())
+
+    def test_signed_test_preview_sources_require_exact_test_application_id(self):
+        build = (ROOT / 'app/build.gradle.kts').read_text()
+        self.assertIn('if (defaultConfig.applicationId == "ru.namaz.safadzhay.test") {\n'
+                      '            getByName("release").java.setSrcDirs(listOf("src/debug/java"))\n'
+                      '        }', build)
+        self.assertEqual(1, build.count('java.setSrcDirs'))
+        self.assertIn('isDebuggable = false', build)
+        self.assertIn('signingConfig = signingConfigs.getByName("namazRelease")', build)
 
     def test_calendar_and_alarm_code_do_not_use_preview(self):
         src = ROOT / 'app/src/main/java/ru/namaz/safadzhay'

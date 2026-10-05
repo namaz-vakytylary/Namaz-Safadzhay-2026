@@ -178,7 +178,42 @@ class ThemeAndRamadanTest {
         assertEquals(Color.rgb(10,78,54), dark.activePrayer)
         assertEquals(Color.rgb(70,218,145), dark.primary)
     }
-    @Test fun previewBoundaryAndReleaseIsolation() {
+    @Test fun testApkSettingsExposePreviewAndCanSelectEveryScene() {
+        assertEquals("ru.namaz.safadzhay.test", app.packageName)
+        assertTrue("Signed TEST and debug APKs must both expose Ramadan preview", RamadanUiPreview.available)
+        val before = prefs.all.toMap()
+        val c = start()
+        try {
+            val a = c.get()
+            for (key in listOf("before", "suhoor", "fast", "iftar", "after", "off")) {
+                invoke(a, "showSettingsDialog")
+                clickText(panel(a), "Проверка Рамадана")
+                val radios = walk(panel(a)).filterIsInstance<RadioButton>()
+                assertEquals(6, radios.size)
+                val scene = RamadanUiPreview.scenes.single { it.key == key }
+                radios.single { it.text.toString() == scene.title }.performClick()
+                assertEquals(key, RamadanUiPreview.selected(a).key)
+                val expected = when (key) {
+                    "suhoor" -> "До окончания сухура"
+                    "iftar" -> "До ифтара"
+                    "after" -> "Время ифтара наступило"
+                    else -> null
+                }
+                if (expected != null) assertEquals(expected, ReflectionHelpers.getField<TextView>(a, "nextName").text.toString())
+                if (key == "before") assertEquals(View.GONE, ReflectionHelpers.getField<View>(a, "ramadanCard").visibility)
+                if (key in listOf("suhoor", "fast", "iftar", "after")) {
+                    assertEquals(View.VISIBLE, ReflectionHelpers.getField<View>(a, "ramadanCard").visibility)
+                    assertEquals(LocalDate.of(2026, 8, 10), RamadanUiPreview.now(a, LocalDateTime.now()).toLocalDate())
+                }
+                assertFalse(walk(a.findViewById(android.R.id.content)).filterIsInstance<TextView>().any { it.text.contains("Тест UI") })
+            }
+            val realNow = LocalDateTime.of(2026, 10, 5, 12, 0)
+            assertEquals(realNow, RamadanUiPreview.now(a, realNow))
+            for ((key, value) in before) assertEquals(value, prefs.all[key])
+        } finally { c.pause().stop().destroy() }
+    }
+
+    @Test fun previewBoundaryAndCalendarIsolation() {
         val before = LocalDate.of(2026,8,9); val start = before.plusDays(1)
         val realNow = LocalDateTime.of(2026,10,4,15,0)
         prefs.edit().putString("debug_ramadan_ui_scene", "iftar").commit()

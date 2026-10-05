@@ -5,7 +5,8 @@ import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.temporal.ChronoUnit
 
-/** Artificial UI fixture, compiled into debug only. It does not modify HolidayCalendar. */
+/** Artificial UI fixture for debug and signed TEST APKs only.
+ * Production release keeps its fixture-free source set. Does not modify HolidayCalendar. */
 internal object RamadanUiPreview {
     const val available = true
     const val TEST_RAMADAN_START_DATE = "2026-08-10"

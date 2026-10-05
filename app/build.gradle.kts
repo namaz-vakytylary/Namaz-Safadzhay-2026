@@ -32,6 +32,15 @@ android {
         }
     }
 
+    // A signed TEST APK is still a release build, but needs the same UI preview
+    // tools as debug. Production application IDs retain src/release/java,
+    // whose RamadanUiPreview has no artificial date or clock override.
+    sourceSets {
+        if (defaultConfig.applicationId == "ru.namaz.safadzhay.test") {
+            getByName("release").java.setSrcDirs(listOf("src/debug/java"))
+        }
+    }
+
     testOptions {
         unitTests.isIncludeAndroidResources = true
         unitTests.all {
