@@ -191,6 +191,8 @@ internal class ScheduleRepository(
         private const val MAX_BUNDLE = 1024 * 1024
         private const val MAX_SNAPSHOT = 48 * 1024 * 1024
         private val supportedCities = setOf("safadzhay", "moscow")
+        // Read-only copy for location matching; the validation allowlist stays unchanged.
+        fun supportedCityIds(): Set<String> = supportedCities.toSet()
         private val prayerKeys = listOf("fajr", "zuhr", "asr", "maghrib", "isha")
 
         fun parseManifest(bytes: ByteArray): List<Entry> {
