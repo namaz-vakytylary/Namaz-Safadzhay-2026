@@ -82,7 +82,7 @@ class TodayLayoutTest {
         report.resolve("matrix.csv").writeText(rows.joinToString("\n"))
     }
 
-    private fun renderContent(a: MainActivity,state: String,tatar: Boolean) {
+    internal fun renderContent(a: MainActivity,state: String,tatar: Boolean) {
         // Keep the actual Today header, tabs and prayer rows. Vary the dynamic
         // banner/countdown copy and existing artwork exactly as the UI does.
         field<View>(a,"eventBanner").visibility=View.GONE
@@ -122,11 +122,11 @@ class TodayLayoutTest {
         for (scale in listOf(1.3f,1.5f,2f)) {
             RuntimeEnvironment.setQualifiers("w360dp-h800dp-mdpi")
             val app=RuntimeEnvironment.getApplication(); TestNetwork.offline(app)
-            val config=android.content.res.Configuration(app.resources.configuration).apply { fontScale=scale }
-            @Suppress("DEPRECATION") app.resources.updateConfiguration(config,app.resources.displayMetrics)
+            RuntimeEnvironment.setFontScale(scale)
             app.getSharedPreferences("settings",0).edit().clear().putBoolean("notifications_enabled",false).commit()
             val c=Robolectric.buildActivity(MainActivity::class.java).create().start().resume().visible()
             try {
+                assertEquals(scale,c.get().resources.configuration.fontScale,0.001f)
                 for(state in listOf("day","suhoor","iftar","after")) {
                     renderContent(c.get(),state,true); measure(c.get(),360,720)
                     assertTextFits(c.get(),"font=$scale/$state")
@@ -147,15 +147,20 @@ class TodayLayoutTest {
     }
     internal fun measure(a: MainActivity,width: Int,height: Int) {
         val root=a.findViewById<View>(android.R.id.content)
-        repeat(6) {
+        repeat(1) {
             root.measure(View.MeasureSpec.makeMeasureSpec(width,View.MeasureSpec.EXACTLY),View.MeasureSpec.makeMeasureSpec(height,View.MeasureSpec.EXACTLY))
             root.layout(0,0,width,height)
         }
     }
     internal fun snapshot(a: MainActivity,name: String,width: Int,height: Int) {
+        val directory=File("build/reports/today-layout")
+        check(directory.isDirectory || directory.mkdirs()) {
+            "Cannot create layout report directory: $directory"
+        }
+        val destination=directory.resolve("$name.png")
         val bitmap=Bitmap.createBitmap(width,height,Bitmap.Config.ARGB_8888)
         a.findViewById<View>(android.R.id.content).draw(Canvas(bitmap))
-        File("build/reports/today-layout/$name.png").outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG,100,it) }
+        destination.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG,100,it) }
         bitmap.recycle()
     }
 }
