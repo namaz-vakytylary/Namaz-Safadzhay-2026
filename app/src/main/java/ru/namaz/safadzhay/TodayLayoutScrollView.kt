@@ -55,27 +55,32 @@ internal class TodayLayoutScrollView(context: Context) : ScrollView(context) {
     private fun configure(c: Content, level: Int) {
         val compact = level > 0
         val tight = level >= 2
-        padding(c.root, contentInsets.left + dp(16), contentInsets.top + dp(if (level == 3) 3 else if (compact) 4 else 6),
-            contentInsets.right + dp(16), contentInsets.bottom + dp(if (level == 3) 4 else if (compact) 6 else 8))
-        c.city.minHeight = dp(if (level == 3) 24 else if (tight) 26 else 29)
-        c.clock.minHeight = c.city.minHeight
-        padding(c.date, 0, dp(if (tight) 1 else 3), 0, dp(if (tight) 1 else 3))
-        margins(c.banner, dp(if (compact) 4 else 7), 0)
-        margins(c.mode, dp(if (compact) 4 else 8), dp(if (compact) 4 else 7))
-        margins(c.card, 0, dp(if (level == 3) 2 else if (compact) 4 else 7))
+        val small = level >= 4
+        val shortest = level >= 5
+        padding(c.root, contentInsets.left + dp(16), contentInsets.top + dp(if (shortest) 2 else if (level >= 3) 3 else if (compact) 4 else 6),
+            contentInsets.right + dp(16), contentInsets.bottom + dp(if (level >= 3) 4 else if (compact) 6 else 8))
+        c.city.minHeight = dp(if (shortest) 23 else if (level >= 3) 24 else if (tight) 26 else 29)
+        c.clock.minHeight = if (shortest) dp(22) else c.city.minHeight
+        padding(c.date, 0, dp(if (shortest) 0 else if (tight) 1 else 3), 0, dp(if (shortest) 0 else if (tight) 1 else 3))
+        margins(c.banner, dp(if (shortest) 1 else if (compact) 4 else 7), 0)
+        margins(c.mode, dp(if (shortest) 1 else if (compact) 4 else 8), dp(if (shortest) 1 else if (compact) 4 else 7))
+        margins(c.card, 0, dp(if (level >= 3) 2 else if (compact) 4 else 7))
         height(c.banner, dp(95))
         val timer = c.copy.getChildAt(2)
         @Suppress("DEPRECATION")
-        val timerHeight = maxOf(dp(if (tight) 56 else 60), (58 * resources.displayMetrics.scaledDensity).toInt())
+        val timerHeight = if (shortest && resources.configuration.fontScale <= 1f) dp(40)
+            else maxOf(dp(if (tight) 56 else 60), (58 * resources.displayMetrics.scaledDensity).toInt())
         height(timer, timerHeight)
-        margins(timer, dp(if (level == 3) 2 else if (compact) 4 else 6), dp(if (level == 3) 2 else if (compact) 4 else 6))
-        val rowPadding = dp(if (level == 3) 4 else if (tight) 6 else 8)
-        val rowMinimum = dp(if (level == 3) 50 else if (tight) 58 else 66)
+        margins(timer, dp(if (shortest) 1 else if (level >= 3) 2 else if (compact) 4 else 6), dp(if (shortest) 1 else if (level >= 3) 2 else if (compact) 4 else 6))
+        val rowPadding = dp(if (shortest) 1 else if (small) 2 else if (level >= 3) 4 else if (tight) 6 else 8)
+        val rowMinimum = dp(if (shortest) 41 else if (small) 46 else if (level >= 3) 50 else if (tight) 58 else 66)
         for (index in 0 until c.prayers.childCount) {
             val row = c.prayers.getChildAt(index)
+            // The icon keeps its 34 dp artwork size; remove only vertical slack.
+            height((row as ViewGroup).getChildAt(0), dp(if (shortest) 34 else if (small) 38 else 42))
             padding(row, dp(12), rowPadding, dp(12), rowPadding)
             row.minimumHeight = rowMinimum
-            margins(row, 0, if (index == c.prayers.childCount - 1) 0 else dp(if (level == 3) 2 else if (tight) 3 else if (compact) 4 else 6))
+            margins(row, 0, if (index == c.prayers.childCount - 1) 0 else dp(if (small) 1 else if (level >= 3) 2 else if (tight) 3 else if (compact) 4 else 6))
         }
     }
 
@@ -108,13 +113,13 @@ internal class TodayLayoutScrollView(context: Context) : ScrollView(context) {
             val image = c.artwork.visibility == View.VISIBLE
             var minimumCard = 0
             compactLevel = 0
-            for (level in 0..if (c.isToday()) 3 else 0) {
+            for (level in 0..if (c.isToday()) 5 else 0) {
                 configure(c, level)
                 val copyWidth = (width - c.root.paddingLeft - c.root.paddingRight - dp(40)).coerceAtLeast(1)
                 (0 until c.copy.childCount).forEach { c.copy.getChildAt(it).forceLayout() }
                 c.copy.forceLayout()
                 c.copy.measure(MeasureSpec.makeMeasureSpec(copyWidth, MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED))
-                minimumCard = c.copy.measuredHeight + dp(if (image) 8 else if (level == 3) 12 else if (level > 0) 24 else 32)
+                minimumCard = c.copy.measuredHeight + dp(if (image) 8 else if (level >= 3) 12 else if (level > 0) 24 else 32)
                 val preferred = if (image) (width - c.root.paddingLeft - c.root.paddingRight) / 3 else dp(174)
                 height(c.card, maxOf(preferred, minimumCard))
                 measureContent()
@@ -127,14 +132,15 @@ internal class TodayLayoutScrollView(context: Context) : ScrollView(context) {
                     if (c.root.measuredHeight <= available) { compactLevel = level; break }
                 }
                 compactLevel = level
-            }
-            if (c.isToday() && c.root.measuredHeight > available && c.banner.visibility == View.VISIBLE) {
-                // Last resort: reduce only excess banner height. Its two text lines still fit.
-                val overflow = c.root.measuredHeight - available
-                val text = (c.banner.getChildAt(0) as FrameLayout).getChildAt(1)
-                text.measure(MeasureSpec.makeMeasureSpec((width - c.root.paddingLeft - c.root.paddingRight).coerceAtLeast(1), MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED))
-                height(c.banner, maxOf(dp(64), text.measuredHeight, dp(95) - overflow))
-                measureContent()
+                if (level >= 3 && c.root.measuredHeight > available && c.banner.visibility == View.VISIBLE) {
+                    // Try excess banner space before the extra-small-window profiles.
+                    val overflow = c.root.measuredHeight - available
+                    val text = (c.banner.getChildAt(0) as FrameLayout).getChildAt(1)
+                    text.measure(MeasureSpec.makeMeasureSpec((width - c.root.paddingLeft - c.root.paddingRight).coerceAtLeast(1), MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED))
+                    height(c.banner, maxOf(dp(64), text.measuredHeight, dp(95) - overflow))
+                    measureContent()
+                    if (c.root.measuredHeight <= available) break
+                }
             }
             if (c.isToday() && !image && c.card.visibility == View.VISIBLE && c.root.measuredHeight < available) {
                 // Preserve the spacious existing countdown on taller windows.
