@@ -179,8 +179,17 @@ class AutomaticCityTest {
             location.resume(); location.pause()
             assertTrue(shadowOf(manager).getLocationUpdateListeners().isEmpty())
             shadowOf(manager).simulateLocation(fix()); shadowOf(Looper.getMainLooper()).idle()
-            assertEquals("Сафаджай", savedCity())
-            location.resume(); settings.selectManual(CityCatalog.all.first()); location.stop()
+            assertEquals("Сафаджай", savedCity()); assertTrue(cities.isEmpty())
+            // simulateLocation updates the provider cache even while our listener is
+            // stopped. Clear that fixture so resume starts a pending request instead
+            // of legitimately resolving the cached Moscow fix before manual selection.
+            shadowOf(manager).setLastKnownLocation(LocationManager.NETWORK_PROVIDER, null)
+            location.resume()
+            val queuedListener = shadowOf(manager).getLocationUpdateListeners().single()
+            settings.selectManual(CityCatalog.all.first()); location.stop()
+            assertTrue(shadowOf(manager).getLocationUpdateListeners().isEmpty())
+            // A callback already queued by Android must also be ignored after stop.
+            queuedListener.onLocationChanged(fix())
             shadowOf(manager).simulateLocation(fix()); shadowOf(Looper.getMainLooper()).idle()
             assertEquals("Сафаджай", savedCity()); assertTrue(cities.isEmpty())
         } finally { location.pause(); activity.pause().stop().destroy() }
@@ -229,7 +238,7 @@ class AutomaticCityTest {
     }
 
     private fun verifyUi(mode: ThemeMode, systemDark: Boolean) {
-        RuntimeEnvironment.setQualifiers("w360dp-h800dp-mdpi-${if (systemDark) "night" else "notnight"}")
+        RuntimeEnvironment.setQualifiers("w360dp-h800dp-${if (systemDark) "night" else "notnight"}-mdpi")
         installVerifiedTodaySchedules(); ThemeSettings.save(app, mode)
         settings.setMode(CitySelectionMode.AUTOMATIC)
         shadowOf(app).grantPermissions(Manifest.permission.ACCESS_COARSE_LOCATION)
