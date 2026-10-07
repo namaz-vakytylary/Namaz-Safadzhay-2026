@@ -6,8 +6,10 @@ import android.app.Application
 import android.app.Dialog
 import android.content.Context
 import android.location.Location
+import android.location.LocationListener
 import android.location.LocationManager
 import android.os.Looper
+import android.os.Bundle
 import android.os.SystemClock
 import android.view.View
 import android.view.ViewGroup
@@ -30,22 +32,22 @@ import java.time.Duration
 import java.time.LocalDate
 import java.time.ZoneId
 
-/** Exercises actual foreground provider lifetime, preferences and the existing Today UI. */
+/** Real provider lifetimes, stale callbacks, migration, session lifecycle and city-only UI. */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [28], qualifiers = "w360dp-h800dp-mdpi")
 class AutomaticCityTest {
-    class RationaleActivity : Activity() {
-        override fun shouldShowRequestPermissionRationale(permission: String) = true
-    }
     private lateinit var app: Application
     private lateinit var manager: LocationManager
     private lateinit var settings: CitySelectionSettings
     private val states = mutableListOf<CityLocationState>()
     private val cities = mutableListOf<ScheduleCity>()
+    private val village = CityCatalog.all.first()
+    private val moscow = CityCatalog.all.last()
 
     @Before fun setup() {
         app = RuntimeEnvironment.getApplication()
-        app.getSharedPreferences("settings", 0).edit().clear().putString("city", "Сафаджай").putString("city_selection_mode", "AUTO").putBoolean("notifications_enabled", false).commit()
+        app.getSharedPreferences("settings", 0).edit().clear().putString("city", "Сафаджай")
+            .putBoolean("notifications_enabled", false).commit()
         settings = CitySelectionSettings(app)
         manager = app.getSystemService(Context.LOCATION_SERVICE) as LocationManager
         shadowOf(app).denyPermissions(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
@@ -55,465 +57,220 @@ class AutomaticCityTest {
         TestNetwork.offline(app)
     }
 
-    private fun fix(accuracyMeters: Float = 20f) = Location(LocationManager.NETWORK_PROVIDER).apply {
-        latitude = 55.7558; longitude = 37.6173; accuracy = accuracyMeters
-        elapsedRealtimeNanos = SystemClock.elapsedRealtimeNanos(); time = System.currentTimeMillis()
-    }
-    private fun controller(activity: Activity, clock: () -> Long = System::currentTimeMillis,
-        candidates: () -> List<ScheduleCity> = { CityCatalog.all }) =
-        CityLocationController(activity, settings, candidates, { cities.add(it) }, { states.add(it) }, clock)
+    private fun fix(city: ScheduleCity = moscow, accuracyMeters: Float = 20f, ageSeconds: Long = 0L) =
+        Location(LocationManager.NETWORK_PROVIDER).apply {
+            // Distinct monotonic fixes, including when two results arrive immediately.
+            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(1))
+            latitude = city.latitude; longitude = city.longitude; accuracy = accuracyMeters
+            elapsedRealtimeNanos = SystemClock.elapsedRealtimeNanos() - ageSeconds * 1_000_000_000L
+            time = System.currentTimeMillis() - ageSeconds * 1000L
+        }
     private fun savedCity() = app.getSharedPreferences("settings", 0).getString("city", null)
-
-    @Test fun fineFixChangesCityAndStopsProviderImmediately() {
-        shadowOf(app).grantPermissions(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
+    private fun active(location: CityLocationController) = ReflectionHelpers.getField<LocationListener>(location, "listener")
+    private fun passive(location: CityLocationController) = ReflectionHelpers.getField<LocationListener>(location, "passiveListener")
+    private fun listeners() = shadowOf(manager).getLocationUpdateListeners()
+    private fun coarse() { shadowOf(app).grantPermissions(Manifest.permission.ACCESS_COARSE_LOCATION) }
+    private fun withLocation(clock: () -> Long = System::currentTimeMillis,
+        candidates: () -> List<ScheduleCity> = { CityCatalog.all }, block: (CityLocationController) -> Unit) {
         val activity = Robolectric.buildActivity(Activity::class.java).setup()
-        val location = controller(activity.get())
-        try {
-            location.resume()
-            assertTrue(shadowOf(manager).getLocationUpdateListeners().isNotEmpty())
-            shadowOf(manager).simulateLocation(fix()); shadowOf(Looper.getMainLooper()).idle()
-            assertEquals("Москва", savedCity()); assertEquals(CityLocationState.READY, states.last())
-            assertEquals(listOf("moscow"), cities.map { it.id })
-            assertTrue(shadowOf(manager).getLocationUpdateListeners().isEmpty())
-        } finally { location.pause(); activity.pause().stop().destroy() }
+        val location = CityLocationController(activity.get(), settings, candidates, { cities.add(it) }, { states.add(it) }, clock)
+        try { block(location) } finally { location.pause(); activity.pause().stop().destroy() }
     }
 
-    @Test @Config(sdk = [33]) fun approximatePermissionAndFreshCachedFixAreEnough() {
-        shadowOf(app).grantPermissions(Manifest.permission.ACCESS_COARSE_LOCATION)
-        shadowOf(manager).setLastKnownLocation(LocationManager.NETWORK_PROVIDER, fix(5000f))
-        val activity = Robolectric.buildActivity(Activity::class.java).setup()
-        val location = controller(activity.get())
-        try {
-            location.resume()
-            assertEquals("Москва", savedCity()); assertEquals(CityLocationState.READY, states.last())
-            assertTrue(shadowOf(manager).getLocationUpdateListeners().isEmpty())
-        } finally { location.pause(); activity.pause().stop().destroy() }
+    @Test fun startupNearVillageSelectsVillage() {
+        coarse(); shadowOf(manager).setLastKnownLocation(LocationManager.NETWORK_PROVIDER, fix(village, 3000f))
+        withLocation { it.resume(); assertEquals("Сафаджай", savedCity()); assertEquals(listOf(village), cities) }
     }
-
-    @Test @Config(sdk = [33]) fun approximatePermissionAcceptsLiveCurrentLocationWithoutFineGrant() {
-        shadowOf(app).grantPermissions(Manifest.permission.ACCESS_COARSE_LOCATION)
-        val activity = Robolectric.buildActivity(Activity::class.java).setup()
-        val location = controller(activity.get())
-        try {
-            location.resume()
-            assertEquals(CityLocationState.SEARCHING, states.last())
-            shadowOf(manager).simulateLocation(fix(5000f))
-            shadowOf(Looper.getMainLooper()).idle()
-            assertEquals("Москва", savedCity()); assertEquals(CityLocationState.READY, states.last())
-            assertEquals(listOf("moscow"), cities.map { it.id })
-            location.pause()
-            val village = CityCatalog.all.first()
-            shadowOf(manager).simulateLocation(fix().apply { latitude = village.latitude; longitude = village.longitude })
-            shadowOf(Looper.getMainLooper()).idle()
-            assertEquals("Москва", savedCity()); assertEquals(1, cities.size)
-        } finally { location.pause(); activity.pause().stop().destroy() }
+    @Test fun startupNearMoscowSelectsMoscowWithCoarsePermission() {
+        coarse(); shadowOf(manager).setLastKnownLocation(LocationManager.NETWORK_PROVIDER, fix(moscow, 5000f))
+        withLocation { it.resume(); assertEquals("Москва", savedCity()); assertNull(active(it)); assertNotNull(passive(it)) }
     }
-
-    @Test fun deniedPermissionKeepsLastCityAndDoesNotStartProviders() {
-        val activity = Robolectric.buildActivity(Activity::class.java).setup()
-        val location = controller(activity.get())
-        try {
-            location.resume(); location.permissionResult()
-            assertEquals(CityLocationState.PERMISSION_BLOCKED, states.last())
+    @Test @Config(sdk = [33]) fun approximateLiveCurrentLocationWorksWithoutFineGrant() {
+        coarse()
+        withLocation {
+            it.resume(); shadowOf(manager).simulateLocation(fix(moscow, 5000f)); shadowOf(Looper.getMainLooper()).idle()
+            assertEquals("Москва", savedCity()); assertEquals(CityLocationState.READY, states.last())
+        }
+    }
+    @Test fun successfulFixStopsActiveProviderAndKeepsOnlyPassiveMovementObserver() {
+        coarse()
+        withLocation {
+            it.resume(); active(it).onLocationChanged(fix())
+            assertEquals("Москва", savedCity()); assertNull(active(it))
+            assertEquals(listOf(passive(it)), listeners().toList())
+        }
+    }
+    @Test fun confidentPassiveMovementChangesVillageToMoscow() {
+        coarse(); shadowOf(manager).setLastKnownLocation(LocationManager.NETWORK_PROVIDER, fix(village))
+        withLocation {
+            it.resume(); val movement = passive(it)
+            movement.onLocationChanged(fix(moscow, 4000f))
+            assertEquals("Москва", savedCity()); assertEquals(listOf(village, moscow), cities); assertNull(active(it))
+        }
+    }
+    @Test fun jitterPoorAccuracyStaleAndDistantFixesKeepWorkingCity() {
+        coarse(); shadowOf(manager).setLastKnownLocation(LocationManager.NETWORK_PROVIDER, fix(village))
+        withLocation {
+            it.resume(); val movement = passive(it)
+            movement.onLocationChanged(fix(village).apply { latitude += 0.00002 })
+            assertEquals("Сафаджай", savedCity())
+            movement.onLocationChanged(fix(moscow, 30_000f))
+            movement.onLocationChanged(fix(moscow, ageSeconds = 601))
+            movement.onLocationChanged(fix(moscow, ageSeconds = 121))
+            movement.onLocationChanged(fix().apply { latitude = 52.37; longitude = 4.90 })
+            assertEquals("Сафаджай", savedCity()); assertEquals(village, settings.automaticCity())
+        }
+    }
+    @Test fun olderCachedResultCannotReverseNewerLiveMovement() {
+        coarse()
+        withLocation {
+            it.resume(); val previous = fix(village); active(it).onLocationChanged(fix(moscow))
+            passive(it).onLocationChanged(previous)
+            assertEquals("Москва", savedCity()); assertEquals(listOf(moscow), cities)
+        }
+    }
+    @Test fun boundaryJitterCannotFlapCity() {
+        coarse()
+        val left = ScheduleCity(village.id, village.name, 0.0, -0.1)
+        val right = ScheduleCity(moscow.id, moscow.name, 0.0, 0.1)
+        withLocation(candidates = { listOf(left, right) }) {
+            it.resume()
+            repeat(10) { count ->
+                active(it).onLocationChanged(fix().apply { latitude = 0.0; longitude = if (count % 2 == 0) 0.001 else -0.001 })
+            }
             assertEquals("Сафаджай", savedCity()); assertTrue(cities.isEmpty())
-            assertTrue(shadowOf(manager).getLocationUpdateListeners().isEmpty())
-        } finally { location.pause(); activity.pause().stop().destroy() }
+        }
     }
-
-    @Test fun permissionRevocationDuringRequestCannotOverwriteLastResolvedCity() {
-        shadowOf(app).grantPermissions(Manifest.permission.ACCESS_COARSE_LOCATION)
-        settings.markPermissionAsked()
-        val old = System.currentTimeMillis() - CitySelectionPolicy.REFRESH_MS - 1000
-        settings.acceptAutomatic(CityCatalog.all.first(), old, old)
-        val activity = Robolectric.buildActivity(Activity::class.java).setup()
-        val location = controller(activity.get())
-        try {
-            location.resume()
-            val receiver = shadowOf(manager).getLocationUpdateListeners().single()
-            shadowOf(app).denyPermissions(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
-            receiver.onLocationChanged(fix())
-            assertEquals(CityLocationState.PERMISSION_BLOCKED, states.last())
-            assertEquals("Сафаджай", savedCity()); assertTrue(settings.hasResolvedCity())
-            assertTrue(cities.isEmpty()); assertTrue(shadowOf(manager).getLocationUpdateListeners().isEmpty())
-        } finally { location.pause(); activity.pause().stop().destroy() }
+    @Test fun manualClickRejectsLateActiveAndPassiveCallbacksWithoutPreferenceWrite() {
+        coarse()
+        withLocation {
+            it.resume(); val oldActive = active(it); val oldPassive = passive(it)
+            settings.selectManual(moscow); it.selectionChanged()
+            val before = app.getSharedPreferences("settings", 0).all.toMap()
+            oldActive.onLocationChanged(fix(village)); oldPassive.onLocationChanged(fix(village))
+            it.permissionResult(); it.schedulesChanged(); it.permissionRequestsAvailable()
+            assertEquals(before, app.getSharedPreferences("settings", 0).all)
+            assertEquals("Москва", savedCity()); assertTrue(cities.isEmpty()); assertTrue(listeners().isEmpty())
+        }
     }
-
-    @Test fun startupAutomaticallyRequestsBothPermissionsAndAcceptsCoarseResult() {
+    @Test @Config(sdk = [33]) fun lateCurrentLocationCallbackCannotUndoManualClick() {
+        coarse()
+        withLocation {
+            it.resume(); settings.selectManual(moscow); it.selectionChanged()
+            shadowOf(manager).simulateLocation(fix(village)); shadowOf(Looper.getMainLooper()).idle()
+            assertEquals("Москва", savedCity()); assertTrue(cities.isEmpty()); assertTrue(listeners().isEmpty())
+        }
+    }
+    @Test fun manualOverrideStopsAllFutureRefreshesAndSurvivesBackgroundForeground() {
+        coarse()
+        withLocation {
+            it.resume(); settings.selectManual(moscow); it.selectionChanged(); it.pause(); it.resume()
+            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(CitySelectionPolicy.REFRESH_MS + 1))
+            assertEquals("Москва", savedCity()); assertTrue(listeners().isEmpty()); assertTrue(cities.isEmpty())
+        }
+    }
+    @Test fun newLaunchChecksLocationDespiteRecentAutoHistoryAndManualCity() {
+        coarse(); val now = System.currentTimeMillis()
+        settings.acceptAutomatic(village, now, now); settings.selectManual(moscow)
+        settings = CitySelectionSettings(app)
+        shadowOf(manager).setLastKnownLocation(LocationManager.NETWORK_PROVIDER, fix(village))
+        withLocation {
+            it.resume(); assertEquals("Сафаджай", savedCity()); assertEquals(moscow, settings.manualCity())
+        }
+    }
+    @Test fun legacyManualInstallRetainsCityUntilReliableStartupFixArrives() {
+        app.getSharedPreferences("settings", 0).edit().putString("city", "Москва").putString("city_selection_mode", "MANUAL").commit()
+        settings = CitySelectionSettings(app); coarse()
+        withLocation {
+            it.resume(); assertEquals("Москва", savedCity())
+            active(it).onLocationChanged(fix(village)); assertEquals("Сафаджай", savedCity())
+            assertEquals(moscow, settings.manualCity())
+        }
+    }
+    @Test fun deniedPermissionKeepsCityAndDoesNotRepeatedlyPrompt() {
+        withLocation {
+            it.resume(); assertTrue(settings.permissionAsked()); it.permissionResult()
+            assertEquals("Сафаджай", savedCity()); assertTrue(listeners().isEmpty())
+            it.pause(); it.resume(); assertEquals(CityLocationState.PERMISSION_BLOCKED, states.last())
+        }
+    }
+    @Test fun permissionDialogWaitsForNotificationDialog() {
         val activity = Robolectric.buildActivity(Activity::class.java).setup()
-        val location = controller(activity.get())
+        val location = CityLocationController(activity.get(), settings, { CityCatalog.all }, {}, {})
         try {
-            location.resume()
-            assertTrue(settings.permissionAsked())
+            location.resume(false); assertNull(shadowOf(activity.get()).lastRequestedPermission)
+            location.permissionRequestsAvailable()
             val request = shadowOf(activity.get()).lastRequestedPermission
             assertEquals(CityLocationController.REQUEST_CODE, request.requestCode)
             assertEquals(setOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION), request.requestedPermissions.toSet())
-            shadowOf(app).grantPermissions(Manifest.permission.ACCESS_COARSE_LOCATION)
-            shadowOf(manager).setLastKnownLocation(LocationManager.NETWORK_PROVIDER, fix(4000f))
-            location.permissionResult()
-            assertEquals("Москва", savedCity()); assertEquals(CityLocationState.READY, states.last())
         } finally { location.pause(); activity.pause().stop().destroy() }
     }
-
-    @Test fun oldManualInstallKeepsItsCityUntilUserEnablesAutomatic() {
-        app.getSharedPreferences("settings", 0).edit().putString("city_selection_mode", "manual").commit()
-        settings = CitySelectionSettings(app)
-        assertEquals("Сафаджай", savedCity()); assertFalse(settings.hasResolvedCity())
-        shadowOf(app).grantPermissions(Manifest.permission.ACCESS_COARSE_LOCATION)
-        shadowOf(manager).setLastKnownLocation(LocationManager.NETWORK_PROVIDER, fix())
-        val activity = Robolectric.buildActivity(Activity::class.java).setup()
-        val location = controller(activity.get())
-        try {
-            location.resume()
-            assertEquals("Сафаджай", savedCity()); assertEquals(CityLocationState.IDLE, states.last())
-            assertTrue(cities.isEmpty()); assertTrue(shadowOf(manager).getLocationUpdateListeners().isEmpty())
-            settings.selectMode(CitySelectionMode.AUTOMATIC); location.selectionChanged()
-            assertEquals("Москва", savedCity()); assertTrue(settings.hasResolvedCity())
-            assertEquals(CityLocationState.READY, states.last())
-            assertEquals(CityCatalog.all.first(), settings.manualCity())
-            assertEquals(CityCatalog.all.last(), settings.automaticCity())
-            assertTrue(shadowOf(manager).getLocationUpdateListeners().isEmpty())
-        } finally { location.pause(); activity.pause().stop().destroy() }
-    }
-
-    @Test fun disabledLocationKeepsLastCity() {
-        shadowOf(app).grantPermissions(Manifest.permission.ACCESS_COARSE_LOCATION)
-        shadowOf(manager).setProviderEnabled(LocationManager.NETWORK_PROVIDER, false)
-        val activity = Robolectric.buildActivity(Activity::class.java).setup()
-        val location = controller(activity.get())
-        try {
-            location.resume()
-            assertEquals(CityLocationState.LOCATION_OFF, states.last()); assertEquals("Сафаджай", savedCity())
-        } finally { location.pause(); activity.pause().stop().destroy() }
-    }
-
-    @Test fun unavailableFixTimesOutWithoutChangingCityOrLeavingListeners() {
-        shadowOf(app).grantPermissions(Manifest.permission.ACCESS_COARSE_LOCATION)
-        val old = System.currentTimeMillis() - CitySelectionPolicy.REFRESH_MS - 1000
-        settings.acceptAutomatic(CityCatalog.all.last(), old, old)
-        settings.selectManual(CityCatalog.all.first()); settings.selectMode(CitySelectionMode.AUTOMATIC)
-        val activity = Robolectric.buildActivity(Activity::class.java).setup()
-        val location = controller(activity.get())
-        try {
-            location.resume(); shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(21))
-            assertEquals(CityLocationState.UNAVAILABLE, states.last()); assertEquals("Москва", savedCity()); assertTrue(settings.hasResolvedCity())
-            assertEquals(CityCatalog.all.first(), settings.manualCity()); assertEquals(CityCatalog.all.last(), settings.automaticCity())
-            assertTrue(shadowOf(manager).getLocationUpdateListeners().isEmpty())
-        } finally { location.pause(); activity.pause().stop().destroy() }
-    }
-
-    @Test fun unsupportedLocationCannotReplaceSavedTimetable() {
-        shadowOf(app).grantPermissions(Manifest.permission.ACCESS_COARSE_LOCATION)
-        val activity = Robolectric.buildActivity(Activity::class.java).setup()
-        val location = controller(activity.get())
-        try {
-            location.resume()
-            shadowOf(manager).simulateLocation(fix().apply { latitude = 52.37; longitude = 4.90 })
-            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(21))
-            assertEquals(CityLocationState.UNSUPPORTED, states.last()); assertEquals("Сафаджай", savedCity())
-            assertTrue(cities.isEmpty()); assertTrue(shadowOf(manager).getLocationUpdateListeners().isEmpty())
-        } finally { location.pause(); activity.pause().stop().destroy() }
-    }
-
-    @Test fun pauseResumeRejectsOldRequestsAndLateResults() {
-        shadowOf(app).grantPermissions(Manifest.permission.ACCESS_COARSE_LOCATION)
-        val activity = Robolectric.buildActivity(Activity::class.java).setup()
-        val location = controller(activity.get())
-        try {
-            location.resume()
-            val previous = shadowOf(manager).getLocationUpdateListeners().single()
-            location.pause()
-            assertTrue(shadowOf(manager).getLocationUpdateListeners().isEmpty())
-            previous.onLocationChanged(fix())
-            assertEquals("Сафаджай", savedCity()); assertTrue(cities.isEmpty())
-            location.resume()
-            val current = shadowOf(manager).getLocationUpdateListeners().single()
-            previous.onLocationChanged(fix())
-            assertEquals("Сафаджай", savedCity()); assertTrue(cities.isEmpty())
-            val village = CityCatalog.all.first()
-            current.onLocationChanged(fix().apply { latitude = village.latitude; longitude = village.longitude })
-            previous.onLocationChanged(fix())
-            shadowOf(Looper.getMainLooper()).idle()
-            assertEquals("Сафаджай", savedCity()); assertTrue(settings.hasResolvedCity())
-            assertEquals(listOf("safadzhay"), cities.map { it.id })
-            assertTrue(shadowOf(manager).getLocationUpdateListeners().isEmpty())
-        } finally { location.pause(); activity.pause().stop().destroy() }
-    }
-
-    @Test fun repeatedResumeWithinFreshnessWindowDoesNotRequestLocation() {
-        shadowOf(app).grantPermissions(Manifest.permission.ACCESS_COARSE_LOCATION)
-        val now = System.currentTimeMillis()
-        settings.acceptAutomatic(CityCatalog.all.last(), now, now)
-        val activity = Robolectric.buildActivity(Activity::class.java).setup()
-        val location = controller(activity.get())
-        try {
-            repeat(3) { location.resume(); location.pause() }
-            assertEquals(CityLocationState.READY, states.last())
-            assertTrue(shadowOf(manager).getLocationUpdateListeners().isEmpty()); assertTrue(cities.isEmpty())
-        } finally { location.pause(); activity.pause().stop().destroy() }
-    }
-
-    @Test fun permissionRequestWaitsForOtherAppPermissionDialog() {
-        val activity = Robolectric.buildActivity(Activity::class.java).setup()
-        val location = controller(activity.get())
-        try {
-            location.resume(allowPermissionRequest = false)
-            assertNull(shadowOf(activity.get()).lastRequestedPermission)
-            location.permissionRequestsAvailable()
-            assertEquals(CityLocationController.REQUEST_CODE, shadowOf(activity.get()).lastRequestedPermission.requestCode)
-            assertTrue(settings.permissionAsked())
-        } finally { location.pause(); activity.pause().stop().destroy() }
-    }
-
-    @Test fun permanentDenialDoesNotRepeatedlyPromptOrOpenAndroidSettings() {
-        settings.markPermissionAsked()
-        repeat(2) {
-            val activity = Robolectric.buildActivity(Activity::class.java).setup()
-            val location = controller(activity.get())
-            try {
-                repeat(2) { location.resume(); location.pause() }
-                assertEquals(CityLocationState.PERMISSION_BLOCKED, states.last())
-                assertNull(shadowOf(activity.get()).lastRequestedPermission)
-                assertNull(shadowOf(activity.get()).nextStartedActivity)
-                assertEquals("Сафаджай", savedCity())
-            } finally { location.pause(); activity.pause().stop().destroy() }
+    @Test fun permissionGrantedWhilePausedIsUsedOnResume() {
+        withLocation {
+            it.resume(); it.pause(); coarse()
+            shadowOf(manager).setLastKnownLocation(LocationManager.NETWORK_PROVIDER, fix())
+            it.permissionResult(); assertEquals("Сафаджай", savedCity()); it.resume(); assertEquals("Москва", savedCity())
         }
     }
-
-    @Test fun returningToAutoCanRequestPermissionAfterAnOrdinaryDenial() {
-        settings.markPermissionAsked(); settings.selectManual(CityCatalog.all.last())
-        val activity = Robolectric.buildActivity(RationaleActivity::class.java).setup()
-        val location = controller(activity.get())
-        try {
-            location.resume(); assertNull(shadowOf(activity.get()).lastRequestedPermission)
-            settings.selectMode(CitySelectionMode.AUTOMATIC); location.selectionChanged()
-            assertEquals(CityLocationController.REQUEST_CODE, shadowOf(activity.get()).lastRequestedPermission.requestCode)
-            assertEquals(CityLocationState.PERMISSION_REQUIRED, states.last())
-            location.permissionResult()
-            assertEquals(CityCatalog.all.last(), settings.manualCity()); assertEquals("Москва", savedCity())
-            assertTrue(cities.isEmpty()); assertTrue(shadowOf(manager).getLocationUpdateListeners().isEmpty())
-        } finally { location.pause(); activity.pause().stop().destroy() }
-    }
-
-    @Test fun permissionGrantedWhilePausedIsUsedOnNextResume() {
-        val activity = Robolectric.buildActivity(Activity::class.java).setup()
-        val location = controller(activity.get())
-        try {
-            location.resume(); location.pause()
-            shadowOf(app).grantPermissions(Manifest.permission.ACCESS_COARSE_LOCATION)
-            shadowOf(manager).setLastKnownLocation(LocationManager.NETWORK_PROVIDER, fix(3000f))
-            location.permissionResult()
-            assertEquals("Сафаджай", savedCity())
-            location.resume()
-            assertEquals("Москва", savedCity()); assertEquals(CityLocationState.READY, states.last())
-        } finally { location.pause(); activity.pause().stop().destroy() }
-    }
-
-    @Test fun automaticCityChangesAfterSavedLocationExpires() {
-        shadowOf(app).grantPermissions(Manifest.permission.ACCESS_COARSE_LOCATION)
-        var now = System.currentTimeMillis()
-        val activity = Robolectric.buildActivity(Activity::class.java).setup()
-        val location = controller(activity.get(), clock = { now })
-        try {
-            shadowOf(manager).setLastKnownLocation(LocationManager.NETWORK_PROVIDER, fix())
-            location.resume(); location.pause()
-            assertEquals("Москва", savedCity())
-            now += CitySelectionPolicy.REFRESH_MS + 1000
-            val village = CityCatalog.all.first()
-            shadowOf(manager).setLastKnownLocation(LocationManager.NETWORK_PROVIDER,
-                fix().apply { latitude = village.latitude; longitude = village.longitude })
-            location.resume()
-            assertEquals("Сафаджай", savedCity()); assertEquals(listOf("moscow", "safadzhay"), cities.map { it.id })
-        } finally { location.pause(); activity.pause().stop().destroy() }
-    }
-
-    @Test fun savedCityIsRestoredWithoutGpsOnNewController() {
-        shadowOf(app).grantPermissions(Manifest.permission.ACCESS_COARSE_LOCATION)
-        val now = System.currentTimeMillis()
-        settings.acceptAutomatic(CityCatalog.all.last(), now, now)
-        repeat(2) {
-            val activity = Robolectric.buildActivity(Activity::class.java).setup()
-            val location = controller(activity.get())
-            try {
-                location.resume()
-                assertEquals("Москва", savedCity()); assertEquals(CityLocationState.READY, states.last())
-                assertTrue(shadowOf(manager).getLocationUpdateListeners().isEmpty()); assertTrue(cities.isEmpty())
-            } finally { location.pause(); activity.pause().stop().destroy() }
+    @Test fun permissionRevocationRejectsCallbacksAndStopsObservers() {
+        coarse()
+        withLocation {
+            it.resume(); val callback = active(it)
+            shadowOf(app).denyPermissions(Manifest.permission.ACCESS_COARSE_LOCATION, Manifest.permission.ACCESS_FINE_LOCATION)
+            callback.onLocationChanged(fix())
+            assertEquals("Сафаджай", savedCity()); assertTrue(listeners().isEmpty())
         }
     }
-
-    @Test fun timedRefreshOnlyRunsWhileForeground() {
-        shadowOf(app).grantPermissions(Manifest.permission.ACCESS_COARSE_LOCATION)
-        val epoch = System.currentTimeMillis(); val elapsed = SystemClock.elapsedRealtime()
-        val activity = Robolectric.buildActivity(Activity::class.java).setup()
-        val location = controller(activity.get(), clock = { epoch + SystemClock.elapsedRealtime() - elapsed })
-        try {
-            shadowOf(manager).setLastKnownLocation(LocationManager.NETWORK_PROVIDER, fix())
-            location.resume(); assertEquals("Москва", savedCity())
-            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(CitySelectionPolicy.REFRESH_MS + 1))
-            assertEquals(CityLocationState.SEARCHING, states.last())
-            assertTrue(shadowOf(manager).getLocationUpdateListeners().isNotEmpty())
-            val village = CityCatalog.all.first()
-            shadowOf(manager).simulateLocation(fix().apply { latitude = village.latitude; longitude = village.longitude })
-            shadowOf(Looper.getMainLooper()).idle()
+    @Test fun locationOffAndMissingSchedulesKeepCityWithoutObservers() {
+        coarse(); shadowOf(manager).setProviderEnabled(LocationManager.NETWORK_PROVIDER, false)
+        withLocation { it.resume(); assertEquals(CityLocationState.LOCATION_OFF, states.last()); assertTrue(listeners().isEmpty()) }
+        shadowOf(manager).setProviderEnabled(LocationManager.NETWORK_PROVIDER, true)
+        withLocation(candidates = { emptyList() }) {
+            it.resume(); assertEquals(CityLocationState.UNSUPPORTED, states.last()); assertTrue(listeners().isEmpty())
             assertEquals("Сафаджай", savedCity())
-            assertTrue(shadowOf(manager).getLocationUpdateListeners().isEmpty())
-            location.pause()
-            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(CitySelectionPolicy.REFRESH_MS + 1))
-            assertTrue(shadowOf(manager).getLocationUpdateListeners().isEmpty())
-            assertEquals(listOf("moscow", "safadzhay"), cities.map { it.id })
-        } finally { location.pause(); activity.pause().stop().destroy() }
+        }
     }
-
-    @Test fun failedAttemptRetriesAutomaticallyAfterCooldown() {
-        shadowOf(app).grantPermissions(Manifest.permission.ACCESS_COARSE_LOCATION)
-        val epoch = System.currentTimeMillis(); val elapsed = SystemClock.elapsedRealtime()
-        val activity = Robolectric.buildActivity(Activity::class.java).setup()
-        val location = controller(activity.get(), clock = { epoch + SystemClock.elapsedRealtime() - elapsed })
-        try {
-            location.resume()
-            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(21))
-            assertEquals(CityLocationState.UNAVAILABLE, states.last())
-            assertTrue(shadowOf(manager).getLocationUpdateListeners().isEmpty())
-            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(CitySelectionPolicy.RETRY_MS))
-            assertEquals(CityLocationState.SEARCHING, states.last())
-            shadowOf(manager).simulateLocation(fix())
-            shadowOf(Looper.getMainLooper()).idle()
-            assertEquals("Москва", savedCity())
-        } finally { location.pause(); activity.pause().stop().destroy() }
-    }
-
-    @Test fun noEligibleSchedulesNeverInventsCityOrTimetable() {
-        shadowOf(app).grantPermissions(Manifest.permission.ACCESS_COARSE_LOCATION)
-        val activity = Robolectric.buildActivity(Activity::class.java).setup()
-        val location = controller(activity.get(), candidates = { emptyList() })
-        try {
-            location.resume()
-            assertEquals(CityLocationState.UNSUPPORTED, states.last()); assertEquals("Сафаджай", savedCity())
-            assertTrue(cities.isEmpty()); assertTrue(shadowOf(manager).getLocationUpdateListeners().isEmpty())
-        } finally { location.pause(); activity.pause().stop().destroy() }
-    }
-
-    @Test fun refreshedSchedulesCanEnableAutomaticSelectionWithoutManualAction() {
-        shadowOf(app).grantPermissions(Manifest.permission.ACCESS_COARSE_LOCATION)
-        shadowOf(manager).setLastKnownLocation(LocationManager.NETWORK_PROVIDER, fix())
+    @Test fun refreshedSchedulesCanEnableSelection() {
+        coarse(); shadowOf(manager).setLastKnownLocation(LocationManager.NETWORK_PROVIDER, fix())
         var eligible = emptyList<ScheduleCity>()
-        val activity = Robolectric.buildActivity(Activity::class.java).setup()
-        val location = controller(activity.get(), candidates = { eligible })
-        try {
-            location.resume()
-            assertEquals(CityLocationState.UNSUPPORTED, states.last())
-            eligible = CityCatalog.all
-            location.schedulesChanged()
-            assertEquals("Москва", savedCity()); assertEquals(CityLocationState.READY, states.last())
-        } finally { location.pause(); activity.pause().stop().destroy() }
+        withLocation(candidates = { eligible }) {
+            it.resume(); eligible = CityCatalog.all; it.schedulesChanged(); assertEquals("Москва", savedCity())
+        }
     }
-
-    @Test fun fullModeCycleRejectsLateAutoRequestEvenAfterReturningToAuto() {
-        shadowOf(app).grantPermissions(Manifest.permission.ACCESS_COARSE_LOCATION)
-        val village = CityCatalog.all.first(); val moscow = CityCatalog.all.last()
-        val old = System.currentTimeMillis() - CitySelectionPolicy.REFRESH_MS - 1000
-        settings.acceptAutomatic(village, old, old)
-        val activity = Robolectric.buildActivity(Activity::class.java).setup()
-        val location = controller(activity.get())
-        try {
-            location.resume()
-            val previous = shadowOf(manager).getLocationUpdateListeners().single()
-            settings.selectManual(moscow); location.selectionChanged()
-            previous.onLocationChanged(fix())
-            assertEquals("Москва", savedCity()); assertEquals(village, settings.automaticCity())
-            assertEquals(moscow, settings.manualCity()); assertTrue(cities.isEmpty())
-            assertTrue(shadowOf(manager).getLocationUpdateListeners().isEmpty())
-
-            assertEquals(village, settings.selectMode(CitySelectionMode.AUTOMATIC))
-            location.selectionChanged()
-            val current = shadowOf(manager).getLocationUpdateListeners().single()
-            previous.onLocationChanged(fix())
-            assertEquals("Сафаджай", savedCity()); assertEquals(village, settings.automaticCity()); assertTrue(cities.isEmpty())
-            current.onLocationChanged(fix().apply { latitude = village.latitude; longitude = village.longitude })
-            assertEquals(CityLocationState.READY, states.last()); assertEquals(listOf(village), cities)
-            assertEquals(moscow, settings.manualCity())
-            settings.selectMode(CitySelectionMode.MANUAL); location.selectionChanged()
-            assertEquals("Москва", savedCity()); assertEquals(village, settings.automaticCity())
-            location.pause(); location.resume()
-            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(CitySelectionPolicy.REFRESH_MS + 1))
-            assertEquals("Москва", savedCity()); assertEquals(listOf(village), cities)
-            assertTrue(shadowOf(manager).getLocationUpdateListeners().isEmpty())
-        } finally { location.pause(); activity.pause().stop().destroy() }
+    @Test fun timeoutStopsActiveGpsAndRetriesOnlyAfterCooldown() {
+        coarse(); val epoch = System.currentTimeMillis(); val elapsed = SystemClock.elapsedRealtime()
+        withLocation(clock = { epoch + SystemClock.elapsedRealtime() - elapsed }) {
+            it.resume(); shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(21))
+            assertEquals(CityLocationState.UNAVAILABLE, states.last()); assertNull(active(it))
+            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(CitySelectionPolicy.RETRY_MS))
+            assertNotNull(active(it)); active(it).onLocationChanged(fix()); assertEquals("Москва", savedCity())
+        }
     }
-
-    @Test fun manualModeNeverRequestsLocationEvenWithFreshProviderCoordinates() {
-        val village = CityCatalog.all.first(); val moscow = CityCatalog.all.last()
-        val now = System.currentTimeMillis()
-        settings.acceptAutomatic(village, now, now); settings.selectManual(moscow)
-        shadowOf(manager).setLastKnownLocation(LocationManager.NETWORK_PROVIDER, fix())
-        val activity = Robolectric.buildActivity(Activity::class.java).setup()
-        val location = controller(activity.get())
-        try {
-            repeat(2) { location.resume(); location.schedulesChanged(); location.pause() }
-            location.permissionRequestsAvailable(); location.permissionResult()
-            assertEquals("Москва", savedCity()); assertEquals(village, settings.automaticCity())
-            assertEquals(moscow, settings.manualCity()); assertEquals(now, settings.lastSuccess())
-            assertTrue(cities.isEmpty()); assertFalse(settings.permissionAsked())
-            assertNull(shadowOf(activity.get()).lastRequestedPermission)
-            assertTrue(shadowOf(manager).getLocationUpdateListeners().isEmpty())
-        } finally { location.pause(); activity.pause().stop().destroy() }
+    @Test fun timedRefreshRunsOnlyWhileForeground() {
+        coarse(); val epoch = System.currentTimeMillis(); val elapsed = SystemClock.elapsedRealtime()
+        shadowOf(manager).setLastKnownLocation(LocationManager.NETWORK_PROVIDER, fix(village))
+        withLocation(clock = { epoch + SystemClock.elapsedRealtime() - elapsed }) {
+            it.resume(); shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(CitySelectionPolicy.REFRESH_MS + 1))
+            assertNotNull(active(it)); active(it).onLocationChanged(fix()); assertEquals("Москва", savedCity())
+            it.pause(); shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(CitySelectionPolicy.REFRESH_MS + 1))
+            assertTrue(listeners().isEmpty())
+        }
     }
-
-    @Test fun permissionResultAfterManualSelectionCannotActivateAutoCity() {
-        val moscow = CityCatalog.all.last(); val village = CityCatalog.all.first()
-        val activity = Robolectric.buildActivity(Activity::class.java).setup()
-        val location = controller(activity.get())
-        try {
-            location.resume()
-            assertEquals(CityLocationController.REQUEST_CODE, shadowOf(activity.get()).lastRequestedPermission.requestCode)
-            settings.selectManual(moscow); location.selectionChanged()
-            shadowOf(app).grantPermissions(Manifest.permission.ACCESS_COARSE_LOCATION)
-            shadowOf(manager).setLastKnownLocation(LocationManager.NETWORK_PROVIDER,
-                fix().apply { latitude = village.latitude; longitude = village.longitude })
-            location.permissionResult()
-            assertEquals("Москва", savedCity()); assertEquals(moscow, settings.manualCity())
-            assertNull(settings.automaticCity()); assertTrue(cities.isEmpty())
-            settings.selectMode(CitySelectionMode.AUTOMATIC); location.selectionChanged()
-            assertEquals("Сафаджай", savedCity()); assertEquals(village, settings.automaticCity())
-            assertEquals(moscow, settings.manualCity()); assertEquals(listOf(village), cities)
-        } finally { location.pause(); activity.pause().stop().destroy() }
+    @Test fun oldRequestsAreIgnoredAfterPauseAndForegroundReturnCanRefresh() {
+        coarse()
+        withLocation {
+            it.resume(); val oldActive = active(it); val oldPassive = passive(it)
+            it.pause(); assertTrue(listeners().isEmpty())
+            oldActive.onLocationChanged(fix()); oldPassive.onLocationChanged(fix()); assertEquals("Сафаджай", savedCity())
+            it.resume(); oldActive.onLocationChanged(fix()); assertEquals("Сафаджай", savedCity())
+            active(it).onLocationChanged(fix()); assertEquals("Москва", savedCity())
+        }
     }
-
-    @Test fun switchingBackToFreshAutomaticCityUsesSavedCityWithoutAnotherGpsRequest() {
-        shadowOf(app).grantPermissions(Manifest.permission.ACCESS_COARSE_LOCATION)
-        val village = CityCatalog.all.first(); val moscow = CityCatalog.all.last()
-        val now = System.currentTimeMillis()
-        settings.acceptAutomatic(village, now, now); settings.selectManual(moscow)
-        shadowOf(manager).setLastKnownLocation(LocationManager.NETWORK_PROVIDER, null)
-        val activity = Robolectric.buildActivity(Activity::class.java).setup()
-        val location = controller(activity.get())
-        try {
-            location.resume(); assertEquals("Москва", savedCity())
-            assertEquals(village, settings.selectMode(CitySelectionMode.AUTOMATIC))
-            location.selectionChanged()
-            assertEquals("Сафаджай", savedCity()); assertEquals(CityLocationState.READY, states.last())
-            assertEquals(moscow, settings.manualCity()); assertEquals(now, settings.lastSuccess())
-            assertTrue(cities.isEmpty()); assertTrue(shadowOf(manager).getLocationUpdateListeners().isEmpty())
-        } finally { location.pause(); activity.pause().stop().destroy() }
-    }
-
-    @Test fun locationDisabledAfterModeSwitchRetainsBothIndependentCities() {
-        shadowOf(app).grantPermissions(Manifest.permission.ACCESS_COARSE_LOCATION)
-        val village = CityCatalog.all.first(); val moscow = CityCatalog.all.last()
-        val old = System.currentTimeMillis() - CitySelectionPolicy.REFRESH_MS - 1000
-        settings.acceptAutomatic(village, old, old); settings.selectManual(moscow)
-        shadowOf(manager).setProviderEnabled(LocationManager.NETWORK_PROVIDER, false)
-        val activity = Robolectric.buildActivity(Activity::class.java).setup()
-        val location = controller(activity.get())
-        try {
-            location.resume()
-            settings.selectMode(CitySelectionMode.AUTOMATIC); location.selectionChanged()
-            assertEquals(CityLocationState.LOCATION_OFF, states.last()); assertEquals("Сафаджай", savedCity())
-            assertEquals(village, settings.automaticCity()); assertEquals(moscow, settings.manualCity())
-            settings.selectMode(CitySelectionMode.MANUAL); location.selectionChanged()
-            assertEquals("Москва", savedCity()); assertEquals(village, settings.automaticCity())
-            assertTrue(shadowOf(manager).getLocationUpdateListeners().isEmpty())
-        } finally { location.pause(); activity.pause().stop().destroy() }
+    @Test fun ordinaryResumeAndRecreatedSessionDoNotCauseRepeatedActiveRequests() {
+        coarse(); shadowOf(manager).setLastKnownLocation(LocationManager.NETWORK_PROVIDER, fix())
+        withLocation { it.resume(); it.pause(); it.resume(); assertNull(active(it)); assertEquals("Москва", savedCity()) }
+        settings = CitySelectionSettings(app, CitySelectionSession(startupChecked = true))
+        withLocation { it.resume(); assertNull(active(it)); assertNotNull(passive(it)) }
     }
 
     private fun installVerifiedTodaySchedules() {
@@ -546,73 +303,78 @@ class AutomaticCityTest {
 
     private fun verifyUi(mode: ThemeMode, systemDark: Boolean) {
         RuntimeEnvironment.setQualifiers("w360dp-h800dp-${if (systemDark) "night" else "notnight"}-mdpi")
-        installVerifiedTodaySchedules(); ThemeSettings.save(app, mode)
-        shadowOf(app).grantPermissions(Manifest.permission.ACCESS_COARSE_LOCATION)
-        shadowOf(manager).setLastKnownLocation(LocationManager.NETWORK_PROVIDER, fix(3000f))
+        installVerifiedTodaySchedules(); ThemeSettings.save(app, mode); coarse()
+        shadowOf(manager).setLastKnownLocation(LocationManager.NETWORK_PROVIDER, fix(moscow, 3000f))
         val activity = Robolectric.buildActivity(MainActivity::class.java).create().start().resume()
         fun root() = ReflectionHelpers.getField<Dialog>(activity.get(), "settingsPanel").window!!.decorView
-        fun choice(tag: String) = tagged(root(), tag) as RadioButton
+        fun choice(city: ScheduleCity) = tagged(root(), "city_choice_${city.id}") as RadioButton
+        fun walk(view: View): List<View> = listOf(view) + if (view is ViewGroup)
+            (0 until view.childCount).flatMap { walk(view.getChildAt(it)) } else emptyList()
         fun assertSchedule(city: String, fajr: String) {
             val main = activity.get()
-            assertEquals(city, ReflectionHelpers.getField<String>(main, "selectedCity"))
-            assertEquals(city, savedCity())
+            assertEquals(city, ReflectionHelpers.getField<String>(main, "selectedCity")); assertEquals(city, savedCity())
             assertEquals(fajr, ReflectionHelpers.callInstanceMethod<List<PrayerDay>>(main, "currentData").single().fajr)
             assertTrue(ReflectionHelpers.getField<TextView>(main, "placeText").text.contains(city))
             assertEquals(mode.usesDark(systemDark), ReflectionHelpers.getField<AppColors>(main, "palette").isDark)
         }
-        fun texts(view: View): List<String> = buildList {
-            if (view is TextView) add(view.text.toString())
-            if (view is ViewGroup) for (i in 0 until view.childCount) addAll(texts(view.getChildAt(i)))
-        }
-        fun assertNoRefresh() {
-            assertNull(tagged(root(), "city_location_retry"))
-            assertFalse(texts(root()).any { it.contains("Обновить местоположение") })
+        fun assertCityOnly() {
+            val texts = walk(root()).filterIsInstance<TextView>().filter { it.contentDescription != "Назад" }.map { it.text.toString() }.filter { it.isNotBlank() }
+            assertEquals(listOf("Город", "Сафаджай", "Москва"), texts)
+            assertEquals(2, walk(root()).filterIsInstance<RadioButton>().size)
+            assertNull(tagged(root(), "city_location_status")); assertNull(tagged(root(), "city_mode_AUTO"))
         }
         try {
             assertSchedule("Москва", "04:01")
             ReflectionHelpers.callInstanceMethod<Unit>(activity.get(), "showSettingsDialog")
-            assertTrue((tagged(root(), "city_selection_summary") as TextView).text.contains("Определено автоматически"))
-            val card = tagged(root(), "city_information")!!
-            assertTrue(card.isClickable); assertTrue(card.isFocusable); assertTrue(card.performClick())
-            assertTrue(texts(root()).contains("Как выбирать город для расписания"))
-            assertEquals("Автоматически", choice("city_mode_AUTO").text.toString())
-            assertEquals("Вручную", choice("city_mode_MANUAL").text.toString())
-            assertTrue(choice("city_mode_AUTO").isChecked)
-            assertNull(tagged(root(), "city_manual_moscow")); assertNull(tagged(root(), "city_manual_safadzhay"))
-            assertNoRefresh()
-
-            // AUTO Moscow -> MANUAL Safadzhay: independent retained cities and actual timetable.
-            assertTrue(choice("city_mode_MANUAL").performClick())
-            assertSchedule("Сафаджай", "04:00")
-            assertTrue(choice("city_mode_MANUAL").isChecked); assertTrue(choice("city_manual_safadzhay").isChecked)
-            assertTrue(choice("city_manual_moscow").performClick()); assertSchedule("Москва", "04:01")
-            assertTrue(choice("city_manual_safadzhay").performClick()); assertSchedule("Сафаджай", "04:00")
-            val saved = CitySelectionSettings(app)
-            assertEquals(CityCatalog.all.last(), saved.automaticCity()); assertEquals(CityCatalog.all.first(), saved.manualCity())
-            assertNoRefresh()
-
-            assertTrue(choice("city_mode_AUTO").performClick()); assertSchedule("Москва", "04:01")
-            assertTrue(choice("city_mode_AUTO").isChecked); assertNull(tagged(root(), "city_manual_moscow"))
-            assertEquals(CityCatalog.all.first(), CitySelectionSettings(app).manualCity())
-            assertTrue(choice("city_mode_MANUAL").performClick()); assertSchedule("Сафаджай", "04:00")
-            assertNoRefresh()
-
-            // Restart/recreation restores MANUAL and both remembered selections without GPS.
-            shadowOf(manager).setLastKnownLocation(LocationManager.NETWORK_PROVIDER, null)
+            assertEquals("Москва", (tagged(root(), "city_selection_summary") as TextView).text.toString())
+            assertTrue(tagged(root(), "city_information")!!.performClick())
+            assertCityOnly(); assertTrue(choice(moscow).isChecked); assertFalse(choice(village).isChecked)
+            val location = ReflectionHelpers.getField<CityLocationController>(activity.get(), "cityLocation")
+            passive(location).onLocationChanged(fix(village)); assertSchedule("Сафаджай", "04:00")
+            assertTrue(choice(village).isChecked); assertFalse(choice(moscow).isChecked)
+            val oldPassive = passive(location)
+            assertTrue(choice(moscow).performClick()); assertSchedule("Москва", "04:01")
+            oldPassive.onLocationChanged(fix(village)); assertSchedule("Москва", "04:01")
+            assertTrue(choice(moscow).isChecked); assertTrue(listeners().isEmpty()); assertCityOnly()
+            ReflectionHelpers.callInstanceMethod<Unit>(activity.get(), "showSettingsDialog")
+            ReflectionHelpers.callInstanceMethod<Unit>(activity.get(), "showCityChoice")
+            assertTrue(choice(moscow).isChecked); assertCityOnly()
+            shadowOf(manager).setLastKnownLocation(LocationManager.NETWORK_PROVIDER, fix(village))
             activity.recreate()
-            assertSchedule("Сафаджай", "04:00")
-            assertNull(shadowOf(activity.get()).lastRequestedPermission)
-            assertTrue(shadowOf(manager).getLocationUpdateListeners().isEmpty())
-            assertTrue(choice("city_mode_MANUAL").isChecked); assertTrue(choice("city_manual_safadzhay").isChecked)
-            assertTrue(choice("city_mode_AUTO").performClick()); assertSchedule("Москва", "04:01")
-            assertTrue((tagged(root(), "city_location_status") as TextView).text.contains("Определено автоматически"))
-            assertTrue(shadowOf(manager).getLocationUpdateListeners().isEmpty())
-            assertNoRefresh()
+            assertSchedule("Москва", "04:01"); assertTrue(choice(moscow).isChecked); assertCityOnly()
+            assertTrue(listeners().isEmpty())
+            assertTrue(ReflectionHelpers.getField<CitySelectionSettings>(activity.get(), "citySelection").session.manualOverride)
         } finally { activity.pause().stop().destroy() }
+        // A new task launch has no saved Activity state: auto is enabled again.
+        val fresh = Robolectric.buildActivity(MainActivity::class.java).create().start().resume()
+        try {
+            assertEquals("Сафаджай", ReflectionHelpers.getField<String>(fresh.get(), "selectedCity"))
+            assertFalse(ReflectionHelpers.getField<CitySelectionSettings>(fresh.get(), "citySelection").session.manualOverride)
+            assertEquals(moscow, CitySelectionSettings(app).manualCity())
+        } finally { fresh.pause().stop().destroy() }
     }
 
-    @Test @Config(sdk = [33]) fun lightSettingsAndTodayUseResolvedCity() = verifyUi(ThemeMode.LIGHT, true)
-    @Test @Config(sdk = [33]) fun darkSettingsAndTodayUseResolvedCity() = verifyUi(ThemeMode.DARK, false)
-    @Test @Config(sdk = [33]) fun systemLightSettingsAndTodayUseResolvedCity() = verifyUi(ThemeMode.SYSTEM, false)
-    @Test @Config(sdk = [33]) fun systemDarkSettingsAndTodayUseResolvedCity() = verifyUi(ThemeMode.SYSTEM, true)
+    @Test @Config(sdk = [33]) fun lightCityOnlyUiAndSessionLifecycle() = verifyUi(ThemeMode.LIGHT, true)
+    @Test @Config(sdk = [33]) fun darkCityOnlyUiAndSessionLifecycle() = verifyUi(ThemeMode.DARK, false)
+    @Test @Config(sdk = [33]) fun systemLightCityOnlyUiAndSessionLifecycle() = verifyUi(ThemeMode.SYSTEM, false)
+    @Test @Config(sdk = [33]) fun systemDarkCityOnlyUiAndSessionLifecycle() = verifyUi(ThemeMode.SYSTEM, true)
+
+    @Test @Config(sdk = [33]) fun systemSavedStateRecreationPreservesManualOverride() {
+        installVerifiedTodaySchedules(); coarse()
+        val saved = Bundle()
+        val old = Robolectric.buildActivity(MainActivity::class.java).create().start().resume()
+        try {
+            val selections = ReflectionHelpers.getField<CitySelectionSettings>(old.get(), "citySelection")
+            selections.selectManual(moscow)
+            ReflectionHelpers.getField<CityLocationController>(old.get(), "cityLocation").selectionChanged()
+            old.saveInstanceState(saved)
+        } finally { old.pause().stop().destroy() }
+        shadowOf(manager).setLastKnownLocation(LocationManager.NETWORK_PROVIDER, fix(village))
+        val restored = Robolectric.buildActivity(MainActivity::class.java).create(saved).start().resume()
+        try {
+            assertEquals("Москва", ReflectionHelpers.getField<String>(restored.get(), "selectedCity"))
+            assertTrue(ReflectionHelpers.getField<CitySelectionSettings>(restored.get(), "citySelection").session.manualOverride)
+            assertTrue(listeners().isEmpty())
+        } finally { restored.pause().stop().destroy() }
+    }
 }

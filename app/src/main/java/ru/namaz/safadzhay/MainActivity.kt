@@ -178,9 +178,8 @@ class MainActivity : Activity() {
     private var selectedCity: String = "Сафаджай"
     private lateinit var citySelection: CitySelectionSettings
     private lateinit var cityLocation: CityLocationController
-    private var cityLocationState = CityLocationState.IDLE
     private var citySettingsSummary: TextView? = null
-    private var cityPanelStatus: TextView? = null
+    private val cityButtons = mutableListOf<RadioButton>()
     private var notificationPermissionPending = false
     private lateinit var placeText: TextView
 
@@ -541,12 +540,15 @@ class MainActivity : Activity() {
         val openedFromReminder = intent?.action == OPEN_PRAYER_ACTION
         selectedDate = savedInstanceState?.getString("selected_date")?.let { runCatching { LocalDate.parse(it) }.getOrNull() } ?: uiNow().toLocalDate()
         val prefs = getSharedPreferences(SETTINGS_PREFS, Context.MODE_PRIVATE)
-        citySelection = CitySelectionSettings(this)
+        val citySession = CitySelectionSession(
+            manualOverride = savedInstanceState?.getBoolean("city_session_manual_override") == true,
+            startupChecked = savedInstanceState?.getBoolean("city_session_startup_checked") == true,
+            latestFixNanos = savedInstanceState?.getLong("city_session_latest_fix_nanos") ?: 0L
+        )
+        citySelection = CitySelectionSettings(this, citySession)
         selectedCity = citySelection.savedCity()?.name ?: "Сафаджай"
         cityLocation = CityLocationController(this, citySelection,
-            { availableCitySchedules() }, { onScheduleCitySelected(it) }, {
-                cityLocationState = it; refreshCitySelectionUi()
-            })
+            { availableCitySchedules() }, { onScheduleCitySelected(it) }, { /* No location status in UI. */ })
         scheduleTabSelected = savedInstanceState?.getBoolean("schedule_tab") ?: false
         if (openedFromReminder) { selectedDate = LocalDate.now(zone); scheduleTabSelected = false }
         calendarMonth = savedInstanceState?.getString("calendar_month")?.let {
@@ -1263,7 +1265,7 @@ headerBox.addView(
     }
 
     private fun fullScreenPanel(titleText: String, onBack: () -> Unit): Pair<android.app.Dialog, LinearLayout> {
-        citySettingsSummary = null; cityPanelStatus = null
+        citySettingsSummary = null; cityButtons.clear()
         // Keep one window throughout settings navigation so the home screen is never exposed.
         val dialog = settingsPanel ?: object : android.app.Dialog(this, if (palette.isDark) R.style.AppPanelTheme else R.style.AppPanelThemeLight) {
             override fun cancel() {
@@ -1410,18 +1412,17 @@ headerBox.addView(
         refreshCitySelectionUi()
     }
 
-    private fun citySelectionSummary(): String =
-        "$selectedCity\n" + if (citySelection.isAutomatic()) {
-            CitySelectionStatus.description(citySelection.hasResolvedCity(), cityLocationState)
-        } else "Выбран вручную"
-
     private fun refreshCitySelectionUi() {
-        citySettingsSummary?.text = citySelectionSummary()
-        cityPanelStatus?.text = citySelectionSummary()
+        citySettingsSummary?.text = selectedCity
+        cityButtons.forEach { button ->
+            val checked = button.text.toString() == selectedCity
+            button.isChecked = checked
+            button.background = surface(checked)
+        }
     }
 
     private fun cityInformationCard(): LinearLayout {
-        val row = screenRow(R.drawable.ic_location, "Город", citySelectionSummary()) { showCityChoice() }
+        val row = screenRow(R.drawable.ic_location, "Город", selectedCity) { showCityChoice() }
         row.tag = "city_information"
         citySettingsSummary = ((row.getChildAt(1) as LinearLayout).getChildAt(1) as TextView).apply {
             tag = "city_selection_summary"
@@ -1433,51 +1434,29 @@ headerBox.addView(
 
     private fun showCityChoice() {
         panelRoute = "city"
-        val pair = fullScreenPanel("Город") { showSettingsDialog() }
-        val root = pair.second
-        root.addView(label("Как выбирать город для расписания", 14f, muted).apply {
-            setPadding(0, dp(16), 0, dp(16)); maxLines = Int.MAX_VALUE
-        })
-        fun choice(group: RadioGroup, title: String, tagValue: String, checked: Boolean, select: () -> Unit) {
-            group.addView(RadioButton(this).apply {
-                id = View.generateViewId(); tag = tagValue
-                text = title; textSize = 17f; setTextColor(ink)
-                isChecked = checked
+        val pair = fullScreenPanel("Город") { cityButtons.clear(); showSettingsDialog() }
+        val cities = RadioGroup(this).apply { orientation = RadioGroup.VERTICAL }
+        cityButtons.clear()
+        scheduleCities().forEach { city ->
+            val choice = RadioButton(this).apply {
+                id = View.generateViewId(); tag = "city_choice_${city.id}"
+                text = city.name; textSize = 17f; setTextColor(ink)
+                isChecked = selectedCity == city.name
                 buttonTintList = android.content.res.ColorStateList(
                     arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf()), intArrayOf(mint, muted)
                 )
-                background = surface(checked)
+                background = surface(isChecked)
                 setPadding(dp(15), dp(12), dp(15), dp(12)); minHeight = dp(64)
-                setOnClickListener { select(); showCityChoice() }
-            }, RadioGroup.LayoutParams(-1, -2).apply { bottomMargin = dp(10) })
-        }
-        val modes = RadioGroup(this).apply { orientation = RadioGroup.VERTICAL }
-        listOf(CitySelectionMode.AUTOMATIC to "Автоматически", CitySelectionMode.MANUAL to "Вручную").forEach { (mode, title) ->
-            choice(modes, title, "city_mode_${mode.key}", citySelection.mode() == mode) {
-                if (citySelection.mode() != mode) {
-                    citySelection.selectMode(mode)?.let { onScheduleCitySelected(it) }
-                    cityLocation.selectionChanged()
-                }
-            }
-        }
-        root.addView(modes, LinearLayout.LayoutParams(-1, -2))
-        cityPanelStatus = label(citySelectionSummary(), 14f, muted).apply {
-            tag = "city_location_status"; maxLines = Int.MAX_VALUE
-            accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
-            setPadding(0, dp(8), 0, dp(12))
-        }
-        root.addView(cityPanelStatus)
-        if (!citySelection.isAutomatic()) {
-            val cities = RadioGroup(this).apply { orientation = RadioGroup.VERTICAL }
-            scheduleCities().forEach { city ->
-                choice(cities, city.name, "city_manual_${city.id}", selectedCity == city.name) {
+                setOnClickListener {
                     citySelection.selectManual(city)
-                    onScheduleCitySelected(city)
                     cityLocation.selectionChanged()
+                    onScheduleCitySelected(city)
                 }
             }
-            root.addView(cities, LinearLayout.LayoutParams(-1, -2))
+            cityButtons.add(choice)
+            cities.addView(choice, RadioGroup.LayoutParams(-1, -2).apply { bottomMargin = dp(10) })
         }
+        pair.second.addView(cities, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(16) })
         pair.first.show()
     }
 
@@ -2599,6 +2578,9 @@ startScheduleUpdateCheck()
 
 
     override fun onSaveInstanceState(outState: Bundle) {
+        outState.putBoolean("city_session_manual_override", citySelection.session.manualOverride)
+        outState.putBoolean("city_session_startup_checked", citySelection.session.startupChecked)
+        outState.putLong("city_session_latest_fix_nanos", citySelection.session.latestFixNanos)
         outState.putString("selected_date", selectedDate?.toString())
         outState.putBoolean("schedule_tab", scheduleTabSelected)
         outState.putString("calendar_month", calendarMonth.toString())

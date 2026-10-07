@@ -2,32 +2,21 @@ package ru.namaz.safadzhay
 
 import kotlin.math.*
 
-internal enum class CitySelectionMode(val key: String) {
-    AUTOMATIC("AUTO"), MANUAL("MANUAL");
-
-    companion object {
-        fun fromKey(key: String?) = if (key == MANUAL.key || key == "manual") MANUAL else AUTOMATIC
-    }
+/** Task/session state, restored by MainActivity's saved instance state, never preferences.
+ * A fresh Activity launch without saved state creates an automatic session.
+ */
+internal class CitySelectionSession(
+    manualOverride: Boolean = false,
+    var startupChecked: Boolean = false,
+    var latestFixNanos: Long = 0L
+) {
+    var manualOverride = manualOverride
+        private set
+    fun selectManual() { manualOverride = true }
 }
 
 internal enum class CityLocationState {
     IDLE, SEARCHING, READY, PERMISSION_REQUIRED, PERMISSION_BLOCKED, LOCATION_OFF, UNAVAILABLE, UNSUPPORTED
-}
-
-internal object CitySelectionStatus {
-    fun description(resolved: Boolean, state: CityLocationState): String {
-        val retained = if (resolved) "Сохранён последний определённый город." else "Местоположение ещё не определено."
-        return when (state) {
-            CityLocationState.READY -> if (resolved) "Определено автоматически" else retained
-            CityLocationState.SEARCHING -> "$retained Определяем местоположение…"
-            CityLocationState.PERMISSION_REQUIRED -> "$retained Нет разрешения на местоположение."
-            CityLocationState.PERMISSION_BLOCKED -> "$retained Разрешите местоположение в настройках Android."
-            CityLocationState.LOCATION_OFF -> "$retained Местоположение устройства выключено."
-            CityLocationState.UNAVAILABLE -> "$retained Координаты временно недоступны. Повторим попытку автоматически."
-            CityLocationState.UNSUPPORTED -> "$retained Рядом нет подходящего доступного расписания."
-            CityLocationState.IDLE -> retained
-        }
-    }
 }
 
 internal data class ScheduleCity(val id: String, val name: String, val latitude: Double, val longitude: Double)
@@ -47,6 +36,10 @@ internal object CityCatalog {
 internal object CitySelectionPolicy {
     const val REFRESH_MS = 30 * 60 * 1000L
     const val RETRY_MS = 5 * 60 * 1000L
+    const val PASSIVE_INTERVAL_MS = 2 * 60 * 1000L
+    const val MOVEMENT_METERS = 5_000f
+    const val SWITCH_MARGIN_METERS = 10_000.0
+    const val MAX_SWITCH_FIX_AGE_SECONDS = 2 * 60.0
     const val MAX_FIX_AGE_SECONDS = 10 * 60.0
     const val MAX_ACCURACY_METERS = 25_000.0
     // A bounded matching policy, not a claim that a timetable covers distant places.
@@ -64,13 +57,17 @@ internal object CitySelectionPolicy {
         return 6_371_000 * 2 * atan2(sqrt(a), sqrt(1-a))
     }
 
-    fun nearest(latitude: Double, longitude: Double, accuracy: Double, candidates: List<ScheduleCity>): ScheduleCity? {
+    fun nearest(latitude: Double, longitude: Double, accuracy: Double, candidates: List<ScheduleCity>, current: ScheduleCity? = null): ScheduleCity? {
         if (!validFix(latitude, longitude, accuracy, 0.0)) return null
         val ranked = candidates.map { it to distance(latitude, longitude, it) }.sortedBy { it.second }
         val first = ranked.firstOrNull() ?: return null
         if (first.second + accuracy > MAX_DISTANCE_METERS) return null
         // Do not switch cities if the uncertainty overlaps their nearest-city boundary.
         if (ranked.size > 1 && ranked[1].second - first.second <= 2 * accuracy) return null
+        // Hysteresis: crossing the nearest-city boundary by a few metres is not
+        // enough. The new city must win beyond both uncertainty and a 10 km margin.
+        if (current != null && current.id != first.first.id && current in candidates &&
+            distance(latitude, longitude, current) - first.second <= 2 * accuracy + SWITCH_MARGIN_METERS) return null
         return first.first
     }
 

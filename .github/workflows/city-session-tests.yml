@@ -1,0 +1,43 @@
+name: City session tests (no APK)
+
+on:
+  push:
+    branches: [test/1.2-test3-security]
+    paths:
+      - 'app/src/main/java/ru/namaz/safadzhay/City*.kt'
+      - 'app/src/main/java/ru/namaz/safadzhay/MainActivity.kt'
+      - 'app/src/test/**'
+      - '.github/workflows/city-session-tests.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+      - name: Static and security checks
+        run: |
+          python3 scripts/preflight.py
+          python3 -m unittest discover -s scripts -p 'test_*.py'
+      - name: Unit tests and lint only
+        run: bash gradlew --no-daemon :app:testDebugUnitTest :app:testReleaseUnitTest :app:lintDebug :app:lintRelease
+      - name: Verification reports
+        if: always()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: city-session-test-reports
+          path: |
+            app/build/reports/tests/
+            app/build/test-results/
+            app/build/reports/lint-results-*.html
+          if-no-files-found: ignore
