@@ -3,15 +3,36 @@ package ru.namaz.safadzhay
 import kotlin.math.*
 
 internal enum class CitySelectionMode(val key: String) {
-    MANUAL("manual"), AUTOMATIC("automatic");
+    AUTOMATIC("AUTO"), MANUAL("MANUAL");
+
     companion object {
-        fun fromKey(key: String?) = entries.firstOrNull { it.key == key } ?: MANUAL
+        fun fromKey(key: String?) = if (key == MANUAL.key || key == "manual") MANUAL else AUTOMATIC
+    }
+}
+
+internal enum class CityLocationState {
+    IDLE, SEARCHING, READY, PERMISSION_REQUIRED, PERMISSION_BLOCKED, LOCATION_OFF, UNAVAILABLE, UNSUPPORTED
+}
+
+internal object CitySelectionStatus {
+    fun description(resolved: Boolean, state: CityLocationState): String {
+        val retained = if (resolved) "Сохранён последний определённый город." else "Местоположение ещё не определено."
+        return when (state) {
+            CityLocationState.READY -> if (resolved) "Определено автоматически" else retained
+            CityLocationState.SEARCHING -> "$retained Определяем местоположение…"
+            CityLocationState.PERMISSION_REQUIRED -> "$retained Нет разрешения на местоположение."
+            CityLocationState.PERMISSION_BLOCKED -> "$retained Разрешите местоположение в настройках Android."
+            CityLocationState.LOCATION_OFF -> "$retained Местоположение устройства выключено."
+            CityLocationState.UNAVAILABLE -> "$retained Координаты временно недоступны. Повторим попытку автоматически."
+            CityLocationState.UNSUPPORTED -> "$retained Рядом нет подходящего доступного расписания."
+            CityLocationState.IDLE -> retained
+        }
     }
 }
 
 internal data class ScheduleCity(val id: String, val name: String, val latitude: Double, val longitude: Double)
 
-/** Metadata for the existing schedule IDs, shared by manual and automatic selection.
+/** Metadata for automatic matching against the existing schedule IDs.
  * It does not add cities to ScheduleRepository's validation allowlist.
  */
 internal object CityCatalog {

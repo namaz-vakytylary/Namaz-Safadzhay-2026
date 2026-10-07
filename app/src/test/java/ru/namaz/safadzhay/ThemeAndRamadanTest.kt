@@ -154,7 +154,16 @@ class ThemeAndRamadanTest {
             clickText(panel(a), "Когда напоминать")
             assertTrue(walk(panel(a)).filterIsInstance<RadioButton>().all { it.currentTextColor == AppColors(mode == ThemeMode.DARK).onSurface })
             screenshot(panel(a), "lead-$suffix")
-            invoke(a, "showSettingsDialog"); clickText(panel(a), "Город")
+            invoke(a, "showSettingsDialog")
+            val city = walk(panel(a)).single { it.tag == "city_information" }
+            assertTrue(city.isClickable); assertTrue(city.hasOnClickListeners())
+            val cityTitle = walk(city).filterIsInstance<TextView>().single { it.text.toString() == "Город" }
+            assertEquals(AppColors(mode == ThemeMode.DARK).onSurface, cityTitle.currentTextColor)
+            assertTrue(city.performClick())
+            val modeChoices = walk(panel(a)).filterIsInstance<RadioButton>()
+            assertEquals(setOf("Автоматически", "Вручную"), modeChoices.map { it.text.toString() }.toSet())
+            assertTrue(modeChoices.all { it.currentTextColor == AppColors(mode == ThemeMode.DARK).onSurface })
+            assertTrue(walk(panel(a)).filterIsInstance<TextView>().none { it.text.contains("Обновить местоположение") })
             screenshot(panel(a), "city-$suffix")
             invoke(a, "showAboutDialog")
             val about = ReflectionHelpers.getField<Dialog>(a, "aboutDialog")

@@ -3,32 +3,28 @@ package ru.namaz.safadzhay
 import android.Manifest
 import android.app.Activity
 import android.content.Context
-import android.content.Intent
 import android.content.pm.PackageManager
 import android.location.Location
 import android.location.LocationListener
 import android.location.LocationManager
-import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.CancellationSignal
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
-import android.provider.Settings
 import java.util.concurrent.Executor
 
-internal enum class CityLocationState { IDLE, SEARCHING, READY, PERMISSION_REQUIRED, LOCATION_OFF, UNAVAILABLE, UNSUPPORTED }
-
-/** One foreground attempt, bounded to 20s and cancelled on pause/manual selection.
- * Independent of Qibla's screen-scoped compass listener. No service or background job.
+/** Automatic selection uses foreground-only attempts bounded to 20s. No service or GPS
+ * tracking in the background; independent of Qibla's screen-scoped listener.
  */
 internal class CityLocationController(
     private val activity: Activity,
     private val settings: CitySelectionSettings,
     private val candidates: () -> List<ScheduleCity>,
     private val onCity: (ScheduleCity) -> Unit,
-    private val onState: (CityLocationState) -> Unit
+    private val onState: (CityLocationState) -> Unit,
+    private val clock: () -> Long = System::currentTimeMillis
 ) {
     private val manager = activity.getSystemService(Context.LOCATION_SERVICE) as LocationManager
     private val handler = Handler(Looper.getMainLooper())
@@ -37,91 +33,150 @@ internal class CityLocationController(
     private var generation = 0
     private var searching = false
     private var foreground = false
+    private var permissionsAvailable = true
     private var unsupportedFix = false
+    private var state = CityLocationState.IDLE
     private var forceNextResume = false
-    private val timeout = Runnable { if (searching) fail(if (unsupportedFix) CityLocationState.UNSUPPORTED else CityLocationState.UNAVAILABLE) }
+    private var permissionRetryFromSelection = false
+    private val timeout = Runnable {
+        if (searching) fail(if (unsupportedFix) CityLocationState.UNSUPPORTED else CityLocationState.UNAVAILABLE)
+    }
+    private val nextRefresh = Runnable { if (foreground) refresh() }
 
+    private fun emit(value: CityLocationState) { state = value; onState(value) }
     private fun granted(permission: String) = activity.checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED
     private fun hasPermission() = granted(Manifest.permission.ACCESS_COARSE_LOCATION) || granted(Manifest.permission.ACCESS_FINE_LOCATION)
     private fun age(fix: Location) = (SystemClock.elapsedRealtimeNanos() - fix.elapsedRealtimeNanos) / 1_000_000_000.0
     private fun valid(fix: Location) = fix.hasAccuracy() && CitySelectionPolicy.validFix(fix.latitude, fix.longitude, fix.accuracy.toDouble(), age(fix))
-    private fun automatic() = foreground && settings.mode() == CitySelectionMode.AUTOMATIC
 
-    fun resume() {
+    fun resume(allowPermissionRequest: Boolean = true) {
         foreground = true
-        val force = forceNextResume; forceNextResume = false
-        refresh(force = force)
+        permissionsAvailable = allowPermissionRequest
+        val force = forceNextResume
+        forceNextResume = false
+        refresh(force)
     }
-    fun retryOnResume() { forceNextResume = true }
-    fun pause() { foreground = false; stop() }
-    fun stop() {
+
+    // Avoid competing with the app's notification permission dialog.
+    fun permissionRequestsAvailable() {
+        permissionsAvailable = true
+        if (foreground) refresh()
+    }
+
+    fun pause() {
+        foreground = false
+        handler.removeCallbacks(nextRefresh)
+        stopAttempt()
+    }
+
+    fun schedulesChanged() {
+        if (settings.isAutomatic() && foreground && !searching && (state == CityLocationState.UNSUPPORTED ||
+                (settings.hasResolvedCity() && candidates().none { it.id == settings.savedCity()?.id }))) {
+            refresh(force = true)
+        }
+    }
+
+    // Called only when the selection changes, never as a manual refresh action.
+    fun selectionChanged() {
+        handler.removeCallbacks(nextRefresh)
+        stopAttempt()
+        forceNextResume = false
+        permissionRetryFromSelection = settings.isAutomatic()
+        emit(CityLocationState.IDLE)
+        if (foreground && settings.isAutomatic()) {
+            val needsFix = !settings.hasResolvedCity() ||
+                !CitySelectionPolicy.fresh(settings.lastSuccess(), clock(), CitySelectionPolicy.REFRESH_MS)
+            refresh(force = needsFix)
+        }
+    }
+
+    private fun stopAttempt() {
         searching = false; generation++
         handler.removeCallbacks(timeout)
         cancellations.forEach { runCatching { it.cancel() } }; cancellations.clear()
         listener?.let { runCatching { manager.removeUpdates(it) } }; listener = null
     }
 
-    fun requestOrOpenPermissionSettings() {
-        if (!automatic()) return
-        if (hasPermission()) { refresh(force = true); return }
-        val canAsk = !settings.permissionAsked() ||
-            activity.shouldShowRequestPermissionRationale(Manifest.permission.ACCESS_COARSE_LOCATION) ||
-            activity.shouldShowRequestPermissionRationale(Manifest.permission.ACCESS_FINE_LOCATION)
-        if (canAsk) {
-            settings.markPermissionAsked()
-            activity.requestPermissions(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION), REQUEST_CODE)
+    private fun permissionState() = if (settings.permissionAsked() &&
+        !activity.shouldShowRequestPermissionRationale(Manifest.permission.ACCESS_COARSE_LOCATION) &&
+        !activity.shouldShowRequestPermissionRationale(Manifest.permission.ACCESS_FINE_LOCATION)) {
+        CityLocationState.PERMISSION_BLOCKED
+    } else CityLocationState.PERMISSION_REQUIRED
+
+    fun permissionResult() {
+        if (!settings.isAutomatic()) { selectionChanged(); return }
+        if (hasPermission()) {
+            forceNextResume = true
+            if (foreground) { forceNextResume = false; refresh(force = true) }
         } else {
-            retryOnResume()
-            val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply { data = Uri.parse("package:${activity.packageName}") }
-            runCatching { activity.startActivity(intent) }.onFailure { onState(CityLocationState.PERMISSION_REQUIRED) }
+            stopAttempt()
+            permissionRetryFromSelection = false
+            settings.recordFailure(clock())
+            emit(permissionState())
         }
     }
 
-    fun permissionResult() {
-        if (!automatic()) return
-        if (hasPermission()) refresh(force = true) else fail(CityLocationState.PERMISSION_REQUIRED)
+    private fun later(timestamp: Long, interval: Long) {
+        handler.removeCallbacks(nextRefresh)
+        if (foreground && settings.isAutomatic()) handler.postDelayed(nextRefresh, (timestamp + interval - clock()).coerceAtLeast(1000L))
     }
 
     // Every provider operation is preceded by a grant check and handles revocation.
     @android.annotation.SuppressLint("MissingPermission")
-    fun refresh(force: Boolean = false, askPermission: Boolean = false) {
-        if (!automatic() || searching) return
-        if (!hasPermission()) {
-            onState(CityLocationState.PERMISSION_REQUIRED)
-            if (askPermission) requestOrOpenPermissionSettings()
+    private fun refresh(force: Boolean = false) {
+        if (!settings.isAutomatic()) {
+            handler.removeCallbacks(nextRefresh); stopAttempt(); emit(CityLocationState.IDLE)
             return
         }
+        if (!foreground || searching) return
+        handler.removeCallbacks(nextRefresh)
+        if (!hasPermission()) {
+            val required = permissionState()
+            emit(required)
+            val mayAsk = !settings.permissionAsked() ||
+                (permissionRetryFromSelection && required == CityLocationState.PERMISSION_REQUIRED)
+            if (permissionsAvailable && mayAsk) {
+                // Persist before asking so recreation/resume cannot repeat the prompt.
+                permissionRetryFromSelection = false
+                settings.markPermissionAsked()
+                runCatching {
+                    activity.requestPermissions(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION), REQUEST_CODE)
+                }.onFailure { emit(CityLocationState.PERMISSION_REQUIRED) }
+            } else if (permissionsAvailable) permissionRetryFromSelection = false
+            return
+        }
+        permissionRetryFromSelection = false
+        val recovered = state == CityLocationState.PERMISSION_REQUIRED || state == CityLocationState.PERMISSION_BLOCKED ||
+            state == CityLocationState.LOCATION_OFF
         val fine = granted(Manifest.permission.ACCESS_FINE_LOCATION)
         val providers = listOf(LocationManager.NETWORK_PROVIDER, LocationManager.GPS_PROVIDER).filter {
-            // Android 12+ can provide a coarse GPS fix; older GPS providers need FINE.
             (it != LocationManager.GPS_PROVIDER || fine || Build.VERSION.SDK_INT >= 31) &&
                 runCatching { manager.isProviderEnabled(it) }.getOrDefault(false)
         }
         if (providers.isEmpty()) { fail(CityLocationState.LOCATION_OFF); return }
-        if (candidates().isEmpty()) { fail(CityLocationState.UNSUPPORTED); return }
-        val now = System.currentTimeMillis()
-        if (!force && CitySelectionPolicy.fresh(settings.lastSuccess(), now, CitySelectionPolicy.REFRESH_MS)) {
-            onState(CityLocationState.READY); return
+        val eligible = candidates()
+        if (eligible.isEmpty()) { fail(CityLocationState.UNSUPPORTED); return }
+        val now = clock()
+        if (!force && !recovered && settings.hasResolvedCity() && eligible.any { it.id == settings.savedCity()?.id } &&
+            CitySelectionPolicy.fresh(settings.lastSuccess(), now, CitySelectionPolicy.REFRESH_MS)) {
+            emit(CityLocationState.READY); later(settings.lastSuccess(), CitySelectionPolicy.REFRESH_MS); return
         }
-        if (!force && CitySelectionPolicy.fresh(settings.lastAttempt(), now, CitySelectionPolicy.RETRY_MS)) {
-            onState(CityLocationState.UNAVAILABLE); return
+        if (!force && !recovered && CitySelectionPolicy.fresh(settings.lastAttempt(), now, CitySelectionPolicy.RETRY_MS)) {
+            emit(CityLocationState.UNAVAILABLE); later(settings.lastAttempt(), CitySelectionPolicy.RETRY_MS); return
         }
-        stop(); searching = true; unsupportedFix = false
+        stopAttempt(); searching = true; unsupportedFix = false
         val token = generation
-        onState(CityLocationState.SEARCHING)
-        // Use only fresh, accurate cached fixes, never a wall-clock-only stale value.
+        emit(CityLocationState.SEARCHING)
         providers.mapNotNull { runCatching { manager.getLastKnownLocation(it) }.getOrNull() }
             .filter(::valid).sortedBy { it.accuracy }.forEach { if (accept(it, token)) return }
-        if (!searching || token != generation || !automatic()) return
+        if (!searching || token != generation || !foreground) return
         var started = 0
         if (Build.VERSION.SDK_INT >= 30) {
             val executor = Executor { command -> handler.post(command) }
             providers.forEach { provider ->
                 val cancel = CancellationSignal(); cancellations.add(cancel)
                 try {
-                    manager.getCurrentLocation(provider, cancel, executor) { fix ->
-                        if (fix != null) accept(fix, token)
-                    }
+                    manager.getCurrentLocation(provider, cancel, executor) { fix -> if (fix != null) accept(fix, token) }
                     started++
                 } catch (_: SecurityException) { cancel.cancel() }
                 catch (_: IllegalArgumentException) { cancel.cancel() }
@@ -140,28 +195,35 @@ internal class CityLocationController(
                 catch (_: SecurityException) {} catch (_: IllegalArgumentException) {} catch (_: IllegalStateException) {}
             }
         }
-        if (started == 0) fail(if (hasPermission()) CityLocationState.UNAVAILABLE else CityLocationState.PERMISSION_REQUIRED)
+        if (started == 0) fail(if (hasPermission()) CityLocationState.UNAVAILABLE else permissionState())
         else handler.postDelayed(timeout, TIMEOUT_MS)
     }
 
     private fun accept(fix: Location, token: Int): Boolean {
-        if (token != generation || !searching || !automatic()) return false
-        if (!hasPermission()) { fail(CityLocationState.PERMISSION_REQUIRED); return false }
+        if (token != generation || !searching || !foreground || !settings.isAutomatic()) return false
+        if (!hasPermission()) { fail(permissionState()); return false }
         if (!valid(fix)) return false
         val city = CitySelectionPolicy.nearest(fix.latitude, fix.longitude, fix.accuracy.toDouble(), candidates())
         if (city == null) { unsupportedFix = true; return false }
-        val now = System.currentTimeMillis()
+        val now = clock()
         val accepted = settings.acceptAutomatic(city, now - (age(fix) * 1000).toLong(), now)
-        stop()
-        if (accepted) { onCity(city); onState(CityLocationState.READY) }
+        stopAttempt()
+        if (accepted) {
+            onCity(city); emit(CityLocationState.READY)
+            later(settings.lastSuccess(), CitySelectionPolicy.REFRESH_MS)
+        }
         return accepted
     }
 
-    private fun fail(state: CityLocationState) {
-        stop()
-        if (settings.mode() == CitySelectionMode.AUTOMATIC) {
-            settings.recordFailure(System.currentTimeMillis()); onState(state)
+    private fun fail(value: CityLocationState) {
+        stopAttempt()
+        if (foreground && settings.isAutomatic()) {
+            settings.recordFailure(clock()); emit(value)
+            if (value != CityLocationState.PERMISSION_REQUIRED && value != CityLocationState.PERMISSION_BLOCKED) {
+                later(settings.lastAttempt(), CitySelectionPolicy.RETRY_MS)
+            }
         }
     }
+
     companion object { const val REQUEST_CODE = 8105; const val TIMEOUT_MS = 20_000L }
 }

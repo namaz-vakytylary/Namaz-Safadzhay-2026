@@ -42,48 +42,224 @@ class CitySelectionTest {
         assertFalse(CitySelectionPolicy.fresh(1000, 999, CitySelectionPolicy.RETRY_MS))
         assertFalse(CitySelectionPolicy.fresh(0, 999, CitySelectionPolicy.REFRESH_MS))
     }
-    @Test fun existingInstallDefaultsToManualWithoutWritingPreferences() {
-        val prefs = MemoryCityPreferences(); prefs.edit().putString("city", "Москва").putBoolean("notifications_enabled", true).commit()
-        val before = prefs.all.toMap(); val settings = CitySelectionSettings(prefs)
-        assertEquals(CitySelectionMode.MANUAL, settings.mode()); assertEquals(before, prefs.all)
-    }
-    @Test fun unknownModeUsesManual() { assertEquals(CitySelectionMode.MANUAL, CitySelectionMode.fromKey("future-mode")) }
-    @Test fun modeAndAutomaticCitySurviveRestart() {
+    @Test fun newInstallUsesAutomaticWithoutInventingEitherCity() {
         val prefs = MemoryCityPreferences(); val settings = CitySelectionSettings(prefs)
-        settings.setMode(CitySelectionMode.AUTOMATIC)
-        assertTrue(settings.acceptAutomatic(moscow, 1000, 1200))
-        val restarted = CitySelectionSettings(prefs)
-        assertEquals(CitySelectionMode.AUTOMATIC, restarted.mode()); assertEquals(1000L, restarted.lastSuccess())
-        assertEquals("Москва", prefs.getString("city", null))
+        assertTrue(settings.isAutomatic()); assertNull(settings.savedCity())
+        assertNull(settings.automaticCity()); assertNull(settings.manualCity())
+        assertFalse(settings.hasResolvedCity()); assertTrue(prefs.all.isEmpty())
     }
-    @Test fun manualModeRejectsLateAutomaticResult() {
+
+    @Test fun oldInstallWithoutModePreservesItsExistingManualCity() {
+        val prefs = MemoryCityPreferences()
+        prefs.edit().putString("city", moscow.name).putBoolean("notifications_enabled", true)
+            .putBoolean("show_tatar_names", false).putString("app_theme", "dark").commit()
+        val settings = CitySelectionSettings(prefs)
+        assertEquals(CitySelectionMode.MANUAL, settings.mode())
+        assertEquals(moscow, settings.manualCity()); assertEquals(moscow, settings.savedCity())
+        assertNull(settings.automaticCity()); assertFalse(settings.hasResolvedCity())
+        assertTrue(prefs.getBoolean("notifications_enabled", false))
+        assertFalse(prefs.getBoolean("show_tatar_names", true)); assertEquals("dark", prefs.getString("app_theme", null))
+    }
+
+    @Test fun legacyManualModeMigratesToItsOwnCityKey() {
+        val prefs = MemoryCityPreferences()
+        prefs.edit().putString("city", moscow.name).putString("city_selection_mode", "manual").commit()
+        val settings = CitySelectionSettings(prefs)
+        assertEquals("MANUAL", prefs.getString("city_selection_mode", null))
+        assertEquals(moscow, settings.manualCity()); assertEquals(moscow, settings.savedCity())
+        assertNull(settings.automaticCity())
+    }
+
+    @Test fun legacyAutomaticSuccessMigratesWithoutInventingAManualCity() {
+        val prefs = MemoryCityPreferences()
+        prefs.edit().putString("city", village.name).putString("city_selection_mode", "automatic")
+            .putLong("city_auto_last_success", 1000).commit()
+        val settings = CitySelectionSettings(prefs)
+        assertEquals("AUTO", prefs.getString("city_selection_mode", null))
+        assertEquals(village, settings.automaticCity()); assertEquals(village, settings.savedCity())
+        assertNull(settings.manualCity()); assertTrue(settings.hasResolvedCity())
+        assertEquals(1000L, settings.lastSuccess())
+    }
+
+    @Test fun failedLegacyAutomaticAttemptCannotBeClaimedAsAGpsCity() {
+        val prefs = MemoryCityPreferences()
+        prefs.edit().putString("city", moscow.name).putString("city_selection_mode", "automatic")
+            .putLong("city_auto_last_attempt", 1000).commit()
+        val settings = CitySelectionSettings(prefs)
+        assertTrue(settings.isAutomatic()); assertEquals(moscow, settings.savedCity())
+        assertNull(settings.automaticCity()); assertFalse(settings.hasResolvedCity())
+    }
+
+    @Test fun legacyManualCityCannotMasqueradeAsUnidentifiedOldGpsResult() {
+        val prefs = MemoryCityPreferences()
+        prefs.edit().putString("city", moscow.name).putString("city_selection_mode", "manual")
+            .putLong("city_auto_last_success", 1000).commit()
+        val settings = CitySelectionSettings(prefs)
+        assertEquals(moscow, settings.manualCity()); assertNull(settings.automaticCity())
+        settings.selectMode(CitySelectionMode.AUTOMATIC)
+        assertEquals(moscow, settings.savedCity()); assertFalse(settings.hasResolvedCity())
+    }
+
+    @Test fun unknownModeUsesAutomaticAndOnlyARegisteredGpsCity() {
+        val prefs = MemoryCityPreferences()
+        prefs.edit().putString("city_selection_mode", "future-mode").putString("city", village.name).commit()
+        val settings = CitySelectionSettings(prefs)
+        assertTrue(settings.isAutomatic())
+        assertTrue(settings.acceptAutomatic(moscow, 1000, 1200)); assertEquals(moscow, settings.savedCity())
+        assertEquals("AUTO", prefs.getString("city_selection_mode", null))
+    }
+
+    @Test fun autoToManualKeepsAutomaticCityAndFreshness() {
         val prefs = MemoryCityPreferences(); val settings = CitySelectionSettings(prefs)
-        settings.selectManual(village)
-        assertFalse(settings.acceptAutomatic(moscow, 1000, 1200)); assertEquals(village.name, prefs.getString("city", null))
+        settings.acceptAutomatic(village, 1000, 1200); settings.selectManual(moscow)
+        assertEquals(moscow, settings.savedCity()); assertEquals(moscow, settings.manualCity())
+        assertEquals(village, settings.automaticCity()); assertTrue(settings.hasResolvedCity())
+        assertEquals(1000L, settings.lastSuccess()); assertEquals(1200L, settings.lastAttempt())
     }
-    @Test fun failureDoesNotOverwriteCityOrOtherSettings() {
-        val prefs = MemoryCityPreferences(); prefs.edit().putString("city", village.name).putBoolean("notifications_enabled", true)
-            .putBoolean("show_tatar_names", false).putString("app_theme", "light").commit()
-        val settings = CitySelectionSettings(prefs); settings.setMode(CitySelectionMode.AUTOMATIC); settings.recordFailure(1200)
-        assertEquals(village.name, prefs.getString("city", null)); assertTrue(prefs.getBoolean("notifications_enabled", false))
-        assertFalse(prefs.getBoolean("show_tatar_names", true)); assertEquals("light", prefs.getString("app_theme", null))
+
+    @Test fun manualToAutoRestoresAutomaticCityAndKeepsManualCity() {
+        val settings = CitySelectionSettings(MemoryCityPreferences())
+        settings.acceptAutomatic(village, 1000, 1200); settings.selectManual(moscow)
+        assertEquals(village, settings.selectMode(CitySelectionMode.AUTOMATIC))
+        assertTrue(settings.isAutomatic()); assertEquals(village, settings.savedCity())
+        assertEquals(moscow, settings.manualCity())
     }
-    @Test fun reEnablingAutomaticAfterManualSelectionDoesNotReuseOldSuccess() {
+
+    @Test fun completeModeRoundTripRestoresBothIndependentCities() {
         val prefs = MemoryCityPreferences(); val settings = CitySelectionSettings(prefs)
-        settings.setMode(CitySelectionMode.AUTOMATIC); settings.acceptAutomatic(moscow, 1000, 1200)
-        settings.selectManual(village); settings.setMode(CitySelectionMode.AUTOMATIC)
-        assertEquals(0L, settings.lastSuccess()); assertEquals(0L, settings.lastAttempt()); assertEquals(village.name, prefs.getString("city", null))
+        settings.acceptAutomatic(village, 1000, 1200)
+        settings.selectMode(CitySelectionMode.MANUAL); settings.selectManual(moscow)
+        assertEquals(moscow.name, prefs.getString("city", null))
+        settings.selectMode(CitySelectionMode.AUTOMATIC)
+        assertEquals(village.name, prefs.getString("city", null)); assertEquals(village, settings.savedCity())
+        settings.selectMode(CitySelectionMode.MANUAL)
+        assertEquals(moscow.name, prefs.getString("city", null)); assertEquals(moscow, settings.savedCity())
+        assertEquals(village, settings.automaticCity()); assertEquals(moscow, settings.manualCity())
+        assertEquals(1000L, settings.lastSuccess())
     }
-    @Test fun unregisteredCityCannotEnterPreferences() {
-        val prefs = MemoryCityPreferences(); val settings = CitySelectionSettings(prefs); settings.setMode(CitySelectionMode.AUTOMATIC)
-        assertFalse(settings.acceptAutomatic(ScheduleCity("unknown", "Unknown", 55.75, 37.62), 1000, 1200))
-        assertNull(prefs.getString("city", null))
+
+    @Test fun restartPreservesModeAndBothCitiesInEitherMode() {
+        val prefs = MemoryCityPreferences(); val settings = CitySelectionSettings(prefs)
+        settings.acceptAutomatic(village, 1000, 1200); settings.selectManual(moscow)
+        for (mode in CitySelectionMode.entries) {
+            settings.selectMode(mode)
+            val restored = CitySelectionSettings(prefs)
+            assertEquals(mode, restored.mode())
+            assertEquals(village, restored.automaticCity()); assertEquals(moscow, restored.manualCity())
+            assertEquals(if (mode == CitySelectionMode.AUTOMATIC) village else moscow, restored.savedCity())
+            assertEquals(1000L, restored.lastSuccess())
+        }
     }
-    @Test fun successfulSelectionDoesNotPersistCoordinates() {
-        val prefs = MemoryCityPreferences(); val settings = CitySelectionSettings(prefs); settings.setMode(CitySelectionMode.AUTOMATIC)
+
+    @Test fun newAutomaticResultOnlyUpdatesAutomaticSelection() {
+        val settings = CitySelectionSettings(MemoryCityPreferences())
+        settings.selectManual(moscow); settings.selectMode(CitySelectionMode.AUTOMATIC)
+        settings.acceptAutomatic(village, 1000, 1200)
+        assertEquals(village, settings.automaticCity()); assertEquals(moscow, settings.manualCity())
+        settings.acceptAutomatic(moscow, 3000, 3200)
+        assertEquals(moscow, settings.automaticCity()); assertEquals(moscow, settings.manualCity())
+    }
+
+    @Test fun manualSelectionChangesDoNotTouchAutomaticMetadata() {
+        val settings = CitySelectionSettings(MemoryCityPreferences())
+        settings.acceptAutomatic(village, 1000, 1200)
+        settings.selectManual(moscow); settings.selectManual(village)
+        assertEquals(village, settings.automaticCity()); assertEquals(village, settings.manualCity())
+        assertEquals(1000L, settings.lastSuccess()); assertEquals(1200L, settings.lastAttempt())
+    }
+
+    @Test fun firstManualChoiceDoesNotBorrowAutomaticCity() {
+        val settings = CitySelectionSettings(MemoryCityPreferences())
         settings.acceptAutomatic(moscow, 1000, 1200)
-        assertEquals(setOf(CitySelectionSettings.MODE_KEY, "city", "city_auto_last_success", "city_auto_last_attempt"), prefs.all.keys)
+        assertEquals(village, settings.selectMode(CitySelectionMode.MANUAL))
+        assertEquals(village, settings.manualCity()); assertEquals(moscow, settings.automaticCity())
     }
+
+    @Test fun autoWithoutAnEarlierFixRetainsWorkingCityWithoutInventingGpsHistory() {
+        val settings = CitySelectionSettings(MemoryCityPreferences())
+        settings.selectManual(moscow); settings.selectMode(CitySelectionMode.AUTOMATIC)
+        assertEquals(moscow, settings.savedCity()); assertNull(settings.automaticCity())
+        assertFalse(settings.hasResolvedCity()); assertEquals(moscow, settings.manualCity())
+        settings.recordFailure(2000)
+        assertEquals(moscow, settings.manualCity()); assertEquals(moscow, settings.savedCity())
+    }
+
+    @Test fun locationFailurePreservesBothCitiesAndUnrelatedSettings() {
+        val prefs = MemoryCityPreferences()
+        prefs.edit().putBoolean("notifications_enabled", true).putBoolean("show_tatar_names", false)
+            .putString("app_theme", "light").commit()
+        val settings = CitySelectionSettings(prefs)
+        settings.acceptAutomatic(village, 1000, 1200); settings.selectManual(moscow)
+        settings.selectMode(CitySelectionMode.AUTOMATIC); settings.recordFailure(5000)
+        assertEquals(village, settings.savedCity()); assertEquals(village, settings.automaticCity())
+        assertEquals(moscow, settings.manualCity()); assertEquals(1000L, settings.lastSuccess())
+        assertTrue(prefs.getBoolean("notifications_enabled", false)); assertFalse(prefs.getBoolean("show_tatar_names", true))
+        assertEquals("light", prefs.getString("app_theme", null))
+    }
+
+    @Test fun automaticResultCannotOverwriteManualModeOrEitherRememberedCity() {
+        val prefs = MemoryCityPreferences(); val settings = CitySelectionSettings(prefs)
+        settings.acceptAutomatic(village, 1000, 1200); settings.selectManual(moscow)
+        val before = prefs.all.toMap()
+        assertFalse(settings.acceptAutomatic(moscow, 3000, 3200))
+        assertEquals(before, prefs.all); assertEquals(moscow, settings.savedCity())
+    }
+
+    @Test fun lateAutomaticFailureInManualModeChangesNothing() {
+        val prefs = MemoryCityPreferences(); val settings = CitySelectionSettings(prefs)
+        settings.acceptAutomatic(village, 1000, 1200); settings.selectManual(moscow)
+        val before = prefs.all.toMap(); settings.recordFailure(5000)
+        assertEquals(before, prefs.all)
+    }
+
+    @Test fun savedIdsRestoreActiveCityWhenCompatibilityCacheIsStale() {
+        val prefs = MemoryCityPreferences()
+        prefs.edit().putString("city_selection_mode", "MANUAL").putString("city", village.name)
+            .putString("city_auto_resolved_id", village.id).putString("city_manual_id", moscow.id)
+            .putLong("city_auto_last_success", 1000).commit()
+        val settings = CitySelectionSettings(prefs)
+        assertEquals(moscow, settings.savedCity()); assertEquals(moscow.name, prefs.getString("city", null))
+        assertEquals(village, settings.automaticCity()); assertEquals(1000L, settings.lastSuccess())
+    }
+
+    @Test fun selectingTheSameAutomaticModeIsNotAManualRefresh() {
+        val prefs = MemoryCityPreferences(); val settings = CitySelectionSettings(prefs)
+        settings.acceptAutomatic(moscow, 1000, 1200)
+        val before = prefs.all.toMap(); settings.selectMode(CitySelectionMode.AUTOMATIC)
+        assertEquals(before, prefs.all)
+    }
+
+    @Test fun unregisteredCityCannotEnterEitherSelection() {
+        val prefs = MemoryCityPreferences(); val settings = CitySelectionSettings(prefs)
+        val city = ScheduleCity("unknown", "Unknown", 55.75, 37.62)
+        assertFalse(settings.acceptAutomatic(city, 1000, 1200))
+        assertThrows(IllegalArgumentException::class.java) { settings.selectManual(city) }
+        assertNull(settings.savedCity()); assertNull(settings.automaticCity()); assertNull(settings.manualCity())
+    }
+
+    @Test fun independentChoicesDoNotPersistCoordinates() {
+        val prefs = MemoryCityPreferences(); val settings = CitySelectionSettings(prefs)
+        settings.acceptAutomatic(village, 1000, 1200); settings.selectManual(moscow)
+        assertEquals(setOf("city", "city_selection_mode", "city_auto_resolved_id", "city_manual_id",
+            "city_auto_last_success", "city_auto_last_attempt"), prefs.all.keys)
+    }
+
+    @Test fun permissionPromptMarkerSurvivesModeChangesAndRestart() {
+        val prefs = MemoryCityPreferences(); val settings = CitySelectionSettings(prefs)
+        assertFalse(settings.permissionAsked()); settings.markPermissionAsked()
+        settings.selectManual(moscow); settings.selectMode(CitySelectionMode.AUTOMATIC)
+        assertTrue(CitySelectionSettings(prefs).permissionAsked())
+    }
+
+    @Test fun automaticStatusNeverOffersAManualLocationRefresh() {
+        for (state in CityLocationState.entries) for (resolved in listOf(true, false)) {
+            val text = CitySelectionStatus.description(resolved, state)
+            assertFalse(text, text.contains("Обновить местоположение"))
+            if (!resolved) assertFalse(text, text == "Определено автоматически")
+        }
+        assertEquals("Определено автоматически", CitySelectionStatus.description(true, CityLocationState.READY))
+    }
+
 }
 
 /** In-memory Android SharedPreferences interface for exercising the real settings class on a JVM. */

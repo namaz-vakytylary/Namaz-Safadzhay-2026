@@ -181,8 +181,7 @@ class MainActivity : Activity() {
     private var cityLocationState = CityLocationState.IDLE
     private var citySettingsSummary: TextView? = null
     private var cityPanelStatus: TextView? = null
-    private var cityRetryButton: TextView? = null
-    private var cityManualOptions = emptyList<Pair<ScheduleCity, RadioButton>>()
+    private var notificationPermissionPending = false
     private lateinit var placeText: TextView
 
     private val safadzhayData = listOf(
@@ -542,10 +541,10 @@ class MainActivity : Activity() {
         val openedFromReminder = intent?.action == OPEN_PRAYER_ACTION
         selectedDate = savedInstanceState?.getString("selected_date")?.let { runCatching { LocalDate.parse(it) }.getOrNull() } ?: uiNow().toLocalDate()
         val prefs = getSharedPreferences(SETTINGS_PREFS, Context.MODE_PRIVATE)
-        selectedCity = prefs.getString("city", "Сафаджай") ?: "Сафаджай"
         citySelection = CitySelectionSettings(this)
+        selectedCity = citySelection.savedCity()?.name ?: "Сафаджай"
         cityLocation = CityLocationController(this, citySelection,
-            { availableCitySchedules() }, { onAutomaticCityResolved(it) }, {
+            { availableCitySchedules() }, { onScheduleCitySelected(it) }, {
                 cityLocationState = it; refreshCitySelectionUi()
             })
         scheduleTabSelected = savedInstanceState?.getBoolean("schedule_tab") ?: false
@@ -562,12 +561,14 @@ val needsNotificationPermission = firstNotificationSetup &&
     Build.VERSION.SDK_INT >= 33 &&
     ContextCompat.checkSelfPermission(this@MainActivity, "android.permission.POST_NOTIFICATIONS") != android.content.pm.PackageManager.PERMISSION_GRANTED
 
+notificationPermissionPending = savedInstanceState?.getBoolean("notification_permission_pending") == true
 if (needsNotificationPermission) {
-    requestPermissions(
-        arrayOf("android.permission.POST_NOTIFICATIONS"),
-        7001
-    )
+    if (!notificationPermissionPending) {
+        notificationPermissionPending = true
+        requestPermissions(arrayOf("android.permission.POST_NOTIFICATIONS"), 7001)
+    }
 } else {
+    notificationPermissionPending = false
     maybeRequestExactAlarmPermission()
     startScheduleUpdateCheck()
 }
@@ -576,7 +577,7 @@ if (needsNotificationPermission) {
             "settings" -> showSettingsDialog()
             "qibla" -> showQiblaCompass()
             "theme" -> showThemeSelector()
-            "city" -> showCityChoice { showSettingsDialog() }
+            "city" -> showCityChoice()
             "lead" -> showNotifyBeforeDialog { showNotificationsScreen { showSettingsDialog() } }
             "prayers" -> showPrayerSelectionDialog { showNotificationsScreen { showSettingsDialog() } }
             "sound" -> showSoundScreen()
@@ -1262,8 +1263,7 @@ headerBox.addView(
     }
 
     private fun fullScreenPanel(titleText: String, onBack: () -> Unit): Pair<android.app.Dialog, LinearLayout> {
-        citySettingsSummary = null; cityPanelStatus = null; cityRetryButton = null
-        cityManualOptions = emptyList()
+        citySettingsSummary = null; cityPanelStatus = null
         // Keep one window throughout settings navigation so the home screen is never exposed.
         val dialog = settingsPanel ?: object : android.app.Dialog(this, if (palette.isDark) R.style.AppPanelTheme else R.style.AppPanelThemeLight) {
             override fun cancel() {
@@ -1400,7 +1400,7 @@ headerBox.addView(
         return scheduleCities().filter { city -> dataForCity(city.name).any { it.date == today } }
     }
 
-    private fun onAutomaticCityResolved(city: ScheduleCity) {
+    private fun onScheduleCitySelected(city: ScheduleCity) {
         if (selectedCity != city.name) {
             selectedCity = city.name
             lastPrayerRender = ""; lastCalendarRender = ""; lastAlarmSignature = ""
@@ -1410,76 +1410,74 @@ headerBox.addView(
         refreshCitySelectionUi()
     }
 
-    private fun citySelectionSummary(): String = if (citySelection.mode() == CitySelectionMode.MANUAL) {
-        "$selectedCity · Вручную"
-    } else {
-        "Автоматически\n$selectedCity · " + if (cityLocationState == CityLocationState.READY) "определено автоматически" else "сохранён"
-    }
+    private fun citySelectionSummary(): String =
+        "$selectedCity\n" + if (citySelection.isAutomatic()) {
+            CitySelectionStatus.description(citySelection.hasResolvedCity(), cityLocationState)
+        } else "Выбран вручную"
 
     private fun refreshCitySelectionUi() {
         citySettingsSummary?.text = citySelectionSummary()
-        val automatic = citySelection.mode() == CitySelectionMode.AUTOMATIC
-        cityManualOptions.forEach { (city, view) ->
-            view.isEnabled = !automatic; view.isChecked = !automatic && selectedCity == city.name
-            view.setTextColor(if (automatic) muted else ink)
-            view.background = surface(view.isChecked)
-        }
-        cityRetryButton?.visibility = if (automatic) View.VISIBLE else View.GONE
-        cityRetryButton?.isEnabled = cityLocationState != CityLocationState.SEARCHING
-        cityPanelStatus?.text = if (!automatic) "Город для расписания: $selectedCity. Выбран вручную." else when (cityLocationState) {
-            CityLocationState.READY -> "$selectedCity · определено автоматически"
-            CityLocationState.SEARCHING -> "Определяем город. Пока используется $selectedCity."
-            CityLocationState.PERMISSION_REQUIRED -> "Нет разрешения на местоположение. Сохранён $selectedCity. Разрешите доступ или выберите «Вручную»."
-            CityLocationState.LOCATION_OFF -> "Геолокация недоступна. Сохранён $selectedCity. Включите местоположение или выберите «Вручную»."
-            CityLocationState.UNSUPPORTED -> "Нет подходящего доступного расписания рядом с вашим местоположением. Сохранён $selectedCity. Выберите «Вручную»."
-            CityLocationState.UNAVAILABLE -> "Не удалось определить город. Сохранён $selectedCity. Попробуйте ещё раз или выберите «Вручную»."
-            CityLocationState.IDLE -> "Автоматический выбор включён. Пока используется $selectedCity."
-        }
+        cityPanelStatus?.text = citySelectionSummary()
     }
 
-    private fun showCityChoice(refreshSettings: () -> Unit) {
-        panelRoute = "city"
-        val pair = fullScreenPanel("Город") { refreshSettings() }
-        val root = pair.second
-        root.addView(label("Как выбирать город для расписания", 14f, muted).apply { setPadding(0, dp(16), 0, dp(16)) })
-        listOf(CitySelectionMode.AUTOMATIC to "Автоматически", CitySelectionMode.MANUAL to "Вручную").forEach { (mode, title) ->
-            root.addView(RadioButton(this).apply {
-                text = title; textSize = 18f; setTextColor(ink)
-                tag = "city_mode_${mode.key}"; isChecked = citySelection.mode() == mode
-                background = surface(isChecked); setPadding(dp(15), dp(8), dp(15), dp(8)); minHeight = dp(64)
-                setOnClickListener {
-                    cityLocation.stop(); citySelection.setMode(mode); cityLocationState = CityLocationState.IDLE
-                    showCityChoice(refreshSettings)
-                    if (mode == CitySelectionMode.AUTOMATIC) cityLocation.refresh(force = true, askPermission = true)
-                }
-            }, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(10) })
+    private fun cityInformationCard(): LinearLayout {
+        val row = screenRow(R.drawable.ic_location, "Город", citySelectionSummary()) { showCityChoice() }
+        row.tag = "city_information"
+        citySettingsSummary = ((row.getChildAt(1) as LinearLayout).getChildAt(1) as TextView).apply {
+            tag = "city_selection_summary"
+            maxLines = Int.MAX_VALUE
+            accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
         }
-        cityPanelStatus = label("", 14f, muted).apply { maxLines = Int.MAX_VALUE; tag = "city_location_status"; setPadding(0, dp(8), 0, dp(12)) }
-        root.addView(cityPanelStatus)
-        cityRetryButton = button("Обновить местоположение") {
-            if (cityLocationState == CityLocationState.LOCATION_OFF) {
-                cityLocation.retryOnResume()
-                runCatching { startActivity(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS)) }
-                    .onFailure { Toast.makeText(this, "Откройте геолокацию в настройках телефона или выберите город вручную", Toast.LENGTH_LONG).show() }
-            } else cityLocation.refresh(force = true, askPermission = true)
-        }.apply { tag = "city_location_retry" }
-        root.addView(cityRetryButton, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(12) })
-        cityManualOptions = scheduleCities().map { city ->
-            val choice = RadioButton(this).apply {
-                text = city.name; textSize = 18f; setTextColor(ink)
-                tag = "city_manual_${city.id}"; minHeight = dp(64)
-                setPadding(dp(15), dp(8), dp(15), dp(8))
-                setOnClickListener {
-                    cityLocation.stop(); citySelection.selectManual(city); selectedCity = city.name
-                    lastPrayerRender = ""; lastCalendarRender = ""
-                    update(); schedulePrayerNotifications(); refreshSettings()
+        return row
+    }
+
+    private fun showCityChoice() {
+        panelRoute = "city"
+        val pair = fullScreenPanel("Город") { showSettingsDialog() }
+        val root = pair.second
+        root.addView(label("Как выбирать город для расписания", 14f, muted).apply {
+            setPadding(0, dp(16), 0, dp(16)); maxLines = Int.MAX_VALUE
+        })
+        fun choice(group: RadioGroup, title: String, tagValue: String, checked: Boolean, select: () -> Unit) {
+            group.addView(RadioButton(this).apply {
+                id = View.generateViewId(); tag = tagValue
+                text = title; textSize = 17f; setTextColor(ink)
+                isChecked = checked
+                buttonTintList = android.content.res.ColorStateList(
+                    arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf()), intArrayOf(mint, muted)
+                )
+                background = surface(checked)
+                setPadding(dp(15), dp(12), dp(15), dp(12)); minHeight = dp(64)
+                setOnClickListener { select(); showCityChoice() }
+            }, RadioGroup.LayoutParams(-1, -2).apply { bottomMargin = dp(10) })
+        }
+        val modes = RadioGroup(this).apply { orientation = RadioGroup.VERTICAL }
+        listOf(CitySelectionMode.AUTOMATIC to "Автоматически", CitySelectionMode.MANUAL to "Вручную").forEach { (mode, title) ->
+            choice(modes, title, "city_mode_${mode.key}", citySelection.mode() == mode) {
+                if (citySelection.mode() != mode) {
+                    citySelection.selectMode(mode)?.let { onScheduleCitySelected(it) }
+                    cityLocation.selectionChanged()
                 }
             }
-            root.addView(choice, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(10) })
-            city to choice
         }
-        root.addView(label("Автоматический выбор использует только доступные расписания рядом с вами. Геолокация запрашивается ненадолго, только пока приложение открыто. Кибла определяется отдельно по координатам телефона.", 14f, muted).apply { maxLines = Int.MAX_VALUE; setPadding(0, dp(12), 0, 0) })
-        refreshCitySelectionUi()
+        root.addView(modes, LinearLayout.LayoutParams(-1, -2))
+        cityPanelStatus = label(citySelectionSummary(), 14f, muted).apply {
+            tag = "city_location_status"; maxLines = Int.MAX_VALUE
+            accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
+            setPadding(0, dp(8), 0, dp(12))
+        }
+        root.addView(cityPanelStatus)
+        if (!citySelection.isAutomatic()) {
+            val cities = RadioGroup(this).apply { orientation = RadioGroup.VERTICAL }
+            scheduleCities().forEach { city ->
+                choice(cities, city.name, "city_manual_${city.id}", selectedCity == city.name) {
+                    citySelection.selectManual(city)
+                    onScheduleCitySelected(city)
+                    cityLocation.selectionChanged()
+                }
+            }
+            root.addView(cities, LinearLayout.LayoutParams(-1, -2))
+        }
         pair.first.show()
     }
 
@@ -1504,7 +1502,7 @@ headerBox.addView(
             contentDescription = "Уведомления"
             isChecked = prefs.getBoolean(NOTIFICATIONS_ENABLED_KEY, false)
             setOnCheckedChangeListener { _, checked -> prefs.edit().putBoolean(NOTIFICATIONS_ENABLED_KEY, checked).apply(); schedulePrayerNotifications(); if (checked) {
-                if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(this@MainActivity, "android.permission.POST_NOTIFICATIONS") != android.content.pm.PackageManager.PERMISSION_GRANTED) requestPermissions(arrayOf("android.permission.POST_NOTIFICATIONS"), 7001)
+                if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(this@MainActivity, "android.permission.POST_NOTIFICATIONS") != android.content.pm.PackageManager.PERMISSION_GRANTED) { notificationPermissionPending = true; requestPermissions(arrayOf("android.permission.POST_NOTIFICATIONS"), 7001) }
                 else maybeRequestExactAlarmPermission(true)
             } }
         }, LinearLayout.LayoutParams(dp(60), dp(58)))
@@ -1531,9 +1529,7 @@ headerBox.addView(
         val pair = create(); dialog = pair.first; val root = pair.second
 
         root.addView(screenRow(R.drawable.ic_notification, "Уведомления", if (prefs.getBoolean(NOTIFICATIONS_ENABLED_KEY, false)) "Включены" else "Выключены") { showNotificationsScreen { showSettingsDialog() } }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(12) })
-        val cityRow = screenRow(R.drawable.ic_location, "Город", citySelectionSummary()) { showCityChoice { showSettingsDialog() } }
-        citySettingsSummary = ((cityRow.getChildAt(1) as LinearLayout).getChildAt(1) as TextView).apply { tag = "city_selection_summary" }
-        root.addView(cityRow, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
+        root.addView(cityInformationCard(), LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
 
         root.addView(screenRow("◐", "Тема приложения", ThemeSettings.read(this).title) {
             showThemeSelector()
@@ -1672,6 +1668,7 @@ headerBox.addView(
             if (!isDestroyed && !isFinishing) {
                 lastAlarmSignature = ""; lastCalendarRender = ""; lastPrayerRender = ""
                 update()
+                if (::cityLocation.isInitialized) cityLocation.schedulesChanged()
             }
         }
     }
@@ -2549,7 +2546,7 @@ cell.addView(
         }
     }
 
-    if (::cityLocation.isInitialized) cityLocation.resume()
+    if (::cityLocation.isInitialized) cityLocation.resume(allowPermissionRequest = !notificationPermissionPending)
 
     activeCompass?.start()
 
@@ -2566,6 +2563,7 @@ override fun onRequestPermissionsResult(
     super.onRequestPermissionsResult(requestCode, permissions, grantResults)
 
     if (requestCode == 7001) {
+        notificationPermissionPending = false
         val granted =
             grantResults.firstOrNull() == android.content.pm.PackageManager.PERMISSION_GRANTED
 
@@ -2585,6 +2583,7 @@ override fun onRequestPermissionsResult(
 }
 
 startScheduleUpdateCheck()
+        if (::cityLocation.isInitialized) cityLocation.permissionRequestsAvailable()
     }
 
     if (requestCode == CityLocationController.REQUEST_CODE && ::cityLocation.isInitialized) {
@@ -2605,6 +2604,7 @@ startScheduleUpdateCheck()
         outState.putString("calendar_month", calendarMonth.toString())
         outState.putBoolean("show_about", aboutDialog?.isShowing == true)
         outState.putString("panel_route", panelRoute)
+        outState.putBoolean("notification_permission_pending", notificationPermissionPending)
         super.onSaveInstanceState(outState)
     }
     override fun onPause() { if (::cityLocation.isInitialized) cityLocation.pause(); activeQiblaLocation?.stop(); activeCompass?.stop(); super.onPause() }
