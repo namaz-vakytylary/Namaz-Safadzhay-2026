@@ -22,7 +22,7 @@ internal class CitySelectionSettings(
         val wasManual = legacyMode == "manual" || legacyMode == "MANUAL"
         val wasAutomatic = legacyMode == "automatic" || legacyMode == "AUTO"
         if (manualCity() == null && legacyCity != null &&
-            (wasManual || (legacyMode == null && automaticCity() == null))) {
+            (wasManual || (legacyMode == null && !prefs.getBoolean(MIGRATED_KEY, false) && automaticCity() == null))) {
             edit.putString(MANUAL_CITY_KEY, legacyCity.id)
             changed = true
         }
@@ -35,7 +35,7 @@ internal class CitySelectionSettings(
             else if (wasAutomatic) automaticCity() ?: legacyCity else legacyCity
         if (active != null && active != legacyCity) { edit.putString("city", active.name); changed = true }
         if (prefs.contains(MODE_KEY)) { edit.remove(MODE_KEY); changed = true }
-        if (changed) edit.apply()
+        if (changed) edit.putBoolean(MIGRATED_KEY, true).apply()
     }
 
     private fun cityById(key: String) = CityCatalog.all.firstOrNull { it.id == prefs.getString(key, null) }
@@ -69,6 +69,7 @@ internal class CitySelectionSettings(
 
     companion object {
         private const val MODE_KEY = "city_selection_mode"
+        private const val MIGRATED_KEY = "city_selection_migrated"
         private const val AUTO_CITY_KEY = "city_auto_resolved_id"
         private const val MANUAL_CITY_KEY = "city_manual_id"
         private const val SUCCESS_KEY = "city_auto_last_success"

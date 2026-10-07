@@ -85,6 +85,12 @@ class CitySelectionTest {
         prefs.edit().putString("city", moscow.name).putString("city_selection_mode", "automatic").commit()
         val settings = CitySelectionSettings(prefs)
         assertEquals(moscow, settings.savedCity()); assertNull(settings.automaticCity())
+        assertNull(settings.manualCity())
+        repeat(3) {
+            val restored = CitySelectionSettings(prefs)
+            assertNull(restored.manualCity()); assertNull(restored.automaticCity())
+            assertEquals(moscow, restored.savedCity())
+        }
     }
 
     @Test fun staleLegacyCacheRestoresPreviouslySelectedManualCity() {

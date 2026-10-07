@@ -179,7 +179,7 @@ class AutomaticCityTest {
         }
     }
     @Test fun legacyManualInstallRetainsCityUntilReliableStartupFixArrives() {
-        app.getSharedPreferences("settings", 0).edit().putString("city", "Москва").putString("city_selection_mode", "MANUAL").commit()
+        app.getSharedPreferences("settings", 0).edit().putString("city", "Москва").putString("city_selection_mode", "MANUAL").remove("city_manual_id").commit()
         settings = CitySelectionSettings(app); coarse()
         withLocation {
             it.resume(); assertEquals("Москва", savedCity())

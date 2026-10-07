@@ -161,9 +161,9 @@ class ThemeAndRamadanTest {
             // City uses the same ink colour as the existing settings rows.
             assertEquals(AppColors(mode == ThemeMode.DARK).onBackground, cityTitle.currentTextColor)
             assertTrue(city.performClick())
-            val modeChoices = walk(panel(a)).filterIsInstance<RadioButton>()
-            assertEquals(setOf("Автоматически", "Вручную"), modeChoices.map { it.text.toString() }.toSet())
-            assertTrue(modeChoices.all { it.currentTextColor == AppColors(mode == ThemeMode.DARK).onBackground })
+            val cityChoices = walk(panel(a)).filterIsInstance<RadioButton>()
+            assertEquals(setOf("Сафаджай", "Москва"), cityChoices.map { it.text.toString() }.toSet())
+            assertTrue(cityChoices.all { it.currentTextColor == AppColors(mode == ThemeMode.DARK).onBackground })
             assertTrue(walk(panel(a)).filterIsInstance<TextView>().none { it.text.contains("Обновить местоположение") })
             screenshot(panel(a), "city-$suffix")
             invoke(a, "showAboutDialog")
