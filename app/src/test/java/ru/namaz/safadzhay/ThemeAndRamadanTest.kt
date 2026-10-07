@@ -158,11 +158,12 @@ class ThemeAndRamadanTest {
             val city = walk(panel(a)).single { it.tag == "city_information" }
             assertTrue(city.isClickable); assertTrue(city.hasOnClickListeners())
             val cityTitle = walk(city).filterIsInstance<TextView>().single { it.text.toString() == "Город" }
-            assertEquals(AppColors(mode == ThemeMode.DARK).onSurface, cityTitle.currentTextColor)
+            // City uses the same ink colour as the existing settings rows.
+            assertEquals(AppColors(mode == ThemeMode.DARK).onBackground, cityTitle.currentTextColor)
             assertTrue(city.performClick())
             val modeChoices = walk(panel(a)).filterIsInstance<RadioButton>()
             assertEquals(setOf("Автоматически", "Вручную"), modeChoices.map { it.text.toString() }.toSet())
-            assertTrue(modeChoices.all { it.currentTextColor == AppColors(mode == ThemeMode.DARK).onSurface })
+            assertTrue(modeChoices.all { it.currentTextColor == AppColors(mode == ThemeMode.DARK).onBackground })
             assertTrue(walk(panel(a)).filterIsInstance<TextView>().none { it.text.contains("Обновить местоположение") })
             screenshot(panel(a), "city-$suffix")
             invoke(a, "showAboutDialog")
