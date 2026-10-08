@@ -1,0 +1,57 @@
+name: Validate stable city geolocation (no APK)
+
+on:
+  push:
+    branches: [stable/city-geolocation-20261008]
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+      - name: Production, repository and security checks
+        run: |
+          python3 scripts/repository-security.py
+          python3 scripts/preflight.py
+          python3 -m unittest discover -s scripts -p 'test_*.py'
+      - name: Compile, unit tests and lint without packaging
+        run: bash gradlew --no-daemon :app:compileDebugSources :app:compileReleaseSources :app:testDebugUnitTest :app:testReleaseUnitTest :app:lintDebug :app:lintRelease
+      - name: Audit production manifest and verify no installable artifacts
+        run: |
+          python3 scripts/audit-merged-manifest.py
+          python3 - <<'PY'
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+          assert not list(Path('app/build').rglob('*.apk'))
+          assert not list(Path('app/build').rglob('*.aab'))
+          for variant in ('Debug', 'Release'):
+              reports = list(Path(f'app/build/test-results/test{variant}UnitTest').glob('TEST-*.xml'))
+              assert reports
+              suites = [ET.parse(path).getroot() for path in reports]
+              tests = sum(int(suite.get('tests', '0')) for suite in suites)
+              failures = sum(int(suite.get('failures', '0')) + int(suite.get('errors', '0')) for suite in suites)
+              assert failures == 0
+              print(f'{variant}: {tests} tests passed; no APK/AAB produced')
+          PY
+      - name: Verification reports
+        if: always()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: stable-city-validation-reports
+          path: |
+            app/build/reports/tests/
+            app/build/test-results/
+            app/build/reports/lint-results-*.html
+          if-no-files-found: ignore
