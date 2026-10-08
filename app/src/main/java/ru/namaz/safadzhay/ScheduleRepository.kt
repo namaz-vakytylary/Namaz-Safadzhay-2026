@@ -193,6 +193,7 @@ internal class ScheduleRepository(
         private const val MAX_SNAPSHOT = 8 * 1024 * 1024
         private const val MAX_TOTAL_PAYLOAD = 2 * 1024 * 1024
         private val supportedCities = setOf("safadzhay", "moscow")
+        fun supportedCityIds(): Set<String> = supportedCities.toSet()
         private val prayerKeys = listOf("fajr", "zuhr", "asr", "maghrib", "isha")
 
         fun parseManifest(bytes: ByteArray): List<Entry> {

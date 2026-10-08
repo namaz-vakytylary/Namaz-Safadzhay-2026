@@ -179,6 +179,11 @@ class MainActivity : Activity() {
 
     private var selectedDate: LocalDate? = null
     private var selectedCity: String = "Сафаджай"
+    private lateinit var citySelection: CitySelectionSettings
+    private lateinit var cityLocation: CityLocationController
+    private var citySettingsSummary: TextView? = null
+    private val cityButtons = mutableListOf<RadioButton>()
+    private var notificationPermissionPending = false
     private lateinit var placeText: TextView
 
     private val safadzhayData = listOf(
@@ -538,7 +543,15 @@ class MainActivity : Activity() {
         val openedFromReminder = intent?.action == OPEN_PRAYER_ACTION
         selectedDate = savedInstanceState?.getString("selected_date")?.let { runCatching { LocalDate.parse(it) }.getOrNull() } ?: LocalDate.now(zone)
         val prefs = getSharedPreferences(SETTINGS_PREFS, Context.MODE_PRIVATE)
-        selectedCity = prefs.getString("city", "Сафаджай") ?: "Сафаджай"
+        val citySession = CitySelectionSession(
+            manualOverride = savedInstanceState?.getBoolean("city_session_manual_override") == true,
+            startupChecked = savedInstanceState?.getBoolean("city_session_startup_checked") == true,
+            latestFixNanos = savedInstanceState?.getLong("city_session_latest_fix_nanos") ?: 0L
+        )
+        citySelection = CitySelectionSettings(this, citySession)
+        selectedCity = citySelection.savedCity()?.name ?: "Сафаджай"
+        cityLocation = CityLocationController(this, citySelection,
+            { availableCitySchedules() }, { onScheduleCitySelected(it) }, { /* No location status in UI. */ })
         scheduleTabSelected = savedInstanceState?.getBoolean("schedule_tab") ?: false
         if (openedFromReminder) { selectedDate = LocalDate.now(zone); scheduleTabSelected = false }
         calendarMonth = savedInstanceState?.getString("calendar_month")?.let {
@@ -553,12 +566,14 @@ val needsNotificationPermission = firstNotificationSetup &&
     Build.VERSION.SDK_INT >= 33 &&
     ContextCompat.checkSelfPermission(this@MainActivity, "android.permission.POST_NOTIFICATIONS") != android.content.pm.PackageManager.PERMISSION_GRANTED
 
+notificationPermissionPending = savedInstanceState?.getBoolean("notification_permission_pending") == true
 if (needsNotificationPermission) {
-    requestPermissions(
-        arrayOf("android.permission.POST_NOTIFICATIONS"),
-        7001
-    )
+    if (!notificationPermissionPending) {
+        notificationPermissionPending = true
+        requestPermissions(arrayOf("android.permission.POST_NOTIFICATIONS"), 7001)
+    }
 } else {
+    notificationPermissionPending = false
     maybeRequestExactAlarmPermission()
     startScheduleUpdateCheck()
 }
@@ -567,7 +582,7 @@ if (needsNotificationPermission) {
             "settings" -> showSettingsDialog()
             "qibla" -> showQiblaCompass()
             "theme" -> showThemeSelector()
-            "city" -> showCityChoice { showSettingsDialog() }
+            "city" -> showCityChoice()
             "lead" -> showNotifyBeforeDialog { showNotificationsScreen { showSettingsDialog() } }
             "prayers" -> showPrayerSelectionDialog { showNotificationsScreen { showSettingsDialog() } }
             "sound" -> showSoundScreen()
@@ -1252,6 +1267,7 @@ headerBox.addView(
     }
 
     private fun fullScreenPanel(titleText: String, onBack: () -> Unit): Pair<android.app.Dialog, LinearLayout> {
+        citySettingsSummary = null; cityButtons.clear()
         // Keep one window throughout settings navigation so the home screen is never exposed.
         val dialog = settingsPanel ?: object : android.app.Dialog(this, if (palette.isDark) R.style.AppPanelTheme else R.style.AppPanelThemeLight) {
             override fun cancel() {
@@ -1379,24 +1395,70 @@ headerBox.addView(
     ) { openExactAlarmSettings() }
 }
 
-    private fun showCityChoice(refreshSettings: () -> Unit) {
+    private fun scheduleCities(): List<ScheduleCity> =
+        CityCatalog.all.filter { it.id in ScheduleRepository.supportedCityIds() }
+
+    private fun availableCitySchedules(): List<ScheduleCity> {
+        // Only cities with actual verified/built-in coverage today are eligible.
+        val today = LocalDate.now(zone).toString()
+        return scheduleCities().filter { city -> dataForCity(city.name).any { it.date == today } }
+    }
+
+    private fun onScheduleCitySelected(city: ScheduleCity) {
+        if (selectedCity != city.name) {
+            selectedCity = city.name
+            lastPrayerRender = ""; lastCalendarRender = ""; lastAlarmSignature = ""
+            calendarMonth = calendarMonth.coerceIn(calendarMinMonth(), calendarMaxMonth())
+            update(); schedulePrayerNotifications()
+        }
+        refreshCitySelectionUi()
+    }
+
+    private fun refreshCitySelectionUi() {
+        citySettingsSummary?.text = selectedCity
+        cityButtons.forEach { button ->
+            val checked = button.text.toString() == selectedCity
+            button.isChecked = checked
+            button.background = surface(checked)
+        }
+    }
+
+    private fun cityInformationCard(): LinearLayout {
+        val row = screenRow(R.drawable.ic_location, "Город", selectedCity) { showCityChoice() }
+        row.tag = "city_settings_entry"
+        citySettingsSummary = ((row.getChildAt(1) as LinearLayout).getChildAt(1) as TextView).apply {
+            tag = "city_selection_summary"
+            maxLines = Int.MAX_VALUE
+            accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
+        }
+        return row
+    }
+
+    private fun showCityChoice() {
         panelRoute = "city"
-        val pair = fullScreenPanel("Город") { refreshSettings() }
-        pair.second.addView(label("Выберите город для расписания", 14f, muted).apply { setPadding(0, dp(16), 0, dp(16)) })
-        listOf("Сафаджай", "Москва").forEach { city ->
+        val pair = fullScreenPanel("Город") { cityButtons.clear(); showSettingsDialog() }
+        val cities = RadioGroup(this).apply { orientation = RadioGroup.VERTICAL }
+        cityButtons.clear()
+        scheduleCities().forEach { city ->
             val choice = RadioButton(this).apply {
-                text = city; textSize = 18f; setTextColor(ink); isChecked = selectedCity == city
-                background = surface(isChecked); setPadding(dp(15), dp(8), dp(15), dp(8))
+                id = View.generateViewId(); tag = "city_choice_${city.id}"
+                text = city.name; textSize = 17f; setTextColor(ink)
+                isChecked = selectedCity == city.name
+                buttonTintList = android.content.res.ColorStateList(
+                    arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf()), intArrayOf(mint, muted)
+                )
+                background = surface(isChecked)
+                setPadding(dp(15), dp(12), dp(15), dp(12)); minHeight = dp(64)
                 setOnClickListener {
-                    selectedCity = city
-                    getSharedPreferences(SETTINGS_PREFS, Context.MODE_PRIVATE).edit().putString("city", city).apply()
-                    update(); schedulePrayerNotifications(); refreshSettings()
+                    citySelection.selectManual(city)
+                    cityLocation.selectionChanged()
+                    onScheduleCitySelected(city)
                 }
             }
-            choice.minimumHeight = dp(64)
-            pair.second.addView(choice, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(10) })
+            cityButtons.add(choice)
+            cities.addView(choice, RadioGroup.LayoutParams(-1, -2).apply { bottomMargin = dp(10) })
         }
-        pair.second.addView(label("Время намазов зависит от выбранного города. Направление киблы определяется по местоположению телефона.", 14f, muted).apply { setPadding(0, dp(12), 0, 0) })
+        pair.second.addView(cities, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(16) })
         pair.first.show()
     }
 
@@ -1448,7 +1510,7 @@ headerBox.addView(
         val pair = create(); dialog = pair.first; val root = pair.second
 
         root.addView(screenRow(R.drawable.ic_notification, "Уведомления", if (prefs.getBoolean(NOTIFICATIONS_ENABLED_KEY, true)) "Включены" else "Выключены") { showNotificationsScreen { showSettingsDialog() } }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(12) })
-        root.addView(screenRow(R.drawable.ic_location, "Город", selectedCity) { showCityChoice { showSettingsDialog() } }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
+        root.addView(cityInformationCard(), LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
 
         root.addView(screenRow("◐", "Тема приложения", ThemeSettings.read(this).title) {
             showThemeSelector()
@@ -1543,6 +1605,7 @@ headerBox.addView(
             if (!isDestroyed && !isFinishing) {
                 lastAlarmSignature = ""; lastCalendarRender = ""; lastPrayerRender = ""
                 update()
+                if (::cityLocation.isInitialized) cityLocation.schedulesChanged()
             }
         }
     }
@@ -2422,6 +2485,8 @@ cell.addView(
         }
     }
 
+    if (::cityLocation.isInitialized) cityLocation.resume(allowPermissionRequest = !notificationPermissionPending)
+
     activeCompass?.start()
 
     if (activeCompass?.hasCompass() == true) {
@@ -2437,6 +2502,7 @@ override fun onRequestPermissionsResult(
     super.onRequestPermissionsResult(requestCode, permissions, grantResults)
 
     if (requestCode == 7001) {
+        notificationPermissionPending = false
         val granted =
             grantResults.firstOrNull() == android.content.pm.PackageManager.PERMISSION_GRANTED
 
@@ -2456,6 +2522,11 @@ override fun onRequestPermissionsResult(
 }
 
 startScheduleUpdateCheck()
+        if (::cityLocation.isInitialized) cityLocation.permissionRequestsAvailable()
+    }
+
+    if (requestCode == CityLocationController.REQUEST_CODE && ::cityLocation.isInitialized) {
+        cityLocation.permissionResult()
     }
 
     if (requestCode == QiblaLocationController.REQUEST_CODE) {
@@ -2467,6 +2538,10 @@ startScheduleUpdateCheck()
 
 
     override fun onSaveInstanceState(outState: Bundle) {
+        outState.putBoolean("city_session_manual_override", citySelection.session.manualOverride)
+        outState.putBoolean("city_session_startup_checked", citySelection.session.startupChecked)
+        outState.putLong("city_session_latest_fix_nanos", citySelection.session.latestFixNanos)
+        outState.putBoolean("notification_permission_pending", notificationPermissionPending)
         outState.putString("selected_date", selectedDate?.toString())
         outState.putBoolean("schedule_tab", scheduleTabSelected)
         outState.putString("calendar_month", calendarMonth.toString())
@@ -2474,8 +2549,9 @@ startScheduleUpdateCheck()
         outState.putString("panel_route", panelRoute)
         super.onSaveInstanceState(outState)
     }
-    override fun onPause() { activeQiblaLocation?.stop(); activeCompass?.stop(); super.onPause() }
+    override fun onPause() { if (::cityLocation.isInitialized) cityLocation.pause(); activeQiblaLocation?.stop(); activeCompass?.stop(); super.onPause() }
     override fun onDestroy() {
+        if (::cityLocation.isInitialized) cityLocation.pause()
         handler.removeCallbacksAndMessages(null)
         activeQiblaLocation?.stop()
         activeCompass?.stop()
