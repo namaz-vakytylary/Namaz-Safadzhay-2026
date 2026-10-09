@@ -5,8 +5,8 @@ APK="${1:-app/build/outputs/apk/release/app-release.apk}"
 TOOLS="$ANDROID_HOME/build-tools/35.0.0"
 "$TOOLS/aapt" dump badging "$APK" > apk-badging.txt
 grep -q "package: name='ru.namaz.safadzhay'" apk-badging.txt
-grep -Fq "versionName='1.3'" apk-badging.txt
-grep -Fq "versionCode='33'" apk-badging.txt
+grep -Fq "versionName='1.4'" apk-badging.txt
+grep -Fq "versionCode='34'" apk-badging.txt
 grep -Fxq "application-label:'Намаз Вакытлары'" apk-badging.txt
 grep -Fxq "sdkVersion:'23'" apk-badging.txt
 grep -Fxq "targetSdkVersion:'35'" apk-badging.txt
@@ -34,4 +34,4 @@ grep -Fq "Signer #1 certificate SHA-256 digest: $EXPECTED" apk-signing.txt
 grep -Fxq 'Number of signers: 1' apk-signing.txt
 python3 scripts/check-apk-contents.py "$APK"
 sha256sum "$APK" > apk.sha256
-echo 'PASS APK: stable package 1.3/33, previous release certificate, permissions, no packaged signing material'
+echo 'PASS APK: stable package 1.4/34, previous release certificate, permissions, no packaged signing material'
