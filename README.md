@@ -1,19 +1,20 @@
-# Намаз Вакытлары 1.3
+# Намаз Вакытлары 1.4
 
-Стабильное приложение: `ru.namaz.safadzhay`, `versionName = 1.3`, `versionCode = 33`.
+Стабильное приложение: `ru.namaz.safadzhay`, `versionName = 1.4`, `versionCode = 34`.
+Версия 1.3 использовала versionCode 33.
 Предыдущие стабильные APK 1.2 из сборок 71 и 156 имеют versionCode 32.
 
 ## Ручная проверка и сборка
 
-В GitHub Actions откройте **Build Namaz Vakytylary 1.3 RELEASE**, выберите `main`
+В GitHub Actions откройте **Build Namaz Vakytylary 1.4 RELEASE**, выберите `main`
 и нажмите **Run workflow**. Push и создание веток сборку не запускают.
 
 Workflow последовательно выполняет preflight, тесты восстановления ключа,
 Android unit tests, Android lint, release build и проверку готового APK.
 Ошибка любого обязательного этапа блокирует выдачу release-артефакта.
 
-Готовый файл: `Namaz_Vakytylary_1.3.apk`, артефакт `Namaz-Vakytylary-1.3-RELEASE`.
-Отчёты и изображения тестовых экранов: `Namaz-Vakytylary-1.3-verification`.
+Готовый файл: `Namaz_Vakytylary_1.4.apk`, артефакт `Namaz-Vakytylary-1.4-RELEASE`.
+Отчёты и изображения тестовых экранов: `Namaz-Vakytylary-1.4-verification`.
 
 Сборка использует существующие GitHub Secrets `NAMAZ_TEST_KEYSTORE_BASE64`,
 `NAMAZ_TEST_STORE_PASSWORD`, `NAMAZ_TEST_KEY_ALIAS`, `NAMAZ_TEST_KEY_PASSWORD`.
@@ -41,5 +42,5 @@ bash gradlew --no-daemon :app:lintRelease
 `namaz-vakytylary/namaz-schedules` используется только как источник данных.
 
 Исторические документы `TEST3_README.md`, `verification/test3/` и `verification/baseline-1.1/`
-описывают прежние сборки и не являются подтверждением проверок stable 1.3.
+описывают прежние сборки и не являются подтверждением проверок текущего релиза.
 Подробный отчёт подготовки: `verification/STABLE_1.3_PREPARATION.md`.

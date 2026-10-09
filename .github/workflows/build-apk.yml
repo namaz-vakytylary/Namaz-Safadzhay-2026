@@ -1,4 +1,4 @@
-name: Build Namaz Vakytylary 1.3 RELEASE
+name: Build Namaz Vakytylary 1.4 RELEASE
 
 on:
   workflow_dispatch:
@@ -124,7 +124,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:
-          name: Namaz-Vakytylary-1.3-verification
+          name: Namaz-Vakytylary-1.4-verification
           path: |
             app/build/reports/tests/testReleaseUnitTest
             app/build/reports/lint-results-release.html
@@ -143,12 +143,12 @@ jobs:
       - name: Name stable APK
         run: |
           mkdir -p dist
-          cp app/build/outputs/apk/release/app-release.apk dist/Namaz_Vakytylary_1.3.apk
+          cp app/build/outputs/apk/release/app-release.apk dist/Namaz_Vakytylary_1.4.apk
 
       - name: Upload RELEASE APK
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:
-          name: Namaz-Vakytylary-1.3-RELEASE
-          path: dist/Namaz_Vakytylary_1.3.apk
+          name: Namaz-Vakytylary-1.4-RELEASE
+          path: dist/Namaz_Vakytylary_1.4.apk
           if-no-files-found: error
           retention-days: 30

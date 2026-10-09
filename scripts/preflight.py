@@ -35,7 +35,7 @@ app = manifest.find('application')
 assert app.get(ns+'allowBackup') == 'false'
 assert app.get(ns+'usesCleartextTraffic') == 'false'
 build = (ROOT / 'app/build.gradle.kts').read_text()
-for required in ['namespace = "ru.namaz.safadzhay"', 'applicationId = "ru.namaz.safadzhay"','versionCode = 33','versionName = "1.3"','isDebuggable = false']:
+for required in ['namespace = "ru.namaz.safadzhay"', 'applicationId = "ru.namaz.safadzhay"','versionCode = 34','versionName = "1.4"','isDebuggable = false']:
     assert required in build, required
 assert not any((ROOT / 'app').glob('*.jks'))
 tracked = subprocess.check_output(['git', 'ls-files', '-z'], cwd=ROOT).decode().split('\0')
@@ -55,7 +55,7 @@ assert not re.search(r'LocalDate\.(?:of\(2026,\s*8,\s*10\)|parse\("2026-08-10"\)
 for name, expected in json.loads((ROOT/'verification/ramadan-resources.sha256.json').read_text()).items():
     assert hashlib.sha256((ROOT/'app/src/main/res/drawable'/name).read_bytes()).hexdigest() == expected, name
 baseline = json.loads((ROOT/'verification/stable-baseline.json').read_text())
-assert 33 > baseline['versionCode']
+assert 34 > baseline['versionCode']
 assert baseline['certificateSha256'] == (ROOT/'verification/release-certificate.sha256').read_text().strip()
 resources = {p.stem for p in (ROOT/'app/src/main/res').rglob('*') if p.is_file()}
 for code in SRC.glob('*.kt'):
@@ -73,4 +73,4 @@ assert "if: github.ref == 'refs/heads/main'" in workflow
 assert hashlib.sha256((ROOT/'gradle/wrapper/gradle-wrapper.jar').read_bytes()).hexdigest() == '2db75c40782f5e8ba1fc278a5574bab070adccb2d21ca5a6e5ed840888448046'
 assert 'distributionSha256Sum=31c55713e40233a8303827ceb42ca48a47267a0ad4bab9177123121e71524c26' in (ROOT/'gradle/wrapper/gradle-wrapper.properties').read_text()
 subprocess.run(['bash','-n',str(ROOT/'gradlew')],check=True)
-print('PASS stable 1.3/33 identity, notification defaults, real Ramadan dates, original Ramadan images, data, permissions, XML, shell syntax and manual CI gates')
+print('PASS stable 1.4/34 identity, notification defaults, real Ramadan dates, original Ramadan images, data, permissions, XML, shell syntax and manual CI gates')

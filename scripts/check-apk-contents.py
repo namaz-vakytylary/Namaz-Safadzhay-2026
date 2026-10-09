@@ -11,7 +11,7 @@ package, code, version = re.search(
     badging, re.M).groups()
 baseline = json.loads(Path('verification/stable-baseline.json').read_text())
 assert package == baseline['applicationId']
-assert version == '1.3' and int(code) == 33 and int(code) > baseline['versionCode']
+assert version == '1.4' and int(code) == 34 and int(code) > baseline['versionCode']
 for label in re.findall(r"^application-label[^:]*:'(.*)'$", badging, re.M):
     assert label == 'Намаз Вакытлары', 'Unexpected user-facing label'
 manifest = Path('apk-manifest.txt').read_text()
