@@ -1279,17 +1279,17 @@ headerBox.addView(
             tag = "notification_card"
             gravity = Gravity.CENTER_VERTICAL
             background = surface()
-            // Short displays use a compact minimum; larger fonts can grow every card.
-            minimumHeight = dp(if (resources.configuration.screenHeightDp < 720) 96 else 112)
-            setPadding(dp(14), dp(16), dp(12), dp(16))
+            // Match the theme selector proportions; wrap content for larger fonts.
+            minimumHeight = dp(76)
+            setPadding(dp(15), dp(12), dp(15), dp(12))
             isFocusable = true
             setOnClickListener { onClick() }
             addView(notificationIcon(iconRes), LinearLayout.LayoutParams(dp(40), dp(40)).apply { marginEnd = dp(10) })
             val copy = LinearLayout(this@MainActivity).apply {
                 orientation = LinearLayout.VERTICAL
                 gravity = Gravity.CENTER_VERTICAL
-                addView(label(title, 18f, ink).apply { maxLines = Int.MAX_VALUE }, LinearLayout.LayoutParams(-1, -2))
-                addView(label(value, 14f, muted).apply { maxLines = Int.MAX_VALUE }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(5) })
+                addView(label(title, 17f, ink).apply { maxLines = Int.MAX_VALUE }, LinearLayout.LayoutParams(-1, -2))
+                addView(label(value, 14f, muted).apply { maxLines = Int.MAX_VALUE }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(4) })
             }
             addView(copy, LinearLayout.LayoutParams(0, -2, 1f))
             addView(label("›", 25f, muted).apply {
@@ -1503,11 +1503,11 @@ headerBox.addView(
         dialog = pair.first; val root = pair.second
         val master = LinearLayout(this).apply {
             tag = "notification_master"
-            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(dp(14), dp(12), dp(12), dp(12))
+            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(dp(15), dp(12), dp(15), dp(12))
             background = surface()
         }
         master.addView(notificationIcon(R.drawable.ic_notification), LinearLayout.LayoutParams(dp(40), dp(40)).apply { marginEnd = dp(10) })
-        master.addView(text("Уведомления", 18f, palette.onSurface, true).apply { gravity = Gravity.CENTER_VERTICAL; maxLines = Int.MAX_VALUE }, LinearLayout.LayoutParams(0, -2, 1f))
+        master.addView(text("Уведомления", 17f, palette.onSurface, true).apply { gravity = Gravity.CENTER_VERTICAL; maxLines = Int.MAX_VALUE }, LinearLayout.LayoutParams(0, -2, 1f))
         master.addView(Switch(this).apply {
             contentDescription = "Уведомления"
             isChecked = prefs.getBoolean(NOTIFICATIONS_ENABLED_KEY, false)
@@ -1515,19 +1515,19 @@ headerBox.addView(
                 if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(this@MainActivity, "android.permission.POST_NOTIFICATIONS") != android.content.pm.PackageManager.PERMISSION_GRANTED) { notificationPermissionPending = true; requestPermissions(arrayOf("android.permission.POST_NOTIFICATIONS"), 7001) }
                 else maybeRequestExactAlarmPermission(true)
             } }
-        }, LinearLayout.LayoutParams(dp(60), dp(58)))
-        master.minimumHeight = dp(80)
-        root.addView(master, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(12) })
+        }, LinearLayout.LayoutParams(dp(60), dp(52)))
+        master.minimumHeight = dp(76)
+        root.addView(master, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(10) })
         root.addView(text("Приложение будет напоминать о выбранных намазах в указанное вами время.", 14f, palette.notificationText, false).apply { maxLines = Int.MAX_VALUE; setPadding(dp(8), dp(12), dp(8), dp(12)) })
         root.addView(notificationRow(R.drawable.ic_schedule, "Когда напоминать", notifyBeforeLabel(prefs.getInt(NOTIFY_BEFORE_MIN_KEY, 5))) { showNotifyBeforeDialog { showNotificationsScreen(onBack) } }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(6) })
-        root.addView(notificationRow(R.drawable.ic_checklist, "Намазы для уведомлений", selectedPrayerSummary(prefs)) { showPrayerSelectionDialog { showNotificationsScreen(onBack) } }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(12) })
+        root.addView(notificationRow(R.drawable.ic_checklist, "Намазы для уведомлений", selectedPrayerSummary(prefs)) { showPrayerSelectionDialog { showNotificationsScreen(onBack) } }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(10) })
         val sound = runCatching { RingtoneManager.getRingtone(this, selectedNotificationSound(this))?.getTitle(this) }.getOrNull() ?: "Системный звук"
-        root.addView(notificationRow(R.drawable.ic_music_note, "Звук уведомления", sound) { showSoundScreen() }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(12) })
+        root.addView(notificationRow(R.drawable.ic_music_note, "Звук уведомления", sound) { showSoundScreen() }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(10) })
         if (Build.VERSION.SDK_INT >= 31) {
             val am = getSystemService(Context.ALARM_SERVICE) as AlarmManager
-            root.addView(notificationRow(R.drawable.ic_alarm_on, "Точные уведомления", if (am.canScheduleExactAlarms()) "Разрешены" else "Нужно разрешить") { maybeRequestExactAlarmPermission(true) }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(12) })
+            root.addView(notificationRow(R.drawable.ic_alarm_on, "Точные уведомления", if (am.canScheduleExactAlarms()) "Разрешены" else "Нужно разрешить") { maybeRequestExactAlarmPermission(true) }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(10) })
         }
-        root.addView(label("Со звуком и вибрацией", 14f, muted).apply { gravity = Gravity.CENTER; background = surface(); maxLines = Int.MAX_VALUE; minimumHeight = dp(56); setPadding(dp(14), dp(16), dp(14), dp(16)) }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(12) })
+        root.addView(label("Со звуком и вибрацией", 14f, muted).apply { gravity = Gravity.CENTER; background = surface(); maxLines = Int.MAX_VALUE; minimumHeight = dp(56); setPadding(dp(15), dp(12), dp(15), dp(12)) }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(10) })
         dialog.show()
     }
 

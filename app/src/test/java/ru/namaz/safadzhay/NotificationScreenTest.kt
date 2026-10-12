@@ -4,6 +4,7 @@ import android.app.Dialog
 import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.graphics.drawable.GradientDrawable
 import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageView
@@ -127,6 +128,10 @@ class NotificationScreenTest {
                 layout(root, width, height)
                 assertAppearance(root, dark)
                 if (scale == 1f) {
+                    val cards = walk(root).filter { it.tag == "notification_card" }
+                    assertTrue("Oversized cards at normal font", cards.all { it.height <= 96 })
+                    val master = walk(root).single { it.tag == "notification_master" }
+                    assertEquals("Oversized master card", 76, master.height)
                     val scroll = walk(root).filterIsInstance<ScrollView>().single()
                     assertTrue("Excessive scrolling at normal font", scroll.getChildAt(0).height <= height + 240)
                 }
@@ -138,6 +143,41 @@ class NotificationScreenTest {
                 walk(card).filterIsInstance<TextView>()[1].text = "Очень длинное название выбранного звука уведомления пользователя"
                 layout(root, width, height)
                 assertAppearance(root, dark)
+            } finally { c.pause().stop().destroy() }
+        }
+    }
+
+    @Test fun notificationsMatchThemeAndCityCardProportions() {
+        for (mode in listOf(ThemeMode.LIGHT, ThemeMode.DARK)) {
+            ThemeSettings.save(app, mode)
+            val c = Robolectric.buildActivity(MainActivity::class.java).create().start().resume().visible()
+            try {
+                val a = c.get()
+                invoke(a, "showSettingsDialog"); clickText(panel(a), "Тема приложения")
+                layout(panel(a), 360, 800)
+                val theme = walk(panel(a)).filterIsInstance<RadioButton>().first()
+                invoke(a, "showSettingsDialog"); clickText(panel(a), "Город")
+                layout(panel(a), 360, 800)
+                val city = walk(panel(a)).filterIsInstance<RadioButton>().first()
+                val root = open(a); layout(root, 360, 800)
+                val cards = walk(root).filter { it.tag == "notification_card" }
+                for (card in cards + walk(root).single { it.tag == "notification_master" }) {
+                    assertEquals(theme.height, card.height)
+                    for (reference in listOf(theme, city)) {
+                        assertEquals(reference.paddingLeft, card.paddingLeft)
+                        assertEquals(reference.paddingTop, card.paddingTop)
+                        assertEquals(reference.paddingRight, card.paddingRight)
+                        assertEquals(reference.paddingBottom, card.paddingBottom)
+                        assertEquals((reference.background as GradientDrawable).cornerRadius,
+                            (card.background as GradientDrawable).cornerRadius, 0f)
+                    }
+                }
+                val themeGap = (theme.layoutParams as ViewGroup.MarginLayoutParams).bottomMargin
+                val cityGap = (city.layoutParams as ViewGroup.MarginLayoutParams).bottomMargin
+                for ((previous, next) in cards.zipWithNext()) {
+                    assertEquals(themeGap, next.top - previous.bottom)
+                    assertEquals(cityGap, next.top - previous.bottom)
+                }
             } finally { c.pause().stop().destroy() }
         }
     }
