@@ -83,7 +83,7 @@ class AppUpdateTest {
         controller.primaryAction(); controller.primaryAction(); assertEquals(1, source.downloads)
         source.emit(sample.copy(stage = AppUpdateStage.DOWNLOADING, downloadedBytes = 42, totalBytes = 100))
         walk(controller.dialog!!.findViewById(android.R.id.content)).single { it.tag == "app_update_continue" }.performClick()
-        assertNull(controller.dialog); source.emit(sample.copy(stage = AppUpdateStage.READY)); idle()
+        idle(); assertNull(controller.dialog); source.emit(sample.copy(stage = AppUpdateStage.READY)); idle()
         assertNull(controller.dialog); assertFalse(source.closed)
         controller.close(); assertTrue(source.closed)
         val next = AppUpdateController(a, FakeSource(sample), { true }, { 11_000L }, showSuccess = {})
