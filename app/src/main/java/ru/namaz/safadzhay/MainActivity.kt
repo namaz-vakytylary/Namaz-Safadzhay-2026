@@ -593,7 +593,7 @@ if (needsNotificationPermission) {
                 
     
         appUpdateController = runCatching {
-            AppUpdateController(this, RuStoreAppUpdateSource(this), {
+            AppUpdateController(this, RuStoreAppUpdateSource.create(this), {
                 !isFinishing && !isDestroyed && hasWindowFocus() && mainScroll.isLaidOut &&
                     panelRoute.isEmpty() && settingsPanel?.isShowing != true &&
                     aboutDialog?.isShowing != true && scheduleUpdateDialog?.isShowing != true &&
@@ -2568,7 +2568,7 @@ cell.addView(
 
     override fun onResume() {
     super.onResume()
-    if (::mainScroll.isInitialized) mainScroll.post { if (!isFinishing && !isDestroyed) appUpdateController?.resume() }
+    appUpdateController?.resume()
 
     if (::placeText.isInitialized) {
         schedulePrayerNotifications()

@@ -14,6 +14,14 @@ internal class RuStoreAppUpdateSource(
     private val activity: Activity,
     private val manager: RuStoreAppUpdateManager = RuStoreAppUpdateManagerFactory.create(activity.applicationContext)
 ) : AppUpdateSource {
+    companion object {
+        fun create(activity: Activity): AppUpdateSource {
+            val installed = listOf("ru.vk.store", "ru.vk.store.qa").any { name ->
+                runCatching { activity.packageManager.getPackageInfo(name, 0) }.isSuccess
+            }
+            return if (installed) RuStoreAppUpdateSource(activity) else UnavailableStoreUpdateSource()
+        }
+    }
     private val main = Handler(Looper.getMainLooper())
     private var closed = false
     private var current: StoreAppUpdate? = null
@@ -75,4 +83,13 @@ internal class RuStoreAppUpdateSource(
         closed = true; if (listening) runCatching { manager.unregisterListener(listener) }
         listening = false; onState = null; main.removeCallbacksAndMessages(null)
     }
+}
+
+/** Absence of a store must cause no SDK initialization, RPC, background work or UI. */
+private class UnavailableStoreUpdateSource : AppUpdateSource {
+    override var onState: ((StoreAppUpdate) -> Unit)? = null
+    override fun check(success: (StoreAppUpdate?) -> Unit, failure: () -> Unit) { success(null) }
+    override fun download(failure: () -> Unit) { failure() }
+    override fun install(failure: () -> Unit) { failure() }
+    override fun close() { onState = null }
 }

@@ -43,6 +43,13 @@ class RuStoreAppUpdateSourceTest {
     private fun withActivity(block: (Activity) -> Unit) {
         val c = Robolectric.buildActivity(Activity::class.java).setup(); try { block(c.get()) } finally { c.pause().stop().destroy() }
     }
+    @Test fun missingStoreSkipsSdkInitializationAndReturnsNoUpdate() = withActivity { a ->
+        val source = RuStoreAppUpdateSource.create(a)
+        assertFalse(source is RuStoreAppUpdateSource)
+        var callback = false
+        source.check({ assertNull(it); callback = true }, { fail("Missing store is a normal state") })
+        assertTrue(callback); source.close()
+    }
     @Test fun availabilityAndPackageIdentityComeFromStore() = withActivity { a ->
         val m = Manager(info(a)); val source = RuStoreAppUpdateSource(a, m); var value: StoreAppUpdate? = null
         source.check({ value = it }, { fail() }); idle(); assertEquals("new", value!!.versionName); assertEquals("Изменения RuStore", value!!.whatsNew)

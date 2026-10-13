@@ -8,6 +8,8 @@ import android.view.Gravity
 import android.view.View
 import android.widget.FrameLayout
 import android.widget.TextView
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 
 /** Small non-modal notice; only the coordinator can mark a real version increase as success. */
 internal class AppUpdateSuccessBanner(private val activity: Activity, message: String, action: (() -> Unit)? = null) {
@@ -24,7 +26,8 @@ internal class AppUpdateSuccessBanner(private val activity: Activity, message: S
     }
     init {
         host.addView(view, FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM).apply {
-            leftMargin = dp(18); rightMargin = dp(18); bottomMargin = dp(40)
+            leftMargin = dp(18); rightMargin = dp(18)
+            bottomMargin = (ViewCompat.getRootWindowInsets(host)?.getInsets(WindowInsetsCompat.Type.systemBars())?.bottom ?: dp(22)) + dp(18)
         })
         handler.postDelayed({ close() }, 6000)
     }
