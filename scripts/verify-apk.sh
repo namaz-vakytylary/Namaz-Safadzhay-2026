@@ -17,6 +17,10 @@ if grep -q "uses-permission: name='android.permission.ACCESS_BACKGROUND_LOCATION
     echo 'ERROR: Qibla must not request background location'
     exit 1
 fi
+if grep -q "uses-permission: name='android.permission.REQUEST_INSTALL_PACKAGES'" apk-badging.txt; then
+    echo 'ERROR: updates must use RuStore, not package installation permission'
+    exit 1
+fi
 if grep -q 'application-debuggable' apk-badging.txt; then
     echo 'ERROR: release APK is debuggable'
     exit 1

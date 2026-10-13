@@ -2,6 +2,13 @@ name: Build Namaz Vakytylary TEST offline schedules
 
 on:
   workflow_dispatch:
+  push:
+    branches: [test/1.2-test3-security]
+    paths:
+      - 'app/src/main/java/ru/namaz/safadzhay/AppUpdate*.kt'
+      - 'app/src/main/java/ru/namaz/safadzhay/RuStoreAppUpdateSource.kt'
+      - 'app/src/test/java/ru/namaz/safadzhay/AppUpdateTest.kt'
+      - 'app/src/test/java/ru/namaz/safadzhay/RuStoreAppUpdateSourceTest.kt'
 permissions:
   contents: read
 

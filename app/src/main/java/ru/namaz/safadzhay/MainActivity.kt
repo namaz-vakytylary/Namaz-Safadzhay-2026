@@ -124,6 +124,8 @@ class MainActivity : Activity() {
     private lateinit var scheduleUpdateChecker: ScheduleUpdateChecker
     private lateinit var holidayRepository: HolidayRepository
     private var panelRoute = ""
+    private var appUpdateController: AppUpdateController? = null
+    private var appUpdateSuccessBanner: AppUpdateSuccessBanner? = null
     private var activeCompass: QiblaCompassView? = null
     private var activeQiblaLocation: QiblaLocationController? = null
     private var lastPrayerRender = ""
@@ -590,6 +592,20 @@ if (needsNotificationPermission) {
         
                 
     
+        appUpdateController = runCatching {
+            AppUpdateController(this, RuStoreAppUpdateSource(this), {
+                !isFinishing && !isDestroyed && hasWindowFocus() && mainScroll.isLaidOut &&
+                    panelRoute.isEmpty() && settingsPanel?.isShowing != true &&
+                    aboutDialog?.isShowing != true && scheduleUpdateDialog?.isShowing != true &&
+                    !notificationPermissionPending && currentData().isNotEmpty()
+            }, savedState = savedInstanceState, showReadyNotice = { install ->
+                appUpdateSuccessBanner?.close()
+                appUpdateSuccessBanner = AppUpdateSuccessBanner(this, "Обновление готово к установке · Установить", install)
+            }, showSuccess = { version ->
+                appUpdateSuccessBanner?.close()
+                appUpdateSuccessBanner = AppUpdateSuccessBanner(this, "Обновлено до версии $version")
+            })
+        }.getOrNull()
         if (openedFromReminder) intent.action = Intent.ACTION_MAIN
         handler.post(object : Runnable {
             override fun run() {
@@ -1704,6 +1720,12 @@ headerBox.addView(
             LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(12) })
         root.addView(button("ОК") { dialog.dismiss() },
             LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(24) })
+        if (AppUpdateUiPreview.available(this)) {
+            root.addView(button("Проверка окна обновления · TEST") {
+                dialog.dismiss()
+                AppUpdateUiPreview.show(this)
+            }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(10) })
+        }
         val scroll = ScrollView(this).apply { addView(root) }
         dialog.setContentView(scroll)
         dialog.window?.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(Color.TRANSPARENT))
@@ -2546,6 +2568,7 @@ cell.addView(
 
     override fun onResume() {
     super.onResume()
+    if (::mainScroll.isInitialized) mainScroll.post { if (!isFinishing && !isDestroyed) appUpdateController?.resume() }
 
     if (::placeText.isInitialized) {
         schedulePrayerNotifications()
@@ -2609,6 +2632,7 @@ startScheduleUpdateCheck()
 
 
     override fun onSaveInstanceState(outState: Bundle) {
+        appUpdateController?.saveState(outState)
         outState.putBoolean("city_session_manual_override", citySelection.session.manualOverride)
         outState.putBoolean("city_session_startup_checked", citySelection.session.startupChecked)
         outState.putLong("city_session_latest_fix_nanos", citySelection.session.latestFixNanos)
@@ -2620,8 +2644,10 @@ startScheduleUpdateCheck()
         outState.putBoolean("notification_permission_pending", notificationPermissionPending)
         super.onSaveInstanceState(outState)
     }
-    override fun onPause() { if (::cityLocation.isInitialized) cityLocation.pause(); activeQiblaLocation?.stop(); activeCompass?.stop(); super.onPause() }
+    override fun onPause() { appUpdateController?.pause(); if (::cityLocation.isInitialized) cityLocation.pause(); activeQiblaLocation?.stop(); activeCompass?.stop(); super.onPause() }
     override fun onDestroy() {
+        appUpdateController?.close()
+        appUpdateSuccessBanner?.close()
         if (::cityLocation.isInitialized) cityLocation.pause()
         handler.removeCallbacksAndMessages(null)
         activeQiblaLocation?.stop()
