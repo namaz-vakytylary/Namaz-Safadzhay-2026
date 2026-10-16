@@ -36,7 +36,7 @@ class ThemeAndRamadanTest {
 
     @Before fun setup() {
         prefs.edit().clear().putBoolean("notifications_enabled", false).commit()
-        TestNetwork.offline(app)
+        TestNetwork.offline(app); TestNetwork.published(app)
         HolidayCalendar.setRemote(2026, null)
     }
     private fun systemDark(dark: Boolean) {
@@ -241,7 +241,7 @@ class ThemeAndRamadanTest {
         }
         assertNull(HolidayCalendar.ramadanDay(start))
         assertNull(HolidayCalendar.holidayFor(start))
-        assertEquals(1, HolidayCalendar.ramadanDay(LocalDate.of(2026,2,19)))
+        assertNull(HolidayCalendar.ramadanDay(LocalDate.of(2026,2,19)))
         assertNull(HolidayCalendar.ramadanDay(LocalDate.of(2026,3,20)))
     }
     @Test fun ramadanLightDarkAndSystemScenes() {

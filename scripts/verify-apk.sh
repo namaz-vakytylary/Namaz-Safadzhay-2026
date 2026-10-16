@@ -5,8 +5,8 @@ APK="${1:-app/build/outputs/apk/release/app-release.apk}"
 TOOLS="$ANDROID_HOME/build-tools/35.0.0"
 "$TOOLS/aapt" dump badging "$APK" > apk-badging.txt
 grep -q "package: name='ru.namaz.safadzhay.test'" apk-badging.txt
-grep -Fq "versionName='1.2-test3.1'" apk-badging.txt
-grep -Fq "versionCode='36'" apk-badging.txt
+grep -Fq "versionName='1.4-test1'" apk-badging.txt
+grep -Fq "versionCode='37'" apk-badging.txt
 grep -q 'Намаз Вакытлары Тест' apk-badging.txt
 grep -q "launchable-activity: name='ru.namaz.safadzhay.MainActivity'" apk-badging.txt
 grep -q "uses-permission: name='android.permission.INTERNET'" apk-badging.txt
@@ -31,3 +31,5 @@ grep -Eq 'usesCleartextTraffic.*0x0$' apk-manifest.txt
 EXPECTED="$(cat verification/release-certificate.sha256)"
 grep -Fq "Signer #1 certificate SHA-256 digest: $EXPECTED" apk-signing.txt
 echo 'PASS APK: separate test package, verified signing certificate, test name/version, release build'
+
+python3 scripts/check-apk-contents.py "$APK"

@@ -13,6 +13,7 @@ internal class CitySelectionSession(
     var manualOverride = manualOverride
         private set
     fun selectManual() { manualOverride = true }
+    companion object { val processToken: String = java.util.UUID.randomUUID().toString() }
 }
 
 internal enum class CityLocationState {

@@ -34,6 +34,7 @@ internal class CityLocationController(
     private var passiveListener: LocationListener? = null
     private var passiveGeneration = 0
     private var generation = 0
+    private var fallback: Runnable? = null
     private var searching = false
     private var foreground = false
     private var permissionsAvailable = true
@@ -120,6 +121,7 @@ internal class CityLocationController(
     private fun stopAttempt() {
         searching = false; generation++
         handler.removeCallbacks(timeout)
+        fallback?.let { handler.removeCallbacks(it) }; fallback = null
         cancellations.forEach { runCatching { it.cancel() } }; cancellations.clear()
         listener?.let { runCatching { manager.removeUpdates(it) } }; listener = null
     }
@@ -202,6 +204,22 @@ internal class CityLocationController(
         providers.mapNotNull { runCatching { manager.getLastKnownLocation(it) }.getOrNull() }
             .filter(::valid).sortedBy { it.accuracy }.forEach { if (accept(it, token)) return }
         if (!searching || token != generation || !foreground) return
+        val started = requestProviders(providers, token)
+        val gps = LocationManager.GPS_PROVIDER
+        if (gps in enabledProviders && gps !in providers) {
+            fallback = Runnable {
+                if (searching && foreground && token == generation && settings.isAutomatic() && hasPermission()) {
+                    runCatching { manager.getLastKnownLocation(gps) }.getOrNull()?.let { if (valid(it)) accept(it, token) }
+                    if (searching && token == generation) requestProviders(listOf(gps), token)
+                }
+            }.also { handler.postDelayed(it, if (started == 0) 0L else 8_000L) }
+        }
+        if (started == 0 && fallback == null) fail(if (hasPermission()) CityLocationState.UNAVAILABLE else permissionState())
+        else handler.postDelayed(timeout, TIMEOUT_MS)
+    }
+
+    @android.annotation.SuppressLint("MissingPermission")
+    private fun requestProviders(providers: List<String>, token: Int): Int {
         var started = 0
         if (Build.VERSION.SDK_INT >= 30) {
             val executor = Executor { command -> handler.post(command) }
@@ -215,7 +233,7 @@ internal class CityLocationController(
                 catch (_: IllegalStateException) { cancel.cancel() }
             }
         } else {
-            val receiver = object : LocationListener {
+            val receiver = listener ?: object : LocationListener {
                 override fun onLocationChanged(location: Location) { accept(location, token) }
                 @Deprecated("Legacy callback") override fun onStatusChanged(provider: String?, status: Int, extras: Bundle?) {}
                 override fun onProviderEnabled(provider: String) {}
@@ -227,8 +245,7 @@ internal class CityLocationController(
                 catch (_: SecurityException) {} catch (_: IllegalArgumentException) {} catch (_: IllegalStateException) {}
             }
         }
-        if (started == 0) fail(if (hasPermission()) CityLocationState.UNAVAILABLE else permissionState())
-        else handler.postDelayed(timeout, TIMEOUT_MS)
+        return started
     }
 
     private fun accept(fix: Location, token: Int): Boolean {

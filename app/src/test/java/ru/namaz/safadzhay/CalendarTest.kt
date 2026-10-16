@@ -59,7 +59,10 @@ class CalendarTest {
     )
 }
     @Test fun fridayAndHolidayAreBothPresentInOneDay() {
-        assertEquals(listOf("Джума-намаз", "Ураза-байрам"), HolidayCalendar.labels(LocalDate.of(2026, 3, 20)))
+        val date = LocalDate.of(2026, 3, 20)
+        HolidayCalendar.setRemote(2026, listOf(Holiday(date, "Ураза-байрам", "", "test")))
+        try { assertEquals(listOf("Джума-намаз", "Ураза-байрам"), HolidayCalendar.labels(date)) }
+        finally { HolidayCalendar.setRemote(2026, null) }
     }
     @Test fun ordinaryDayHasNoBannerContent() {
         assertTrue(HolidayCalendar.labels(LocalDate.of(2026, 9, 8)).isEmpty())

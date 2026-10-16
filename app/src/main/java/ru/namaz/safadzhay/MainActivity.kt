@@ -113,16 +113,29 @@ private fun ensurePrayerNotificationChannel(context: Context): String {
 
 
 // Process-wide queues let a completed download rebuild alarms even if its screen was closed.
-private val prayerAlarmWorker = java.util.concurrent.Executors.newSingleThreadExecutor()
+private val prayerAlarmWorker = PrayerAlarmScheduler.worker
 private val holidayUpdateWorker = java.util.concurrent.Executors.newSingleThreadExecutor()
 
 class MainActivity : Activity() {
     private val zone = ZoneId.of("Europe/Moscow")
     private val handler = Handler(Looper.getMainLooper())
+    private var nextNetworkCheck = 0L
+    private val ticker = object : Runnable {
+        override fun run() {
+            update()
+            val elapsed = android.os.SystemClock.elapsedRealtime()
+            if (elapsed >= nextNetworkCheck && !notificationPermissionPending) {
+                nextNetworkCheck = elapsed + 300_000L
+                scheduleUpdateChecker.allowRetryIfDue(); startScheduleUpdateCheck()
+            }
+            handler.postDelayed(this, 1000L)
+        }
+    }
     private val alarmExecutor = prayerAlarmWorker
     private lateinit var scheduleRepository: ScheduleRepository
     private lateinit var scheduleUpdateChecker: ScheduleUpdateChecker
     private lateinit var holidayRepository: HolidayRepository
+    private var holidayCheckAt = Long.MIN_VALUE
     private var panelRoute = ""
     private var appUpdateController: AppUpdateController? = null
     private var appUpdateSuccessBanner: AppUpdateSuccessBanner? = null
@@ -185,318 +198,7 @@ class MainActivity : Activity() {
     private var notificationPermissionPending = false
     private lateinit var placeText: TextView
 
-    private val safadzhayData = listOf(
-        PrayerDay("2026-08-01", "02:14", "12:20", "16:55", "20:06", "21:56"),
-        PrayerDay("2026-08-02", "02:16", "12:20", "16:54", "20:04", "21:54"),
-        PrayerDay("2026-08-03", "02:18", "12:20", "16:53", "20:02", "21:52"),
-        PrayerDay("2026-08-04", "02:20", "12:20", "16:51", "20:00", "21:50"),
-        PrayerDay("2026-08-05", "02:22", "12:20", "16:50", "19:58", "21:48"),
-        PrayerDay("2026-08-06", "02:24", "12:20", "16:49", "19:56", "21:46"),
-        PrayerDay("2026-08-07", "02:26", "12:20", "16:47", "19:54", "21:44"),
-        PrayerDay("2026-08-08", "02:28", "12:20", "16:46", "19:52", "21:42"),
-        PrayerDay("2026-08-09", "02:29", "12:20", "16:44", "19:50", "21:40"),
-        PrayerDay("2026-08-10", "02:32", "12:20", "16:42", "19:47", "21:36"),
-        PrayerDay("2026-08-11", "02:35", "12:20", "16:41", "19:45", "21:33"),
-        PrayerDay("2026-08-12", "02:38", "12:20", "16:40", "19:43", "21:30"),
-        PrayerDay("2026-08-13", "02:42", "12:20", "16:38", "19:41", "21:26"),
-        PrayerDay("2026-08-14", "02:44", "12:20", "16:37", "19:39", "21:24"),
-        PrayerDay("2026-08-15", "02:48", "12:20", "16:35", "19:36", "21:19"),
-        PrayerDay("2026-08-16", "02:50", "12:20", "16:33", "19:34", "21:17"),
-        PrayerDay("2026-08-17", "02:53", "12:20", "16:32", "19:32", "21:14"),
-        PrayerDay("2026-08-18", "02:57", "12:20", "16:30", "19:29", "21:09"),
-        PrayerDay("2026-08-19", "02:59", "12:20", "16:29", "19:27", "21:07"),
-        PrayerDay("2026-08-20", "03:02", "12:20", "16:27", "19:25", "21:04"),
-        PrayerDay("2026-08-21", "03:04", "12:20", "16:25", "19:22", "21:00"),
-        PrayerDay("2026-08-22", "03:07", "12:20", "16:24", "19:20", "20:57"),
-        PrayerDay("2026-08-23", "03:10", "12:20", "16:21", "19:17", "20:53"),
-        PrayerDay("2026-08-24", "03:12", "12:20", "16:20", "19:15", "20:51"),
-        PrayerDay("2026-08-25", "03:15", "12:20", "16:19", "19:13", "20:48"),
-        PrayerDay("2026-08-26", "03:19", "12:20", "16:17", "19:10", "20:43"),
-        PrayerDay("2026-08-27", "03:21", "12:20", "16:15", "19:08", "20:41"),
-        PrayerDay("2026-08-28", "03:24", "12:20", "16:13", "19:05", "20:37"),
-        PrayerDay("2026-08-29", "03:26", "12:20", "16:12", "19:03", "20:35"),
-        PrayerDay("2026-08-30", "03:29", "12:20", "16:10", "19:00", "20:31"),
-        PrayerDay("2026-08-31", "03:32", "12:20", "16:08", "18:58", "20:28"),
-        PrayerDay("2026-09-01", "03:34", "12:20", "16:06", "18:55", "20:25"),
-        PrayerDay("2026-09-02", "03:36", "12:20", "16:04", "18:52", "20:22"),
-        PrayerDay("2026-09-03", "03:37", "12:20", "16:02", "18:50", "20:20"),
-        PrayerDay("2026-09-04", "03:39", "12:20", "16:00", "18:47", "20:17"),
-        PrayerDay("2026-09-05", "03:42", "12:20", "15:59", "18:45", "20:14"),
-        PrayerDay("2026-09-06", "03:44", "12:20", "15:57", "18:42", "20:11"),
-        PrayerDay("2026-09-07", "03:48", "12:20", "15:55", "18:40", "20:07"),
-        PrayerDay("2026-09-08", "03:50", "12:20", "15:53", "18:37", "20:04"),
-        PrayerDay("2026-09-09", "03:53", "12:20", "15:51", "18:34", "20:00"),
-        PrayerDay("2026-09-10", "03:55", "12:20", "15:50", "18:32", "19:58"),
-        PrayerDay("2026-09-11", "03:57", "12:20", "15:48", "18:29", "19:55"),
-        PrayerDay("2026-09-12", "04:00", "12:20", "15:46", "18:27", "19:52"),
-        PrayerDay("2026-09-13", "04:01", "12:20", "15:44", "18:24", "19:49"),
-        PrayerDay("2026-09-14", "04:03", "12:20", "15:42", "18:21", "19:46"),
-        PrayerDay("2026-09-15", "04:05", "12:20", "15:40", "18:19", "19:44"),
-        PrayerDay("2026-09-16", "04:07", "12:20", "15:38", "18:16", "19:41"),
-        PrayerDay("2026-09-17", "04:09", "12:20", "15:36", "18:13", "19:38"),
-        PrayerDay("2026-09-18", "04:11", "12:20", "15:35", "18:11", "19:36"),
-        PrayerDay("2026-09-19", "04:13", "12:20", "15:33", "18:08", "19:33"),
-        PrayerDay("2026-09-20", "04:15", "12:20", "15:30", "18:05", "19:30"),
-        PrayerDay("2026-09-21", "04:17", "12:20", "15:29", "18:03", "19:28"),
-        PrayerDay("2026-09-22", "04:18", "12:20", "15:27", "18:00", "19:25"),
-        PrayerDay("2026-09-23", "04:20", "12:20", "15:25", "17:58", "19:23"),
-        PrayerDay("2026-09-24", "04:22", "12:20", "15:23", "17:55", "19:20"),
-        PrayerDay("2026-09-25", "04:24", "12:20", "15:21", "17:52", "19:17"),
-        PrayerDay("2026-09-26", "04:26", "12:20", "15:20", "17:50", "19:15"),
-        PrayerDay("2026-09-27", "04:28", "12:20", "15:18", "17:47", "19:12"),
-        PrayerDay("2026-09-28", "04:30", "12:20", "15:15", "17:44", "19:09"),
-        PrayerDay("2026-09-29", "04:32", "12:20", "15:14", "17:42", "19:07"),
-        PrayerDay("2026-09-30", "04:34", "12:20", "15:12", "17:39", "19:04"),
-        PrayerDay("2026-10-01", "04:36", "12:20", "15:11", "17:37", "19:02"),
-        PrayerDay("2026-10-02", "04:38", "12:20", "15:08", "17:34", "18:59"),
-        PrayerDay("2026-10-03", "04:40", "12:20", "15:06", "17:31", "18:56"),
-        PrayerDay("2026-10-04", "04:42", "12:20", "15:05", "17:29", "18:54"),
-        PrayerDay("2026-10-05", "04:44", "12:20", "15:03", "17:26", "18:51"),
-        PrayerDay("2026-10-06", "04:45", "12:20", "15:01", "17:24", "18:49"),
-        PrayerDay("2026-10-07", "04:47", "12:20", "14:59", "17:21", "18:46"),
-        PrayerDay("2026-10-08", "04:49", "12:20", "14:58", "17:19", "18:44"),
-        PrayerDay("2026-10-09", "04:51", "12:20", "14:56", "17:16", "18:41"),
-        PrayerDay("2026-10-10", "04:53", "12:20", "14:53", "17:13", "18:38"),
-        PrayerDay("2026-10-11", "04:55", "12:20", "14:52", "17:11", "18:36"),
-        PrayerDay("2026-10-12", "04:57", "12:20", "14:50", "17:08", "18:33"),
-        PrayerDay("2026-10-13", "04:59", "12:20", "14:49", "17:06", "18:31"),
-        PrayerDay("2026-10-14", "05:01", "12:20", "14:46", "17:03", "18:28"),
-        PrayerDay("2026-10-15", "05:03", "12:20", "14:45", "17:01", "18:26"),
-        PrayerDay("2026-10-16", "05:05", "12:20", "14:43", "16:58", "18:23"),
-        PrayerDay("2026-10-17", "05:07", "12:20", "14:42", "16:56", "18:21"),
-        PrayerDay("2026-10-18", "05:09", "12:20", "14:40", "16:54", "18:19"),
-        PrayerDay("2026-10-19", "05:11", "12:20", "14:38", "16:51", "18:16"),
-        PrayerDay("2026-10-20", "05:14", "12:20", "14:37", "16:49", "18:14"),
-        PrayerDay("2026-10-21", "05:16", "12:20", "14:35", "16:46", "18:11"),
-        PrayerDay("2026-10-22", "05:18", "12:20", "14:33", "16:44", "18:09"),
-        PrayerDay("2026-10-23", "05:20", "12:20", "14:32", "16:42", "18:07"),
-        PrayerDay("2026-10-24", "05:22", "12:20", "14:30", "16:39", "18:04"),
-        PrayerDay("2026-10-25", "05:24", "12:20", "14:29", "16:37", "18:02"),
-        PrayerDay("2026-10-26", "05:26", "12:20", "14:27", "16:35", "18:00"),
-        PrayerDay("2026-10-27", "05:28", "12:20", "14:25", "16:32", "17:57"),
-        PrayerDay("2026-10-28", "05:30", "12:20", "14:24", "16:30", "17:55"),
-        PrayerDay("2026-10-29", "05:32", "12:20", "14:22", "16:28", "17:53"),
-        PrayerDay("2026-10-30", "05:34", "12:20", "14:21", "16:26", "17:51"),
-        PrayerDay("2026-10-31", "05:36", "12:20", "14:20", "16:24", "17:49"),
-        PrayerDay("2026-11-01", "05:38", "12:20", "14:18", "16:22", "17:47"),
-        PrayerDay("2026-11-02", "05:41", "12:20", "14:16", "16:19", "17:44"),
-        PrayerDay("2026-11-03", "05:42", "12:20", "14:15", "16:17", "17:43"),
-        PrayerDay("2026-11-04", "05:44", "12:20", "14:14", "16:15", "17:41"),
-        PrayerDay("2026-11-05", "05:46", "12:20", "14:12", "16:13", "17:39"),
-        PrayerDay("2026-11-06", "05:48", "12:20", "14:11", "16:11", "17:37"),
-        PrayerDay("2026-11-07", "05:50", "12:20", "14:10", "16:09", "17:35"),
-        PrayerDay("2026-11-08", "05:52", "12:20", "14:08", "16:07", "17:33"),
-        PrayerDay("2026-11-09", "05:53", "12:20", "14:07", "16:05", "17:32"),
-        PrayerDay("2026-11-10", "05:55", "12:20", "14:06", "16:03", "17:30"),
-        PrayerDay("2026-11-11", "05:57", "12:20", "14:05", "16:02", "17:29"),
-        PrayerDay("2026-11-12", "05:59", "12:20", "14:04", "16:00", "17:27"),
-        PrayerDay("2026-11-13", "06:02", "12:20", "14:03", "15:58", "17:25"),
-        PrayerDay("2026-11-14", "06:03", "12:20", "14:01", "15:56", "17:24"),
-        PrayerDay("2026-11-15", "06:03", "12:20", "14:01", "15:55", "17:25"),
-        PrayerDay("2026-11-16", "06:05", "12:20", "14:00", "15:53", "17:23"),
-        PrayerDay("2026-11-17", "06:07", "12:20", "13:58", "15:51", "17:21"),
-        PrayerDay("2026-11-18", "06:09", "12:20", "13:58", "15:50", "17:20"),
-        PrayerDay("2026-11-19", "06:11", "12:20", "13:56", "15:48", "17:18"),
-        PrayerDay("2026-11-20", "06:13", "12:20", "13:56", "15:47", "17:17"),
-        PrayerDay("2026-11-21", "06:15", "12:20", "13:55", "15:45", "17:15"),
-        PrayerDay("2026-11-22", "06:17", "12:20", "13:54", "15:44", "17:14"),
-        PrayerDay("2026-11-23", "06:18", "12:20", "13:53", "15:42", "17:12"),
-        PrayerDay("2026-11-24", "06:20", "12:20", "13:52", "15:41", "17:11"),
-        PrayerDay("2026-11-25", "06:22", "12:20", "13:52", "15:40", "17:10"),
-        PrayerDay("2026-11-26", "06:24", "12:20", "13:51", "15:39", "17:09"),
-        PrayerDay("2026-11-27", "06:26", "12:20", "13:51", "15:38", "17:08"),
-        PrayerDay("2026-11-28", "06:28", "12:20", "13:49", "15:36", "17:06"),
-        PrayerDay("2026-11-29", "06:29", "12:20", "13:49", "15:35", "17:05"),
-        PrayerDay("2026-11-30", "06:31", "12:20", "13:48", "15:34", "17:04"),
-        PrayerDay("2026-12-01", "06:31", "12:20", "13:48", "15:33", "17:05"),
-        PrayerDay("2026-12-02", "06:30", "12:20", "13:48", "15:33", "17:07"),
-        PrayerDay("2026-12-03", "06:32", "12:20", "13:47", "15:32", "17:06"),
-        PrayerDay("2026-12-04", "06:33", "12:20", "13:47", "15:31", "17:05"),
-        PrayerDay("2026-12-05", "06:35", "12:20", "13:46", "15:30", "17:04"),
-        PrayerDay("2026-12-06", "06:36", "12:20", "13:46", "15:30", "17:04"),
-        PrayerDay("2026-12-07", "06:36", "12:20", "13:46", "15:29", "17:05"),
-        PrayerDay("2026-12-08", "06:37", "12:20", "13:46", "15:29", "17:05"),
-        PrayerDay("2026-12-09", "06:37", "12:20", "13:45", "15:28", "17:05"),
-        PrayerDay("2026-12-10", "06:39", "12:20", "13:46", "15:28", "17:05"),
-        PrayerDay("2026-12-11", "06:40", "12:20", "13:46", "15:28", "17:05"),
-        PrayerDay("2026-12-12", "06:40", "12:20", "13:45", "15:27", "17:05"),
-        PrayerDay("2026-12-13", "06:41", "12:20", "13:45", "15:27", "17:05"),
-        PrayerDay("2026-12-14", "06:42", "12:20", "13:45", "15:27", "17:05"),
-        PrayerDay("2026-12-15", "06:43", "12:20", "13:46", "15:27", "17:05"),
-        PrayerDay("2026-12-16", "06:44", "12:20", "13:46", "15:27", "17:05"),
-        PrayerDay("2026-12-17", "06:45", "12:20", "13:46", "15:27", "17:05"),
-        PrayerDay("2026-12-18", "06:45", "12:20", "13:46", "15:27", "17:05"),
-        PrayerDay("2026-12-19", "06:46", "12:20", "13:47", "15:28", "17:06"),
-        PrayerDay("2026-12-20", "06:47", "12:20", "13:47", "15:28", "17:06"),
-        PrayerDay("2026-12-21", "06:47", "12:20", "13:47", "15:28", "17:06"),
-        PrayerDay("2026-12-22", "06:48", "12:20", "13:48", "15:29", "17:07"),
-        PrayerDay("2026-12-23", "06:48", "12:20", "13:48", "15:29", "17:07"),
-        PrayerDay("2026-12-24", "06:49", "12:20", "13:49", "15:30", "17:08"),
-        PrayerDay("2026-12-25", "06:49", "12:20", "13:49", "15:30", "17:08"),
-        PrayerDay("2026-12-26", "06:49", "12:20", "13:50", "15:31", "17:09"),
-        PrayerDay("2026-12-27", "06:49", "12:20", "13:51", "15:32", "17:10"),
-        PrayerDay("2026-12-28", "06:50", "12:20", "13:52", "15:33", "17:11"),
-        PrayerDay("2026-12-29", "06:50", "12:20", "13:53", "15:34", "17:12"),
-        PrayerDay("2026-12-30", "06:50", "12:20", "13:53", "15:35", "17:13"),
-        PrayerDay("2026-12-31", "06:49", "12:20", "13:54", "15:36", "17:14")
-    )
 
-    // Москва: август–декабрь 2026. Времена взяты из предоставленного пользователем расписания Sajda.
-    private val moscowData = listOf(
-        PrayerDay("2026-08-01", "02:11", "12:41", "16:52", "20:42", "22:36"),
-        PrayerDay("2026-08-02", "02:12", "12:41", "16:51", "20:40", "22:35"),
-        PrayerDay("2026-08-03", "02:12", "12:41", "16:51", "20:38", "22:34"),
-        PrayerDay("2026-08-04", "02:13", "12:41", "16:50", "20:36", "22:33"),
-        PrayerDay("2026-08-05", "02:14", "12:41", "16:49", "20:34", "22:32"),
-        PrayerDay("2026-08-06", "02:15", "12:40", "16:48", "20:32", "22:30"),
-        PrayerDay("2026-08-07", "02:15", "12:40", "16:47", "20:30", "22:29"),
-        PrayerDay("2026-08-08", "02:16", "12:40", "16:46", "20:28", "22:28"),
-        PrayerDay("2026-08-09", "02:17", "12:40", "16:45", "20:26", "22:27"),
-        PrayerDay("2026-08-10", "02:17", "12:40", "16:44", "20:23", "22:26"),
-        PrayerDay("2026-08-11", "02:18", "12:40", "16:42", "20:21", "22:25"),
-        PrayerDay("2026-08-12", "02:19", "12:40", "16:41", "20:19", "22:23"),
-        PrayerDay("2026-08-13", "02:19", "12:39", "16:40", "20:17", "22:22"),
-        PrayerDay("2026-08-14", "02:20", "12:39", "16:39", "20:14", "22:21"),
-        PrayerDay("2026-08-15", "02:21", "12:39", "16:38", "20:12", "22:20"),
-        PrayerDay("2026-08-16", "02:21", "12:39", "16:37", "20:10", "22:17"),
-        PrayerDay("2026-08-17", "02:22", "12:39", "16:35", "20:07", "22:13"),
-        PrayerDay("2026-08-18", "02:23", "12:38", "16:34", "20:05", "22:10"),
-        PrayerDay("2026-08-19", "02:23", "12:38", "16:33", "20:02", "22:06"),
-        PrayerDay("2026-08-20", "02:24", "12:38", "16:31", "20:00", "22:02"),
-        PrayerDay("2026-08-21", "02:27", "12:38", "16:30", "19:58", "21:58"),
-        PrayerDay("2026-08-22", "02:32", "12:37", "16:29", "19:55", "21:54"),
-        PrayerDay("2026-08-23", "02:36", "12:37", "16:27", "19:53", "21:51"),
-        PrayerDay("2026-08-24", "02:40", "12:37", "16:26", "19:50", "21:47"),
-        PrayerDay("2026-08-25", "02:44", "12:37", "16:24", "19:48", "21:43"),
-        PrayerDay("2026-08-26", "02:47", "12:36", "16:23", "19:45", "21:40"),
-        PrayerDay("2026-08-27", "02:51", "12:36", "16:21", "19:43", "21:36"),
-        PrayerDay("2026-08-28", "02:55", "12:36", "16:20", "19:40", "21:33"),
-        PrayerDay("2026-08-29", "02:58", "12:35", "16:18", "19:38", "21:29"),
-        PrayerDay("2026-08-30", "03:02", "12:35", "16:17", "19:35", "21:26"),
-        PrayerDay("2026-08-31", "03:05", "12:35", "16:15", "19:33", "21:22"),
-        PrayerDay("2026-09-01", "03:08", "12:35", "16:14", "19:30", "21:19"),
-        PrayerDay("2026-09-02", "03:12", "12:34", "16:12", "19:27", "21:16"),
-        PrayerDay("2026-09-03", "03:15", "12:34", "16:10", "19:25", "21:12"),
-        PrayerDay("2026-09-04", "03:18", "12:34", "16:09", "19:22", "21:09"),
-        PrayerDay("2026-09-05", "03:21", "12:33", "16:07", "19:20", "21:06"),
-        PrayerDay("2026-09-06", "03:24", "12:33", "16:05", "19:17", "21:02"),
-        PrayerDay("2026-09-07", "03:27", "12:33", "16:04", "19:14", "20:59"),
-        PrayerDay("2026-09-08", "03:30", "12:32", "16:02", "19:12", "20:56"),
-        PrayerDay("2026-09-09", "03:33", "12:32", "16:00", "19:09", "20:53"),
-        PrayerDay("2026-09-10", "03:36", "12:32", "15:59", "19:07", "20:49"),
-        PrayerDay("2026-09-11", "03:38", "12:31", "15:57", "19:04", "20:46"),
-        PrayerDay("2026-09-12", "03:41", "12:31", "15:55", "19:01", "20:43"),
-        PrayerDay("2026-09-13", "03:44", "12:30", "15:53", "18:59", "20:40"),
-        PrayerDay("2026-09-14", "03:46", "12:30", "15:52", "18:56", "20:37"),
-        PrayerDay("2026-09-15", "03:49", "12:30", "15:50", "18:53", "20:34"),
-        PrayerDay("2026-09-16", "03:52", "12:29", "15:48", "18:51", "20:31"),
-        PrayerDay("2026-09-17", "03:54", "12:29", "15:46", "18:48", "20:28"),
-        PrayerDay("2026-09-18", "03:57", "12:29", "15:44", "18:46", "20:25"),
-        PrayerDay("2026-09-19", "03:59", "12:28", "15:42", "18:43", "20:22"),
-        PrayerDay("2026-09-20", "04:02", "12:28", "15:41", "18:40", "20:19"),
-        PrayerDay("2026-09-21", "04:04", "12:28", "15:39", "18:38", "20:16"),
-        PrayerDay("2026-09-22", "04:07", "12:27", "15:37", "18:35", "20:13"),
-        PrayerDay("2026-09-23", "04:09", "12:27", "15:35", "18:32", "20:10"),
-        PrayerDay("2026-09-24", "04:11", "12:27", "15:33", "18:30", "20:07"),
-        PrayerDay("2026-09-25", "04:14", "12:26", "15:31", "18:27", "20:04"),
-        PrayerDay("2026-09-26", "04:16", "12:26", "15:29", "18:24", "20:01"),
-        PrayerDay("2026-09-27", "04:18", "12:26", "15:27", "18:22", "19:58"),
-        PrayerDay("2026-09-28", "04:21", "12:25", "15:25", "18:19", "19:55"),
-        PrayerDay("2026-09-29", "04:23", "12:25", "15:23", "18:17", "19:53"),
-        PrayerDay("2026-09-30", "04:25", "12:25", "15:21", "18:14", "19:50"),
-        PrayerDay("2026-10-01", "04:27", "12:24", "15:20", "18:11", "19:47"),
-        PrayerDay("2026-10-02", "04:30", "12:24", "15:18", "18:09", "19:44"),
-        PrayerDay("2026-10-03", "04:32", "12:24", "15:16", "18:06", "19:42"),
-        PrayerDay("2026-10-04", "04:34", "12:23", "15:14", "18:04", "19:39"),
-        PrayerDay("2026-10-05", "04:36", "12:23", "15:12", "18:01", "19:36"),
-        PrayerDay("2026-10-06", "04:38", "12:23", "15:10", "17:58", "19:34"),
-        PrayerDay("2026-10-07", "04:40", "12:22", "15:08", "17:56", "19:31"),
-        PrayerDay("2026-10-08", "04:42", "12:22", "15:06", "17:53", "19:28"),
-        PrayerDay("2026-10-09", "04:45", "12:22", "15:04", "17:51", "19:26"),
-        PrayerDay("2026-10-10", "04:47", "12:22", "15:02", "17:48", "19:23"),
-        PrayerDay("2026-10-11", "04:49", "12:21", "15:00", "17:46", "19:21"),
-        PrayerDay("2026-10-12", "04:51", "12:21", "14:58", "17:43", "19:18"),
-        PrayerDay("2026-10-13", "04:53", "12:21", "14:56", "17:41", "19:16"),
-        PrayerDay("2026-10-14", "04:55", "12:21", "14:54", "17:38", "19:13"),
-        PrayerDay("2026-10-15", "04:57", "12:20", "14:52", "17:36", "19:11"),
-        PrayerDay("2026-10-16", "04:59", "12:20", "14:51", "17:33", "19:09"),
-        PrayerDay("2026-10-17", "05:01", "12:20", "14:49", "17:31", "19:06"),
-        PrayerDay("2026-10-18", "05:03", "12:20", "14:47", "17:28", "19:04"),
-        PrayerDay("2026-10-19", "05:05", "12:20", "14:45", "17:26", "19:02"),
-        PrayerDay("2026-10-20", "05:07", "12:19", "14:43", "17:23", "18:59"),
-        PrayerDay("2026-10-21", "05:09", "12:19", "14:41", "17:21", "18:57"),
-        PrayerDay("2026-10-22", "05:11", "12:19", "14:39", "17:19", "18:55"),
-        PrayerDay("2026-10-23", "05:12", "12:19", "14:38", "17:16", "18:53"),
-        PrayerDay("2026-10-24", "05:14", "12:19", "14:36", "17:14", "18:51"),
-        PrayerDay("2026-10-25", "05:16", "12:19", "14:34", "17:12", "18:49"),
-        PrayerDay("2026-10-26", "05:18", "12:18", "14:32", "17:09", "18:46"),
-        PrayerDay("2026-10-27", "05:20", "12:18", "14:30", "17:07", "18:44"),
-        PrayerDay("2026-10-28", "05:22", "12:18", "14:29", "17:05", "18:42"),
-        PrayerDay("2026-10-29", "05:24", "12:18", "14:27", "17:03", "18:40"),
-        PrayerDay("2026-10-30", "05:26", "12:18", "14:25", "17:00", "18:38"),
-        PrayerDay("2026-10-31", "05:27", "12:18", "14:24", "16:58", "18:36"),
-        PrayerDay("2026-11-01", "05:29", "12:18", "14:22", "16:56", "18:35"),
-        PrayerDay("2026-11-02", "05:31", "12:18", "14:20", "16:54", "18:33"),
-        PrayerDay("2026-11-03", "05:33", "12:18", "14:19", "16:52", "18:31"),
-        PrayerDay("2026-11-04", "05:35", "12:18", "14:17", "16:50", "18:29"),
-        PrayerDay("2026-11-05", "05:37", "12:18", "14:15", "16:48", "18:27"),
-        PrayerDay("2026-11-06", "05:38", "12:18", "14:14", "16:46", "18:26"),
-        PrayerDay("2026-11-07", "05:40", "12:18", "14:12", "16:44", "18:24"),
-        PrayerDay("2026-11-08", "05:42", "12:18", "14:11", "16:42", "18:22"),
-        PrayerDay("2026-11-09", "05:44", "12:18", "14:09", "16:40", "18:21"),
-        PrayerDay("2026-11-10", "05:45", "12:18", "14:08", "16:38", "18:19"),
-        PrayerDay("2026-11-11", "05:47", "12:19", "14:07", "16:36", "18:18"),
-        PrayerDay("2026-11-12", "05:49", "12:19", "14:05", "16:34", "18:16"),
-        PrayerDay("2026-11-13", "05:50", "12:19", "14:04", "16:32", "18:15"),
-        PrayerDay("2026-11-14", "05:52", "12:19", "14:03", "16:31", "18:13"),
-        PrayerDay("2026-11-15", "05:54", "12:19", "14:01", "16:29", "18:12"),
-        PrayerDay("2026-11-16", "05:55", "12:19", "14:00", "16:27", "18:11"),
-        PrayerDay("2026-11-17", "05:57", "12:19", "13:59", "16:26", "18:10"),
-        PrayerDay("2026-11-18", "05:59", "12:20", "13:58", "16:24", "18:08"),
-        PrayerDay("2026-11-19", "06:00", "12:20", "13:57", "16:22", "18:07"),
-        PrayerDay("2026-11-20", "06:02", "12:20", "13:56", "16:21", "18:06"),
-        PrayerDay("2026-11-21", "06:03", "12:20", "13:55", "16:20", "18:05"),
-        PrayerDay("2026-11-22", "06:05", "12:21", "13:54", "16:18", "18:04"),
-        PrayerDay("2026-11-23", "06:06", "12:21", "13:53", "16:17", "18:03"),
-        PrayerDay("2026-11-24", "06:08", "12:21", "13:52", "16:15", "18:02"),
-        PrayerDay("2026-11-25", "06:09", "12:21", "13:51", "16:14", "18:01"),
-        PrayerDay("2026-11-26", "06:11", "12:22", "13:50", "16:13", "18:00"),
-        PrayerDay("2026-11-27", "06:12", "12:22", "13:49", "16:12", "18:00"),
-        PrayerDay("2026-11-28", "06:13", "12:22", "13:49", "16:11", "17:59"),
-        PrayerDay("2026-11-29", "06:15", "12:23", "13:48", "16:10", "17:58"),
-        PrayerDay("2026-11-30", "06:16", "12:23", "13:47", "16:09", "17:58"),
-        PrayerDay("2026-12-01", "06:17", "12:24", "13:47", "16:08", "17:57"),
-        PrayerDay("2026-12-02", "06:19", "12:24", "13:46", "16:07", "17:57"),
-        PrayerDay("2026-12-03", "06:20", "12:24", "13:46", "16:06", "17:56"),
-        PrayerDay("2026-12-04", "06:21", "12:25", "13:45", "16:06", "17:56"),
-        PrayerDay("2026-12-05", "06:22", "12:25", "13:45", "16:05", "17:55"),
-        PrayerDay("2026-12-06", "06:23", "12:25", "13:45", "16:04", "17:55"),
-        PrayerDay("2026-12-07", "06:25", "12:26", "13:44", "16:04", "17:55"),
-        PrayerDay("2026-12-08", "06:26", "12:26", "13:44", "16:03", "17:55"),
-        PrayerDay("2026-12-09", "06:27", "12:27", "13:44", "16:03", "17:54"),
-        PrayerDay("2026-12-10", "06:28", "12:27", "13:44", "16:03", "17:54"),
-        PrayerDay("2026-12-11", "06:29", "12:28", "13:44", "16:02", "17:54"),
-        PrayerDay("2026-12-12", "06:30", "12:28", "13:44", "16:02", "17:54"),
-        PrayerDay("2026-12-13", "06:30", "12:29", "13:44", "16:02", "17:54"),
-        PrayerDay("2026-12-14", "06:31", "12:29", "13:44", "16:02", "17:54"),
-        PrayerDay("2026-12-15", "06:32", "12:30", "13:44", "16:02", "17:55"),
-        PrayerDay("2026-12-16", "06:33", "12:30", "13:44", "16:02", "17:55"),
-        PrayerDay("2026-12-17", "06:34", "12:31", "13:45", "16:02", "17:55"),
-        PrayerDay("2026-12-18", "06:34", "12:31", "13:45", "16:03", "17:55"),
-        PrayerDay("2026-12-19", "06:35", "12:32", "13:45", "16:03", "17:56"),
-        PrayerDay("2026-12-20", "06:36", "12:32", "13:46", "16:03", "17:56"),
-        PrayerDay("2026-12-21", "06:36", "12:33", "13:46", "16:04", "17:57"),
-        PrayerDay("2026-12-22", "06:37", "12:33", "13:47", "16:04", "17:57"),
-        PrayerDay("2026-12-23", "06:37", "12:34", "13:47", "16:05", "17:58"),
-        PrayerDay("2026-12-24", "06:38", "12:34", "13:48", "16:05", "17:58"),
-        PrayerDay("2026-12-25", "06:38", "12:35", "13:48", "16:06", "17:59"),
-        PrayerDay("2026-12-26", "06:38", "12:35", "13:49", "16:07", "18:00"),
-        PrayerDay("2026-12-27", "06:38", "12:36", "13:50", "16:08", "18:00"),
-        PrayerDay("2026-12-28", "06:39", "12:36", "13:51", "16:09", "18:01"),
-        PrayerDay("2026-12-29", "06:39", "12:36", "13:51", "16:10", "18:02"),
-        PrayerDay("2026-12-30", "06:39", "12:37", "13:52", "16:11", "18:03"),
-        PrayerDay("2026-12-31", "06:39", "12:37", "13:53", "16:12", "18:04")
-    )
 
 
 
@@ -535,17 +237,15 @@ class MainActivity : Activity() {
         scheduleUpdateChecker = (lastNonConfigurationInstance as? ScheduleUpdateChecker)
             ?: ScheduleUpdateChecker(applicationContext)
             holidayRepository = HolidayRepository(applicationContext)
-            holidayRepository.loadSaved(LocalDate.now(zone).year)?.let { holidays ->
-    HolidayCalendar.setRemote(LocalDate.now(zone).year, holidays)
-            }
         WindowCompat.setDecorFitsSystemWindows(window, false)
         val openedFromReminder = intent?.action == OPEN_PRAYER_ACTION
         selectedDate = savedInstanceState?.getString("selected_date")?.let { runCatching { LocalDate.parse(it) }.getOrNull() } ?: uiNow().toLocalDate()
         val prefs = getSharedPreferences(SETTINGS_PREFS, Context.MODE_PRIVATE)
+        val sameProcess = savedInstanceState?.getString("city_session_process") == CitySelectionSession.processToken
         val citySession = CitySelectionSession(
-            manualOverride = savedInstanceState?.getBoolean("city_session_manual_override") == true,
-            startupChecked = savedInstanceState?.getBoolean("city_session_startup_checked") == true,
-            latestFixNanos = savedInstanceState?.getLong("city_session_latest_fix_nanos") ?: 0L
+            manualOverride = sameProcess && savedInstanceState?.getBoolean("city_session_manual_override") == true,
+            startupChecked = sameProcess && savedInstanceState?.getBoolean("city_session_startup_checked") == true,
+            latestFixNanos = if (sameProcess) savedInstanceState?.getLong("city_session_latest_fix_nanos") ?: 0L else 0L
         )
         citySelection = CitySelectionSettings(this, citySession)
         selectedCity = citySelection.savedCity()?.name ?: "Сафаджай"
@@ -597,7 +297,7 @@ if (needsNotificationPermission) {
                 !isFinishing && !isDestroyed && hasWindowFocus() && mainScroll.isLaidOut &&
                     panelRoute.isEmpty() && settingsPanel?.isShowing != true &&
                     aboutDialog?.isShowing != true && scheduleUpdateDialog?.isShowing != true &&
-                    !notificationPermissionPending && currentData().isNotEmpty()
+                    !notificationPermissionPending
             }, savedState = savedInstanceState, showReadyNotice = { install ->
                 appUpdateSuccessBanner?.close()
                 appUpdateSuccessBanner = AppUpdateSuccessBanner(this, "Обновление готово к установке · Установить", install)
@@ -607,24 +307,21 @@ if (needsNotificationPermission) {
             })
         }.getOrNull()
         if (openedFromReminder) intent.action = Intent.ACTION_MAIN
-        handler.post(object : Runnable {
-            override fun run() {
-                update()
-                handler.postDelayed(this, 1000L)
-            }
-        })
+
     }
 private fun startScheduleUpdateCheck() {
+    val elapsed = android.os.SystemClock.elapsedRealtime()
+    if (holidayCheckAt == Long.MIN_VALUE || elapsed - holidayCheckAt >= 300_000) {
+    holidayCheckAt = elapsed
     holidayUpdateWorker.execute {
     val year = LocalDate.now(zone).year
-    val holidays = holidayRepository.download(year)
-
-    if (holidays != null) {
-        HolidayCalendar.setRemote(year, holidays)
-
-        handler.post {
-            update()
-        }
+    for (targetYear in year..minOf(year + 1, 2100)) {
+        holidayRepository.loadSaved(targetYear)?.let { HolidayCalendar.setRemote(targetYear, it) }
+    }
+    holidayRepository.downloadYears((year..minOf(year + 1, 2100)).toSet()).forEach { (loadedYear, holidays) ->
+        HolidayCalendar.setRemote(loadedYear, holidays)
+    }
+    handler.post { if (!isDestroyed) { lastCalendarRender = ""; update() } }
     }
     }
     scheduleUpdateChecker.checkOnce(
@@ -850,7 +547,8 @@ private fun startScheduleUpdateCheck() {
                 android.view.Window.FEATURE_NO_TITLE
             )
 
-            dialog.setCancelable(false)
+            dialog.setCancelable(true)
+            dialog.setOnCancelListener { scheduleUpdateChecker.cancel() }
             dialog.setCanceledOnTouchOutside(false)
             dialog.setContentView(root)
 
@@ -888,59 +586,18 @@ private fun startScheduleUpdateCheck() {
             scheduleUpdateShownAt = android.os.SystemClock.uptimeMillis()
 scheduleUpdateCompletionPending = false
 
-handler.postDelayed({
-    if (
-        scheduleUpdateDialog != null &&
-        (scheduleUpdateBar?.progress ?: 0) < 40
-    ) {
-        scheduleUpdateBar?.progress = 40
-        scheduleUpdatePercent?.text = "40%"
-        scheduleUpdateStatus?.text =
-            "Загружаем данные на $year год..."
-    }
-}, 400L)
-        
         }
-        
+        scheduleUpdateBar?.progress = safeValue
+        scheduleUpdatePercent?.text = "$safeValue%"
+        scheduleUpdateStatus?.text = when {
+            safeValue >= 100 -> "Проверка завершена"
+            safeValue >= 68 -> "Проверка данных"
+            safeValue >= 12 -> "Загрузка расписания"
+            else -> "Проверка обновлений"
+        }
         if (safeValue >= 100) {
             scheduleUpdateCompletionPending = true
-        }
-
-        val minimumOffset = when {
-            safeValue >= 100 -> 2300L
-            safeValue >= 88 -> 1600L
-            safeValue >= 68 -> 900L
-            else -> 0L
-        }
-
-        val delay = (
-            scheduleUpdateShownAt +
-                minimumOffset -
-                android.os.SystemClock.uptimeMillis()
-            ).coerceAtLeast(0L)
-
-        val applyProgress = Runnable {
-            if (scheduleUpdateDialog != null) {
-                scheduleUpdateBar?.progress = safeValue
-                scheduleUpdatePercent?.text = "$safeValue%"
-
-                if (safeValue >= 100) {
-                    scheduleUpdateStatus?.text = "Расписание обновлено"
-
-                    handler.postDelayed({
-                        dismissScheduleUpdateDialog()
-                    }, 2000L)
-                } else {
-                    scheduleUpdateStatus?.text =
-                        "Загружаем данные на $year год..."
-                }
-            }
-        }
-
-        if (delay > 0L) {
-            handler.postDelayed(applyProgress, delay)
-        } else {
-            applyProgress.run()
+            handler.postDelayed({ dismissScheduleUpdateDialog() }, 600L)
         }
     }
 }
@@ -1017,7 +674,7 @@ private fun dismissScheduleUpdateDialog() {
         fun shortcut(res: Int, desc: String, side: Int, action: () -> Unit) {
             top.addView(ImageView(this).apply {
                 setImageResource(res); if (!palette.isDark) setColorFilter(mint); setPadding(dp(11), dp(11), dp(11), dp(11))
-                contentDescription = desc; isFocusable = true; setOnClickListener { action() }
+                contentDescription = desc; isFocusable = true; setOnClickListener { action() }; TouchTargets.expand(this)
             }, android.widget.FrameLayout.LayoutParams(dp(48), dp(44), side))
         }
         shortcut(R.drawable.ic_qibla, "Кибла", Gravity.START) { showQiblaCompass() }
@@ -1124,10 +781,10 @@ headerBox.addView(
         val months = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
         val prev = label("‹", 27f).apply { setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, 27f); gravity = Gravity.CENTER; contentDescription = "Предыдущий месяц"; setOnClickListener { if (calendarMonth > calendarMinMonth()) { calendarMonth = calendarMonth.minusMonths(1); renderInlineCalendar() } } }
         val next = label("›", 27f).apply { setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, 27f); gravity = Gravity.CENTER; contentDescription = "Следующий месяц"; setOnClickListener { if (calendarMonth < calendarMaxMonth()) { calendarMonth = calendarMonth.plusMonths(1); renderInlineCalendar() } } }
-        months.addView(prev, LinearLayout.LayoutParams(dp(44), dp(40)))
+        months.addView(prev, LinearLayout.LayoutParams(dp(44), dp(40))); TouchTargets.expand(prev)
         calendarTitle = label("", 16f, ink, true).apply { gravity = Gravity.CENTER }
         months.addView(calendarTitle, LinearLayout.LayoutParams(0, dp(40), 1f))
-        months.addView(next, LinearLayout.LayoutParams(dp(44), dp(40)))
+        months.addView(next, LinearLayout.LayoutParams(dp(44), dp(40))); TouchTargets.expand(next)
         calendarPanel.addView(months)
         calendarGrid = android.widget.GridLayout(this).apply { columnCount = 7; alignmentMode = android.widget.GridLayout.ALIGN_BOUNDS }
         calendarPanel.addView(calendarGrid, LinearLayout.LayoutParams(-1, -2))
@@ -1213,7 +870,7 @@ headerBox.addView(
         progress = CardProgressIndicator(this).apply { importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO }
         countdownCard.addView(progress, android.widget.FrameLayout.LayoutParams(-1, -1))
         heroCopy = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER }
-        countdownLabel = label("", 13f, muted).apply { gravity = Gravity.CENTER; visibility = View.GONE }
+        countdownLabel = label("", 13f, muted).apply { gravity = Gravity.CENTER; visibility = View.GONE; maxLines = Int.MAX_VALUE }
         nextName = label("", 18f, ink, true).apply { gravity = Gravity.CENTER; maxLines = Int.MAX_VALUE }
         countdown = label("00:00:00", 48f, mint).apply {
             gravity = Gravity.CENTER; typeface = Typeface.create("sans-serif-light", Typeface.NORMAL); maxLines = 1
@@ -1448,7 +1105,7 @@ headerBox.addView(
         CityCatalog.all.filter { it.id in ScheduleRepository.supportedCityIds() }
 
     private fun availableCitySchedules(): List<ScheduleCity> {
-        // Eligibility uses real verified/built-in timetable coverage, not the UI preview clock.
+        // Eligibility uses real verified downloaded timetable coverage, not the UI preview clock.
         val today = LocalDate.now(zone).toString()
         return scheduleCities().filter { city -> dataForCity(city.name).any { it.date == today } }
     }
@@ -1681,13 +1338,9 @@ headerBox.addView(
 
     private fun onScheduleUpdated() {
         // A completed download must update alarms even if the activity has closed.
+        val app = applicationContext
         alarmExecutor.execute {
-            val prefs = getSharedPreferences(SETTINGS_PREFS, Context.MODE_PRIVATE)
-            val city = prefs.getString("city", "Сафаджай") ?: "Сафаджай"
-            runCatching { rebuildPrayerNotifications(dataForCity(city), city,
-                prefs.getBoolean(NOTIFICATIONS_ENABLED_KEY, false),
-                prefs.getInt(NOTIFY_BEFORE_MIN_KEY, 5).coerceIn(0, 180),
-                prayerKeys.filter { prefs.getBoolean("notify_$it", true) }.toSet()) }
+            runCatching { PrayerAlarmScheduler.rebuild(app) }
                 .onFailure { android.util.Log.w("ScheduleUpdate", "Alarm refresh failed: ${it.javaClass.simpleName}") }
         }
         handler.post {
@@ -1867,122 +1520,27 @@ headerBox.addView(
         val signature = listOf(selectedCity, LocalDate.now(zone), scheduleRepository.revision(), prefs.getBoolean(NOTIFICATIONS_ENABLED_KEY, false), prefs.getInt(NOTIFY_BEFORE_MIN_KEY, 5), prefs.getString(SOUND_URI_KEY, ""), prayerKeys.map { prefs.getBoolean("notify_$it", true) }, if (Build.VERSION.SDK_INT >= 31) (getSystemService(Context.ALARM_SERVICE) as AlarmManager).canScheduleExactAlarms() else true).joinToString("|")
         if (signature == lastAlarmSignature) return
         lastAlarmSignature = signature
-        val days = currentData().toList()
-        val city = selectedCity
-        val enabled = prefs.getBoolean(NOTIFICATIONS_ENABLED_KEY, false)
-        val before = prefs.getInt(NOTIFY_BEFORE_MIN_KEY, 5).coerceIn(0, 180)
-        val selectedKeys = prayerKeys.filter { prefs.getBoolean("notify_$it", true) }.toSet()
-        alarmExecutor.execute { runCatching { rebuildPrayerNotifications(days, city, enabled, before, selectedKeys) }.onFailure {
+        val app = applicationContext
+        val cachePending = !scheduleRepository.isLoaded
+        alarmExecutor.execute {
+            if (cachePending) {
+                scheduleRepository.loadSavedIfNeeded()
+                handler.post { if (!isDestroyed) { update(); cityLocation.schedulesChanged() } }
+            }
+            runCatching { PrayerAlarmScheduler.rebuild(app) }.onFailure {
             handler.post { lastAlarmSignature = ""; if (!isDestroyed) Toast.makeText(this, "Не удалось настроить уведомления. Проверьте разрешения.", Toast.LENGTH_LONG).show() }
         } }
     }
 
-    private fun rebuildPrayerNotifications(days: List<PrayerDay>, city: String, notificationsEnabled: Boolean, notifyBeforeMinutes: Int, selectedKeys: Set<String>) {
-            if (notificationsEnabled && days.isEmpty()) {
-        return
-    }
-        val prefs = getSharedPreferences(SETTINGS_PREFS, Context.MODE_PRIVATE)
-        val am = getSystemService(Context.ALARM_SERVICE) as AlarmManager
-        val today = LocalDate.now(zone)
-        val entries = mutableListOf<String>()
-        val previousEntries = prefs.getString("scheduled_prayers", "").orEmpty()
-        // Keep all downloaded future dates, including the next year, for the receiver chain.
-        for (day in days) {
-            val date = LocalDate.parse(day.date)
-            if (date.isBefore(today)) continue
-            val times = listOf(day.fajr, day.zuhr, day.asr, day.maghrib, day.isha)
-            for (i in times.indices) {
-                val key = prayerKeys[i]
-                if (!notificationsEnabled || key !in selectedKeys) continue
-                entries += listOf(
-                    date.toString(), key, prayerRussian[i], prayerTatar[i], times[i], city
-                ).joinToString("|")
-            }
-        }
-        prefs.edit().putString("scheduled_prayers", entries.joinToString("\n")).apply()
-
-        // Cancel the prior date/key identities, regardless of their year or city.
-        previousEntries.lineSequence().filter { it.isNotBlank() }.forEach { entry ->
-            val parts = entry.split("|")
-            if (parts.size >= 2) {
-                val date = runCatching { LocalDate.parse(parts[0]) }.getOrNull()
-                if (date != null && parts[1] in prayerKeys) {
-                    val flags = PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE
-                    PendingIntent.getBroadcast(this, alarmRequestCode(date, parts[1]),
-                        Intent(this, PrayerNotificationReceiver::class.java), flags)?.let { existing ->
-                        am.cancel(existing); existing.cancel()
-                    }
-                }
-            }
-        }
-
-        // Rebuild the near-term alarms from the stored schedule.
-        entries.forEach { entry ->
-            val parts = entry.split("|")
-            if (parts.size < 6) return@forEach
-            val date = LocalDate.parse(parts[0])
-            val key = parts[1]
-            val idx = prayerKeys.indexOf(key)
-            if (idx < 0) return@forEach
-            val time = parts[4]
-            val dt = dateTime(date, time).minusMinutes(notifyBeforeMinutes.toLong())
-            if (dt.isBefore(LocalDateTime.now(zone))) return@forEach
-            val requestCode = alarmRequestCode(date, key)
-            if (date.isAfter(today.plusDays(14))) return@forEach
-            val pi = pendingIntentFor(
-                this, requestCode, parts[2], parts[3], time, key, date.toString()
-            )
-            am.cancel(pi)
-            setPrayerAlarm(am, dt.atZone(zone).toInstant().toEpochMilli(), pi)
-        }
-    }
-
-    private fun alarmRequestCode(date: LocalDate, key: String): Int {
-        val index = prayerKeys.indexOf(key).coerceAtLeast(0)
-        return ((date.toEpochDay() % 100000L) * 10L + index).toInt()
-    }
-
-    private fun pendingIntentFor(
-        context: Context, requestCode: Int, prayer: String, tatar: String,
-        time: String, key: String, date: String
-    ): PendingIntent {
-        val intent = Intent(context, PrayerNotificationReceiver::class.java).apply {
-            putExtra("prayer", prayer)
-            putExtra("tatar", tatar)
-            putExtra("time", time)
-            putExtra("key", key)
-            putExtra("date", date)
-        }
-        val flags = PendingIntent.FLAG_UPDATE_CURRENT or
-            (if (Build.VERSION.SDK_INT >= 23) PendingIntent.FLAG_IMMUTABLE else 0)
-        return PendingIntent.getBroadcast(context, requestCode, intent, flags)
-    }
-
-    private fun setPrayerAlarm(am: AlarmManager, triggerAtMillis: Long, pi: PendingIntent) {
-        if (Build.VERSION.SDK_INT >= 31 && am.canScheduleExactAlarms()) {
-            am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis, pi)
-        } else if (Build.VERSION.SDK_INT >= 23) {
-            am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis, pi)
-        } else {
-            am.set(AlarmManager.RTC_WAKEUP, triggerAtMillis, pi)
-        }
-    }
-
     private fun currentData(): List<PrayerDay> = dataForCity(selectedCity)
 
-    private fun dataForCity(city: String): List<PrayerDay> {
-    val currentYear = LocalDate.now(zone).year
-
-    return if (city == "Москва") {
-        scheduleRepository.dataForYear("moscow", currentYear, moscowData)
-    } else {
-        scheduleRepository.dataForYear("safadzhay", currentYear, safadzhayData)
-    }
-}
+    private fun selectedCityId() = if (selectedCity == "Москва") "moscow" else "safadzhay"
+    private fun dataForCity(city: String): List<PrayerDay> =
+        scheduleRepository.days(if (city == "Москва") "moscow" else "safadzhay")
    private fun calendarMinMonth(): java.time.YearMonth {
     val data = currentData()
     return if (data.isNotEmpty()) {
-        java.time.YearMonth.from(LocalDate.parse(data.first().date))
+        minOf(java.time.YearMonth.from(LocalDate.parse(data.first().date)), java.time.YearMonth.from(LocalDate.now(zone)))
     } else {
         val currentYear = LocalDate.now(zone).year
         java.time.YearMonth.of(currentYear, 1)
@@ -1992,7 +1550,7 @@ headerBox.addView(
 private fun calendarMaxMonth(): java.time.YearMonth {
     val data = currentData()
     return if (data.isNotEmpty()) {
-        java.time.YearMonth.from(LocalDate.parse(data.last().date))
+        maxOf(java.time.YearMonth.from(LocalDate.parse(data.last().date)), java.time.YearMonth.from(LocalDate.now(zone)))
     } else {
         val currentYear = LocalDate.now(zone).year
         java.time.YearMonth.of(currentYear, 12)
@@ -2006,7 +1564,7 @@ private fun calendarMaxMonth(): java.time.YearMonth {
         return "${date.dayOfMonth} ${months[date.monthValue - 1]} ${date.year}"
     }
 
-    private fun dayFor(date: LocalDate): PrayerDay? = currentData().firstOrNull { it.date == date.toString() }
+    private fun dayFor(date: LocalDate): PrayerDay? = scheduleRepository.day(selectedCityId(), date)
 
     private fun renderInlineCalendar() {
         calendarMonth = calendarMonth.coerceIn(calendarMinMonth(), calendarMaxMonth())
@@ -2240,7 +1798,16 @@ cell.addView(
         prayerList.visibility = View.VISIBLE
         if (!scheduleTabSelected) selectedDate = todayDate
         if (selectedDate == null) selectedDate = todayDate
-        if (lastDay != todayDate) { lastDay = todayDate; schedulePrayerNotifications() }
+        if (lastDay != todayDate) {
+            val previousDay = lastDay
+            lastDay = todayDate; schedulePrayerNotifications()
+            if (previousDay != null) {
+                if (!scheduleTabSelected && previousDay.year != todayDate.year) {
+                    calendarMonth = java.time.YearMonth.from(todayDate); lastCalendarRender = ""
+                }
+                scheduleUpdateChecker.allowRetry(); startScheduleUpdateCheck()
+            }
+        }
         val selected = selectedDate!!
         updateHolidayCard(selected)
         if (selected != todayDate && !scheduleTabSelected) scheduleTabSelected = true
@@ -2266,7 +1833,13 @@ cell.addView(
             nextName.text = "Расписание пока недоступно"
             countdownLabel.visibility = View.VISIBLE
             countdown.text = "—"
-            countdownLabel.text = "Для этой даты время намаза ещё не загружено."
+            countdownLabel.text = if (!scheduleRepository.isLoaded) "Читаем сохранённое расписание…"
+                else if (!scheduleRepository.hasDownloads())
+                "Подключитесь к интернету, чтобы загрузить расписание. Нажмите здесь, чтобы повторить."
+                else "Для этой даты расписание ещё не опубликовано или не загружено. Нажмите здесь, чтобы проверить."
+            countdownLabel.isClickable = true
+            countdownLabel.contentDescription = countdownLabel.text
+            countdownLabel.setOnClickListener { scheduleUpdateChecker.allowRetry(); startScheduleUpdateCheck() }
             progress.progress = 0f
             countdownStart.text = ""
 
@@ -2288,6 +1861,8 @@ cell.addView(
             return
         }
 
+        countdownLabel.isClickable = false
+        countdownLabel.setOnClickListener(null)
         val prayers = getPrayers(selectedDay)
         if (selected != todayDate) {
             nextName.text = "Расписание"
@@ -2568,6 +2143,9 @@ cell.addView(
 
     override fun onResume() {
     super.onResume()
+    handler.removeCallbacks(ticker); handler.post(ticker)
+    scheduleUpdateChecker.allowRetryIfDue()
+    if (!notificationPermissionPending) startScheduleUpdateCheck()
     appUpdateController?.resume()
 
     if (::placeText.isInitialized) {
@@ -2633,6 +2211,7 @@ startScheduleUpdateCheck()
 
     override fun onSaveInstanceState(outState: Bundle) {
         appUpdateController?.saveState(outState)
+        outState.putString("city_session_process", CitySelectionSession.processToken)
         outState.putBoolean("city_session_manual_override", citySelection.session.manualOverride)
         outState.putBoolean("city_session_startup_checked", citySelection.session.startupChecked)
         outState.putLong("city_session_latest_fix_nanos", citySelection.session.latestFixNanos)
@@ -2644,8 +2223,9 @@ startScheduleUpdateCheck()
         outState.putBoolean("notification_permission_pending", notificationPermissionPending)
         super.onSaveInstanceState(outState)
     }
-    override fun onPause() { appUpdateController?.pause(); if (::cityLocation.isInitialized) cityLocation.pause(); activeQiblaLocation?.stop(); activeCompass?.stop(); super.onPause() }
+    override fun onPause() { handler.removeCallbacks(ticker); appUpdateController?.pause(); if (::cityLocation.isInitialized) cityLocation.pause(); activeQiblaLocation?.stop(); activeCompass?.stop(); super.onPause() }
     override fun onDestroy() {
+        scheduleUpdateChecker.detach()
         appUpdateController?.close()
         appUpdateSuccessBanner?.close()
         if (::cityLocation.isInitialized) cityLocation.pause()
@@ -2665,23 +2245,44 @@ startScheduleUpdateCheck()
 
 class PrayerNotificationReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        val prayer = intent.getStringExtra("prayer") ?: return
-        val tatar = intent.getStringExtra("tatar") ?: ""
-        val time = intent.getStringExtra("time") ?: ""
-        val key = intent.getStringExtra("key") ?: return
-        val date = intent.getStringExtra("date") ?: return
-
-        val prefs = context.getSharedPreferences(SETTINGS_PREFS, Context.MODE_PRIVATE)
-        if (!prefs.getBoolean(NOTIFICATIONS_ENABLED_KEY, false) || !prefs.getBoolean("notify_$key", true)) {
-            scheduleNextStoredPrayer(context, date, key)
-            return
+        val pending = goAsync()
+        PrayerAlarmScheduler.worker.execute {
+            try { deliver(context.applicationContext, intent) }
+            catch (error: Exception) { android.util.Log.w("PrayerReminder", "Delivery rejected: ${error.javaClass.simpleName}") }
+            finally { runCatching { PrayerAlarmScheduler.rebuild(context.applicationContext) }; pending.finish() }
         }
-
+    }
+    private fun deliver(context: Context, intent: Intent) {
+        val key = intent.getStringExtra("key") ?: return
+        val index = PrayerAlarmScheduler.keys.indexOf(key)
+        if (index < 0) return
+        val date = intent.getStringExtra("date")?.let { runCatching { LocalDate.parse(it) }.getOrNull() } ?: return
+        val prefs = context.getSharedPreferences(SETTINGS_PREFS, Context.MODE_PRIVATE)
+        if (!prefs.getBoolean(NOTIFICATIONS_ENABLED_KEY, false) || !prefs.getBoolean("notify_$key", true)) return
+        val city = prefs.getString("city", "Сафаджай") ?: "Сафаджай"
+        if (intent.hasExtra("city") && intent.getStringExtra("city") != city) return
+        val repo = ScheduleRepository.get(context)
+        repo.loadSavedIfNeeded()
+        if (intent.hasExtra("revision") && intent.getStringExtra("revision") != repo.revision()) return
+        val day = repo.day(if (city == "Москва") "moscow" else "safadzhay", date) ?: return
+        val time = PrayerAlarmScheduler.time(day, key) ?: return
+        if (time != intent.getStringExtra("time")) return
+        val lead = prefs.getInt(NOTIFY_BEFORE_MIN_KEY, 5).coerceIn(0, 180)
+        val remaining = PrayerAlarmScheduler.remainingMinutes(date, time, lead, PrayerAlarmScheduler.clock()) ?: return
+        if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(context, "android.permission.POST_NOTIFICATIONS") != android.content.pm.PackageManager.PERMISSION_GRANTED) return
+        if (!NotificationManagerCompat.from(context).areNotificationsEnabled()) return
+        val deliveredKey = "delivered_$key"
+        val deliveredDatesKey = "delivered_dates_$key"
+        val deliveredDates = prefs.getStringSet(deliveredDatesKey, emptySet()).orEmpty()
+        if (prefs.getString(deliveredKey, null) == date.toString() || date.toString() in deliveredDates) return
+        val prayer = PrayerAlarmScheduler.russian[index]
+        val tatar = PrayerAlarmScheduler.tatar[index]
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         val sound = selectedNotificationSound(context)
         val channelId = ensurePrayerNotificationChannel(context)
-        val minutes = prefs.getInt(NOTIFY_BEFORE_MIN_KEY, 5).coerceIn(0, 180)
-        val reminderText = if (minutes == 0) "Время намаза: $time" else "До намаза $minutes мин. Время намаза: $time"
+        if (Build.VERSION.SDK_INT >= 26 && nm.getNotificationChannel(channelId)?.importance == NotificationManager.IMPORTANCE_NONE) return
+        val minutes = remaining
+        val reminderText = if (minutes == 0L) "Время намаза: $time" else "До намаза $minutes мин. Время намаза: $time"
         val openApp = Intent(context, MainActivity::class.java).apply {
             action = OPEN_PRAYER_ACTION
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
@@ -2702,94 +2303,26 @@ class PrayerNotificationReceiver : BroadcastReceiver() {
 
         if (Build.VERSION.SDK_INT < 33 ||
             ContextCompat.checkSelfPermission(context, "android.permission.POST_NOTIFICATIONS") == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            if (!prefs.edit().putString(deliveredKey, date.toString())
+                .putStringSet(deliveredDatesKey, (deliveredDates + date.toString()).sortedDescending().take(64).toSet()).commit()) return
             NotificationManagerCompat.from(context)
-                .notify(((LocalDate.parse(date).toEpochDay() % 100000L) * 10L +
+                .notify(((date.toEpochDay() % 100000L) * 10L +
                     listOf("fajr", "zuhr", "asr", "maghrib", "isha").indexOf(key).coerceAtLeast(0)).toInt(), builder.build())
         }
 
-        // Schedule the next occurrence of this same prayer without requiring the app UI.
-        scheduleNextStoredPrayer(context, date, key)
-    }
-}
-
-private fun scheduleNextStoredPrayer(context: Context, firedDate: String, key: String) {
-    val prefs = context.getSharedPreferences(SETTINGS_PREFS, Context.MODE_PRIVATE)
-    if (!prefs.getBoolean(NOTIFICATIONS_ENABLED_KEY, false) || !prefs.getBoolean("notify_$key", true)) return
-    val notifyBeforeMinutes = prefs.getInt(NOTIFY_BEFORE_MIN_KEY, 5).coerceIn(0, 180)
-    val lines = prefs.getString("scheduled_prayers", "")
-        .orEmpty().lineSequence().filter { it.isNotBlank() }.toList()
-    val fired = runCatching { LocalDate.parse(firedDate) }.getOrNull() ?: return
-    val next = lines.mapNotNull { line ->
-        val p = line.split("|")
-        if (p.size < 6 || p[1] != key) return@mapNotNull null
-        val d = runCatching { LocalDate.parse(p[0]) }.getOrNull() ?: return@mapNotNull null
-        if (!d.isAfter(fired)) return@mapNotNull null
-        Triple(d, p[4], p)
-    }.minByOrNull { it.first }
-        ?: return
-
-    val dt = runCatching { next.first.atTime(next.second.substringBefore(":").toInt(), next.second.substringAfter(":").toInt()).minusMinutes(notifyBeforeMinutes.toLong()) }.getOrNull()
-        ?: return
-    if (!dt.isAfter(LocalDateTime.now(ZoneId.of("Europe/Moscow")))) return
-
-    val am = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-    val p = next.third
-    val index = listOf("fajr", "zuhr", "asr", "maghrib", "isha").indexOf(key).coerceAtLeast(0)
-    val requestCode = ((next.first.toEpochDay() % 100000L) * 10L + index).toInt()
-    val piIntent = Intent(context, PrayerNotificationReceiver::class.java).apply {
-        putExtra("prayer", p[2]); putExtra("tatar", p[3]); putExtra("time", p[4]);
-        putExtra("key", key); putExtra("date", p[0])
-    }
-    val flags = PendingIntent.FLAG_UPDATE_CURRENT or
-        (if (Build.VERSION.SDK_INT >= 23) PendingIntent.FLAG_IMMUTABLE else 0)
-    val pi = PendingIntent.getBroadcast(context, requestCode, piIntent, flags)
-    if (Build.VERSION.SDK_INT >= 31 && am.canScheduleExactAlarms()) {
-        am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, dt.atZone(ZoneId.of("Europe/Moscow")).toInstant().toEpochMilli(), pi)
-    } else if (Build.VERSION.SDK_INT >= 23) {
-        am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, dt.atZone(ZoneId.of("Europe/Moscow")).toInstant().toEpochMilli(), pi)
-    } else {
-        am.set(AlarmManager.RTC_WAKEUP, dt.atZone(ZoneId.of("Europe/Moscow")).toInstant().toEpochMilli(), pi)
     }
 }
 
 class PrayerBootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        if (intent.action != Intent.ACTION_BOOT_COMPLETED && intent.action != Intent.ACTION_MY_PACKAGE_REPLACED &&
-            intent.action != AlarmManager.ACTION_SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED) return
+        if (intent.action !in setOf(Intent.ACTION_BOOT_COMPLETED, Intent.ACTION_MY_PACKAGE_REPLACED,
+                Intent.ACTION_TIME_CHANGED, Intent.ACTION_DATE_CHANGED, Intent.ACTION_TIMEZONE_CHANGED,
+                AlarmManager.ACTION_SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED)) return
         val pending = goAsync()
-        try {
-            val prefs = context.getSharedPreferences(SETTINGS_PREFS, Context.MODE_PRIVATE)
-            if (!prefs.getBoolean(NOTIFICATIONS_ENABLED_KEY, false)) return
-            val notifyBeforeMinutes = prefs.getInt(NOTIFY_BEFORE_MIN_KEY, 5).coerceIn(0, 180)
-            val lines = prefs.getString("scheduled_prayers", "")
-                .orEmpty().lineSequence().filter { it.isNotBlank() }.toList()
-            val now = LocalDateTime.now(ZoneId.of("Europe/Moscow"))
-            val am = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-            lines.forEach { line ->
-                val p = line.split("|")
-                if (p.size < 6) return@forEach
-                if (!prefs.getBoolean("notify_${p[1]}", true)) return@forEach
-                val d = runCatching { LocalDate.parse(p[0]) }.getOrNull() ?: return@forEach
-                val dt = runCatching { d.atTime(p[4].substringBefore(":").toInt(), p[4].substringAfter(":").toInt()).minusMinutes(notifyBeforeMinutes.toLong()) }.getOrNull() ?: return@forEach
-                if (!dt.isAfter(now) || dt.isAfter(now.plusDays(14))) return@forEach
-                val keys = listOf("fajr", "zuhr", "asr", "maghrib", "isha")
-                val idx = keys.indexOf(p[1]).coerceAtLeast(0)
-                val rc = ((d.toEpochDay() % 100000L) * 10L + idx).toInt()
-                val piIntent = Intent(context, PrayerNotificationReceiver::class.java).apply {
-                    putExtra("prayer", p[2]); putExtra("tatar", p[3]); putExtra("time", p[4]); putExtra("key", p[1]); putExtra("date", p[0])
-                }
-                val flags = PendingIntent.FLAG_UPDATE_CURRENT or (if (Build.VERSION.SDK_INT >= 23) PendingIntent.FLAG_IMMUTABLE else 0)
-                val pi = PendingIntent.getBroadcast(context, rc, piIntent, flags)
-                if (Build.VERSION.SDK_INT >= 31 && am.canScheduleExactAlarms()) {
-                    am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, dt.atZone(ZoneId.of("Europe/Moscow")).toInstant().toEpochMilli(), pi)
-                } else if (Build.VERSION.SDK_INT >= 23) {
-                    am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, dt.atZone(ZoneId.of("Europe/Moscow")).toInstant().toEpochMilli(), pi)
-                } else {
-                    am.set(AlarmManager.RTC_WAKEUP, dt.atZone(ZoneId.of("Europe/Moscow")).toInstant().toEpochMilli(), pi)
-                }
-            }
-        } finally {
-            pending.finish()
+        PrayerAlarmScheduler.worker.execute {
+            try { PrayerAlarmScheduler.rebuild(context.applicationContext) }
+            catch (error: Exception) { android.util.Log.w("PrayerRestore", "Restore failed: ${error.javaClass.simpleName}") }
+            finally { pending.finish() }
         }
     }
 }

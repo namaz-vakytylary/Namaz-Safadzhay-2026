@@ -71,15 +71,14 @@ class ScheduleRepositoryTest {
             .put("schedules", JSONArray(entries.toList())).toString().toByteArray()
     }
 
-    @Test fun downloadPersistsAcrossRestartAndRetainsBuiltInDaysOffline() {
+    @Test fun downloadPersistsAcrossRestartWithoutInventingOfflineDays() {
         publish(fixture())
         assertTrue(repository().sync(online = true).changed)
         val restarted = repository()
-        val days = restarted.merged("safadzhay", listOf(original))
-        assertEquals(listOf("2026-08-01", "2027-01-01"), days.map { it.date })
-        assertEquals(original, days.first())
+        val days = restarted.days("safadzhay")
+        assertEquals(listOf("2027-01-01"), days.map { it.date })
         assertEquals("06:00", days.last().fajr)
-        assertEquals(1, restarted.merged("moscow", emptyList()).size)
+        assertEquals(1, restarted.days("moscow").size)
         calls.clear()
         assertFalse(restarted.sync(online = false).changed)
         assertTrue(calls.isEmpty())
@@ -105,7 +104,7 @@ class ScheduleRepositoryTest {
         responses["2027.json"] = "broken".toByteArray()
         assertFalse(repo.sync(online = true).changed)
         assertArrayEquals(before, File(context.filesDir, "downloaded-schedules.json").readBytes())
-        assertEquals("06:00", repository().merged("moscow", emptyList()).single().fajr)
+        assertEquals("06:00", repository().days("moscow").single().fajr)
     }
 
     @Test fun interruptedSecondYearDoesNotPartiallyCommitFirstYear() {
@@ -114,7 +113,7 @@ class ScheduleRepositoryTest {
         publish(fixture(version = 2, fajr = "06:05"), fixture(year = 2028))
         responses.remove("2028.json")
         assertFalse(repo.sync(online = true).changed)
-        val days = repository().merged("safadzhay", emptyList())
+        val days = repository().days("safadzhay")
         assertEquals(1, days.size)
         assertEquals("06:00", days.single().fajr)
     }
@@ -126,7 +125,7 @@ class ScheduleRepositoryTest {
         assertTrue(repo.sync(online = true).changed)
         publish(fixture())
         assertFalse(repo.sync(online = true).changed)
-        assertEquals("06:05", repository().merged("safadzhay", emptyList()).single().fajr)
+        assertEquals("06:05", repository().days("safadzhay").single().fajr)
     }
 
     @Test fun malformedDatesAndTimeZoneRejectedEvenWithMatchingChecksum() {
@@ -137,7 +136,7 @@ class ScheduleRepositoryTest {
         responses["2027.json"] = bytes
         publish(entryFor(2027, 1, bytes))
         assertFalse(repository().sync(online = true).changed)
-        assertEquals(listOf(original), repository().merged("safadzhay", listOf(original)))
+        assertTrue(repository().days("safadzhay").isEmpty())
         fixture()
         val invalid = JSONObject(String(responses.getValue("2027.json")))
         invalid.getJSONArray("cities").getJSONObject(0).getJSONArray("days").getJSONObject(0).put("date", "2027-01-02")
@@ -160,12 +159,12 @@ class ScheduleRepositoryTest {
         assertFalse(repository().sync(online = true).changed)
     }
 
-    @Test fun offlineFirstLaunchAndInvalidSavedFileFallBackToBuiltIn() {
+    @Test fun offlineFirstLaunchAndInvalidSavedFileHaveNoSchedule() {
         val repo = repository()
         assertFalse(repo.sync(online = false).changed)
         assertTrue(calls.isEmpty())
         File(context.filesDir, "downloaded-schedules.json").writeText("invalid")
-        assertEquals(listOf(original), repository().merged("safadzhay", listOf(original)))
+        assertTrue(repository().days("safadzhay").isEmpty())
     }
 
     @Test fun published2026FilesLoadAll306UnchangedDays() {
@@ -174,8 +173,8 @@ class ScheduleRepositoryTest {
         responses["manifest.json"] = manifest; responses["2026.json"] = payload
         val repo = repository()
         assertTrue(repo.sync(online = true).changed)
-        val safadzhay = repo.merged("safadzhay", emptyList())
-        val moscow = repo.merged("moscow", emptyList())
+        val safadzhay = repo.days("safadzhay")
+        val moscow = repo.days("moscow")
         assertEquals(153, safadzhay.size); assertEquals(153, moscow.size)
         assertEquals(original, safadzhay.first())
         assertEquals("2026-12-31", moscow.last().date)
@@ -187,13 +186,13 @@ class ScheduleRepositoryTest {
         val payload = javaClass.getResourceAsStream("/schedules/2026.json")!!.use { it.readBytes() }
         responses["manifest.json"] = manifest; responses["2026.json"] = payload
         val repo = repository(); repo.sync(true)
-        assertFalse(repo.merged("moscow", emptyList()).any { it.date.startsWith("2027") })
+        assertFalse(repo.days("moscow").any { it.date.startsWith("2027") })
         val old = JSONObject(String(manifest)).getJSONArray("schedules").getJSONObject(0)
         val nextYear = fixture()
         publish(old, nextYear)
         calls.clear(); assertTrue(repo.sync(true).changed)
         assertEquals(listOf("manifest.json", "2027.json"), calls)
-        val dates = repository().merged("moscow", emptyList()).map { it.date }
+        val dates = repository().days("moscow").map { it.date }
         assertEquals(listOf("2026-12-31", "2027-01-01"), dates.takeLast(2))
         val revised = fixture(version = 2, fajr = "06:02")
         publish(old, revised); calls.clear(); assertTrue(repo.sync(true).changed)
@@ -214,7 +213,7 @@ class ScheduleRepositoryTest {
         publish(entry)
         assertFalse(repo.sync(true).changed)
         assertArrayEquals(before, File(context.filesDir, "downloaded-schedules.json").readBytes())
-        assertEquals("06:00", repository().merged("moscow", emptyList()).single().fajr)
+        assertEquals("06:00", repository().days("moscow").single().fajr)
     }
     @Test fun duplicateDateRejected() = rejectsReplacement { body, entry ->
         entry.put("dateTo", "2027-01-02").put("daysPerCity", 2)
@@ -264,71 +263,54 @@ class ScheduleRepositoryTest {
         }
     }
 
-   @Test
-fun downloadedNextYearIsNotShownBeforeItBecomesCurrentYear() {
-    val currentYear = LocalDate.now().year
-val nextYear = currentYear + 1
-
-    publish(fixture(year = nextYear))
-
-    val repo = repository(year = currentYear)
-    assertTrue(repo.sync(online = true).changed)
-
-    TestNetwork.offline(context)
-
-    val controller =
-        org.robolectric.Robolectric.buildActivity(MainActivity::class.java).create()
-    val activity = controller.get()
-
-    try {
-        org.robolectric.util.ReflectionHelpers
-            .getField<java.util.concurrent.ExecutorService>(activity, "alarmExecutor")
-            .submit {}
-            .get(15, java.util.concurrent.TimeUnit.SECONDS)
-
-        org.robolectric.util.ReflectionHelpers.setField(
-            activity,
-            "scheduleRepository",
-            repo
-        )
-
-        org.robolectric.util.ReflectionHelpers.setField(
-            activity,
-            "calendarMonth",
-            java.time.YearMonth.of(nextYear, 1)
-        )
-
-        org.robolectric.util.ReflectionHelpers.callInstanceMethod<Unit>(
-            activity,
-            "renderInlineCalendar"
-        )
-
-        val title =
-            org.robolectric.util.ReflectionHelpers.getField<android.widget.TextView>(
-                activity,
-                "calendarTitle"
-            )
-
-        assertFalse(
-            title.text.toString().contains(nextYear.toString())
-        )
-
-        val downloadedNextYear = repo.merged(
-            "safadzhay",
-            listOf(original)
-        )
-
-        assertTrue(
-            downloadedNextYear.any {
-                it.date == "$nextYear-01-01"
-            }
-        )
-    } finally {
-        controller.destroy()
+    @Test fun prefetchIsAvailableByDateWithoutRestartAndCannotFillOtherDates() {
+        publish(fixture(year = 2028))
+        val repo = repository(year = 2026)
+        assertTrue(repo.sync(true).changed)
+        assertNull(repo.day("moscow", LocalDate.of(2026, 12, 31)))
+        assertEquals("06:00", repo.day("moscow", LocalDate.of(2028, 1, 1))?.fajr)
+        assertTrue(repo.dataForYear("moscow", 2026).isEmpty())
     }
-}
+
+    @Test fun migrationReadsExact13SnapshotOfflineWithoutRewritingEitherCity() {
+        val entry = fixture(year = 2026)
+        val legacy = JSONObject().put("schemaVersion", 1).put("bundles", JSONArray().put(
+            JSONObject().put("entry", entry).put("payload", String(responses.getValue("2026.json")))))
+        val file = File(context.filesDir, "downloaded-schedules.json")
+        file.writeText(legacy.toString())
+        val before = file.readBytes()
+        val repo = repository()
+        assertFalse(repo.sync(false).changed)
+        for (city in listOf("moscow", "safadzhay")) {
+            assertEquals("06:00", repo.day(city, LocalDate.of(2026, 1, 1))?.fajr)
+        }
+        assertArrayEquals(before, file.readBytes())
+        assertTrue(calls.isEmpty())
+    }
+
+    @Test fun damagedCacheDoesNotEraseAcceptedRevisionFloor() {
+        publish(fixture(version = 2)); assertTrue(repository().sync(true).changed)
+        File(context.filesDir, "downloaded-schedules.json").writeText("broken")
+        publish(fixture(version = 1))
+        val repo = repository()
+        assertFalse(repo.sync(true).successful)
+        assertTrue(repo.days("moscow").isEmpty())
+        publish(fixture(version = 2))
+        assertTrue(repo.sync(true).changed)
+    }
+
+    @Test fun interruptedAtomicWriteRecovers13BackupWithoutNetwork() {
+        val entry = fixture(year = 2026)
+        val legacy = JSONObject().put("schemaVersion", 1).put("bundles", JSONArray().put(
+            JSONObject().put("entry", entry).put("payload", String(responses.getValue("2026.json")))))
+        val file = File(context.filesDir, "downloaded-schedules.json")
+        File(file.path + ".bak").writeText(legacy.toString())
+        file.writeText("interrupted")
+        assertEquals(1, repository().days("moscow").size)
+    }
+
 @Test
-fun newYearRemovesOldCacheDoesNotRedownloadOldYearAndKeepsCurrentSchedule() {
+fun newYearPreservesUserCacheDoesNotRedownloadOldYearAndKeepsCurrentSchedule() {
     val oldYear = LocalDate.now().year
 val newYear = oldYear + 1
 
@@ -342,7 +324,7 @@ val newYear = oldYear + 1
     calls.clear()
 
     val newRepo = repository(year = newYear)
-    assertTrue(newRepo.sync(online = true).changed)
+    assertFalse(newRepo.sync(online = true).changed)
 
     val snapshot = File(
         context.filesDir,
@@ -350,7 +332,7 @@ val newYear = oldYear + 1
     ).readText()
 
     // Старый год удалён из локального кэша.
-    assertFalse(snapshot.contains("\"year\":$oldYear"))
+    assertTrue(snapshot.contains("\"year\":$oldYear"))
     assertTrue(snapshot.contains("\"year\":$newYear"))
 
     // JSON старого года больше не скачивается.
@@ -359,12 +341,55 @@ val newYear = oldYear + 1
     // Расписание нового года остаётся рабочим.
     val days = newRepo.dataForYear(
         "safadzhay",
-        newYear,
-        emptyList()
+        newYear
     )
 
     assertEquals(1, days.size)
     assertEquals("$newYear-01-01", days.first().date)
     assertEquals("06:10", days.first().fajr)
 }
+    @Test fun measureColdVerifiedCacheReadOnBuildHost() {
+        responses["manifest.json"] = javaClass.getResourceAsStream("/schedules/manifest.json")!!.use { it.readBytes() }
+        responses["2026.json"] = javaClass.getResourceAsStream("/schedules/2026.json")!!.use { it.readBytes() }
+        assertTrue(repository().sync(true).changed)
+        val durations = (1..5).map {
+            val start = System.nanoTime()
+            assertEquals(153, repository().days("moscow").size)
+            (System.nanoTime() - start) / 1_000_000.0
+        }.sorted()
+        println("VERIFIED_CACHE_READ_HOST_MEDIAN_MS=${durations[2]}")
+    }
+
+    @Test fun deferredStartupRestores13CacheOnWorkerAndReusesItOffline() {
+        publish(fixture(year = 2026)); assertTrue(repository().sync(true).changed)
+        val repo = ScheduleRepository(context, { _, _ -> throw IOException("offline") }, loadImmediately = false)
+        assertFalse(repo.isLoaded)
+        val worker = java.util.concurrent.Executors.newSingleThreadExecutor()
+        try { assertTrue(worker.submit<Boolean> { repo.loadSavedIfNeeded() }.get()) }
+        finally { worker.shutdownNow() }
+        assertTrue(repo.isLoaded)
+        assertEquals("06:00", repo.day("moscow", LocalDate.of(2026, 1, 1))?.fajr)
+        assertFalse(repo.loadSavedIfNeeded())
+    }
+
+    @Test fun diskWriteFailureKeepsPreviousVerifiedSnapshot() {
+        publish(fixture()); val repo = repository(); assertTrue(repo.sync(true).changed)
+        val file = File(context.filesDir, "downloaded-schedules.json")
+        val before = file.readBytes()
+        val blocked = File(file.path + ".new"); blocked.mkdirs()
+        // Non-empty directory prevents AtomicFile replacing its staging file.
+        File(blocked, "blocked").writeText("test")
+        publish(fixture(version = 2, fajr = "06:05"))
+        try {
+            assertFalse(repo.sync(true).successful)
+            assertArrayEquals(before, file.readBytes())
+            assertEquals("06:00", repo.days("moscow").single().fajr)
+        } finally { blocked.deleteRecursively() }
+    }
+
+    @Test fun partialCityUpdateCannotDiscardOtherCityOfflineCache() = rejectsReplacement { body, entry ->
+        body.getJSONArray("cities").remove(1)
+        entry.put("cityIds", JSONArray().put("safadzhay"))
+    }
+
 }

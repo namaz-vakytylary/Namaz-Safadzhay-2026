@@ -2,13 +2,6 @@ name: Build Namaz Vakytylary TEST offline schedules
 
 on:
   workflow_dispatch:
-  push:
-    branches: [test/1.2-test3-security]
-    paths:
-      - 'app/src/main/java/ru/namaz/safadzhay/AppUpdate*.kt'
-      - 'app/src/main/java/ru/namaz/safadzhay/RuStoreAppUpdateSource.kt'
-      - 'app/src/test/java/ru/namaz/safadzhay/AppUpdateTest.kt'
-      - 'app/src/test/java/ru/namaz/safadzhay/RuStoreAppUpdateSourceTest.kt'
 permissions:
   contents: read
 
@@ -22,6 +15,7 @@ jobs:
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           persist-credentials: false
+          fetch-depth: 0
 
       - name: Set up JDK 17
         uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
@@ -42,11 +36,15 @@ jobs:
 
       - name: Check original timetable and test identity
         run: |
+          python3 scripts/repository-security.py
           python3 scripts/preflight.py
           python3 -m unittest discover -s scripts -p 'test_*.py'
 
       - name: Unit tests and lint
         run: ./gradlew --no-daemon clean :app:assembleDebug :app:testDebugUnitTest :app:testReleaseUnitTest :app:lintDebug :app:lintRelease
+
+      - name: Audit merged release manifest
+        run: python3 scripts/audit-merged-manifest.py
 
       - name: Build signed TEST APK
         env:
@@ -135,7 +133,7 @@ jobs:
       - name: Upload RELEASE APK
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:
-          name: Namaz-Vakytylary-TEST-1.2-test3.1
+          name: Namaz-Vakytylary-TEST-1.4-test1
           path: app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
           retention-days: 30

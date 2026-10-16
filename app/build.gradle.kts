@@ -1,3 +1,6 @@
+import java.security.KeyStore
+import java.security.MessageDigest
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -11,8 +14,8 @@ android {
         applicationId = "ru.namaz.safadzhay.test"
         minSdk = 23
         targetSdk = 35
-        versionCode = 36
-        versionName = "1.2-test3.1"
+        versionCode = 37
+        versionName = "1.4-test1"
     }
 
     signingConfigs {
@@ -69,6 +72,8 @@ dependencies {
     testImplementation("org.robolectric:robolectric:4.16")
     implementation("androidx.core:core-ktx:1.15.0")
     implementation("ru.rustore.sdk:appupdate:10.5.1")
+    // Prepared verifier only: no signed feed or production trust key is activated.
+    implementation("com.google.crypto.tink:tink-android:1.23.0")
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.2")
 }
 
@@ -81,6 +86,17 @@ val verifyReleaseSigning by tasks.registering {
         if (missing.isNotEmpty()) {
             throw GradleException("Release signing is not configured; missing: " + missing.joinToString())
         }
+        val keystore = KeyStore.getInstance(
+            file(providers.environmentVariable("NAMAZ_KEYSTORE_PATH").get()),
+            providers.environmentVariable("NAMAZ_STORE_PASSWORD").get().toCharArray())
+        val certificate = keystore.getCertificate(providers.environmentVariable("NAMAZ_KEY_ALIAS").get())
+            ?: throw GradleException("Signing certificate is missing")
+        val fingerprint = MessageDigest.getInstance("SHA-256").digest(certificate.encoded)
+            .joinToString("") { "%02x".format(it.toInt() and 255) }
+        val expected = rootProject.file("verification/release-certificate.sha256").readText().trim()
+        check(fingerprint == expected) { "Unexpected TEST signing certificate" }
+        check(android.defaultConfig.applicationId == "ru.namaz.safadzhay.test") { "This branch builds TEST only" }
+
     }
 }
 // AGP omits validateSigningRelease entirely if the signing inputs are absent.
@@ -88,3 +104,9 @@ val verifyReleaseSigning by tasks.registering {
 tasks.matching { it.name in setOf("validateSigningRelease", "packageRelease") }.configureEach {
     dependsOn(verifyReleaseSigning)
 }
+
+// Calling assembleRelease locally must enforce the same checks as CI.
+val verifyReleaseQuality by tasks.registering {
+    dependsOn("testDebugUnitTest", "testReleaseUnitTest", "lintDebug", "lintRelease")
+}
+tasks.matching { it.name == "packageRelease" }.configureEach { dependsOn(verifyReleaseQuality) }

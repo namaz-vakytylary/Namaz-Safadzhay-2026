@@ -11,7 +11,8 @@ internal data class Holiday(
     val description: String,
     val sourceName: String,
     val night: Boolean = false,
-    val hijriDate: String = ""
+    val hijriDate: String = "",
+    val id: String? = null
 ) {
     val displayDate: String get() {
         val fmt = DateTimeFormatter.ofPattern("d MMMM yyyy", Locale("ru"))
@@ -27,7 +28,7 @@ internal object HolidayCalendar {
     @Volatile
 private var remoteByYear: Map<Int, List<Holiday>> = emptyMap()
 
-fun setRemote(year: Int, holidays: List<Holiday>?) {
+@Synchronized fun setRemote(year: Int, holidays: List<Holiday>?) {
     remoteByYear = if (holidays == null) {
         remoteByYear - year
     } else {
@@ -51,8 +52,6 @@ private fun rf(date: String, title: String, text: String, night: Boolean = false
     val items = listOf(
         rf("2026-01-16", "Ночь Мирадж", "Памятная ночь Исра и Мирадж.", true),
         rf("2026-02-03", "Ночь Бараат", "Памятная ночь середины месяца Шаабан.", true),
-        rf("2026-02-19", "Начало Рамадана", "Начало месяца поста."),
-        rf("2026-03-20", "Ураза-байрам", "Праздник окончания поста Рамадана."),
         rf("2026-05-26", "День Арафа", "День перед Курбан-байрамом."),
         rf("2026-05-27", "Курбан-байрам", "Праздник жертвоприношения."),
         rf("2026-06-16", "Начало года по Хиджре", "Начало 1448 года по Хиджре."),
@@ -64,18 +63,19 @@ private fun rf(date: String, title: String, text: String, night: Boolean = false
     holidaysFor(date.year).firstOrNull { it.date == date }
 
     fun ramadanDay(date: LocalDate): Int? {
-        val holidays = holidaysFor(date.year)
+        val holidays = remoteByYear[date.year] ?: return null
 
         val start = holidays
-            .firstOrNull { it.title == "Начало Рамадана" }
+            .firstOrNull { it.id == "ramadan_start" || (it.id == null && it.title == "Начало Рамадана") }
             ?.date
             ?: return null
 
         val end = holidays
-            .firstOrNull { it.title == "Ураза-байрам" }
+            .firstOrNull { it.id == "eid_al_fitr" || (it.id == null && it.title == "Ураза-байрам") }
             ?.date
             ?: return null
 
+        if (java.time.temporal.ChronoUnit.DAYS.between(start, end) !in 29L..30L) return null
         if (date.isBefore(start) || !date.isBefore(end)) {
             return null
         }

@@ -40,7 +40,7 @@ class TodayPreviewLayoutTest {
                 for (tatar in listOf(false, true)) for (time in listOf("00:30", "12:00", "18:00", "20:15")) {
                     ReflectionHelpers.setField(scene, "time", LocalDate.of(2026, 8, 9).atTime(LocalTime.parse(time)))
                     RuntimeEnvironment.setQualifiers("w360dp-h800dp-${if (dark) "night" else "notnight"}-mdpi")
-                    val app = RuntimeEnvironment.getApplication(); TestNetwork.offline(app)
+                    val app = RuntimeEnvironment.getApplication(); TestNetwork.offline(app); TestNetwork.published(app)
                     app.getSharedPreferences("settings", 0).edit().clear().putBoolean("notifications_enabled", false)
                         .putBoolean("show_tatar_names", tatar).putString("debug_ramadan_ui_scene", "before").commit()
                     ThemeSettings.save(app, mode)
@@ -81,7 +81,7 @@ class TodayPreviewLayoutTest {
         for((mode,dark) in listOf(ThemeMode.LIGHT to true,ThemeMode.DARK to false,ThemeMode.SYSTEM to false,ThemeMode.SYSTEM to true)) {
             for(tatar in listOf(false,true)) for(scene in listOf("before","suhoor","fast","iftar","after")) {
                 RuntimeEnvironment.setQualifiers("w360dp-h800dp-${if(dark) "night" else "notnight"}-mdpi")
-                val app=RuntimeEnvironment.getApplication(); TestNetwork.offline(app)
+                val app=RuntimeEnvironment.getApplication(); TestNetwork.offline(app); TestNetwork.published(app)
                 app.getSharedPreferences("settings",0).edit().clear().putBoolean("notifications_enabled",false)
                     .putBoolean("show_tatar_names",tatar).putString("debug_ramadan_ui_scene",scene).commit()
                 ThemeSettings.save(app,mode)

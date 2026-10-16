@@ -174,8 +174,22 @@ internal class QiblaCompassView(context: Context) : View(context), SensorEventLi
         else heading = (heading + QiblaMath.shortestAngle(target - heading) * .18f + 360) % 360
         notifyDirection(); invalidate()
     }
+    init { isFocusable = true; importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_YES }
     private fun notifyDirection() {
         val target = bearing
+        val description = when {
+            !hasCompass() -> "Компас Киблы: датчик недоступен"
+            target == null -> "Компас Киблы: ожидаем местоположение"
+            !initialized -> "Компас Киблы: ожидаем показания датчика"
+            unreliable || tilted -> "Компас Киблы: требуется калибровка, держите телефон горизонтально"
+            else -> {
+                val angle = QiblaMath.shortestAngle(target - heading)
+                if (kotlin.math.abs(angle) <= 6f) "Компас Киблы: направление найдено"
+                else "Кибла: поверните ${if (angle > 0) "направо" else "налево"} на ${kotlin.math.abs(angle).toInt()} градусов"
+            }
+        }
+        // Read on focus; do not announce sensor updates continuously.
+        if (contentDescription != description) contentDescription = description
         onDirection?.invoke(target != null && initialized && abs(QiblaMath.shortestAngle(target-heading)) < 5,
             unreliable || tilted || !initialized)
     }

@@ -38,7 +38,7 @@ class NotificationScreenTest {
 
     @Before fun setup() {
         RuntimeEnvironment.setFontScale(1f)
-        TestNetwork.offline(app)
+        TestNetwork.offline(app); TestNetwork.published(app)
         shadowOf(app).grantPermissions(android.Manifest.permission.POST_NOTIFICATIONS)
         prefs.edit().clear().putBoolean("notifications_enabled", false)
             .putInt("notify_before_min", 15).putBoolean("notify_asr", false)

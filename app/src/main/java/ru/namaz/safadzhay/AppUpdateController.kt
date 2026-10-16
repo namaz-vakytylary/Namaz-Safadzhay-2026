@@ -46,17 +46,22 @@ internal class AppUpdateController(
             current = value; dialog?.submit(value); schedulePresentation()
         } }
     }
+    private var checkGeneration = 0
     fun resume() {
         resumed = true
         if (!checking && (installationRequested || current?.stage in listOf(AppUpdateStage.READY, AppUpdateStage.WAITING, AppUpdateStage.DOWNLOADING) ||
                 checkedAt == null || now() - checkedAt!! >= 900_000)) {
             checking = true
-            source.check({ value -> if (!destroyed) {
+            val generation = ++checkGeneration
+            handler.postDelayed({ if (!destroyed && checking && generation == checkGeneration) {
+                checking = false; checkedAt = now(); checkGeneration++
+            } }, 20_000L)
+            source.check({ value -> if (!destroyed && generation == checkGeneration) {
                 checking = false; checkedAt = now(); installationRequested = false; current = value
                 if (value == null) { dialog?.dismiss(); dialog = null; restoreOpen = false }
                 else dialog?.submit(value)
                 schedulePresentation()
-            } }, { if (!destroyed) { checking = false; checkedAt = now() } })
+            } }, { if (!destroyed && generation == checkGeneration) { checking = false; checkedAt = now() } })
         }
         schedulePresentation()
     }

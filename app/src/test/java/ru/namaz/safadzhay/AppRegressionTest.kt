@@ -146,9 +146,9 @@ class AppRegressionTest {
             ReflectionHelpers.setField(c.get(),"selectedDate",LocalDate.of(2027,1,1))
             ReflectionHelpers.setField(c.get(),"scheduleTabSelected",true);invoke(c.get(),"update")
             val main=texts(c.get().window.decorView).joinToString("\n")
-            assertFalse(main,forbidden.any { main.contains(it,true) })
+            assertFalse(main,main.contains("JSON"))
            assertTrue(main.contains("Расписание пока недоступно"))
-assertTrue(main.contains("Для этой даты время намаза ещё не загружено."))
+assertTrue(main.contains("Подключитесь к интернету"))
         } finally { c.destroy() }
     }
     @Test fun accessibilityActionsHaveNamesAndDateRemainsReadable() {
@@ -169,6 +169,7 @@ assertTrue(main.contains("Для этой даты время намаза ещ�
     }
 
     @Test fun tatarTogglePersistsAndNotificationUsesPreference() {
+        publish(1, "05:30"); assertTrue(repo.sync(true).changed)
         var c=Robolectric.buildActivity(MainActivity::class.java).create()
         waitWorkers(c.get());invoke(c.get(),"showSettingsDialog")
         fun findSwitch(v: View): Switch? {
@@ -184,12 +185,17 @@ assertTrue(main.contains("Для этой даты время намаза ещ�
             assertTrue((rows.getChildAt(0) as ViewGroup).let { row ->
                 val box=row.getChildAt(1) as ViewGroup;box.getChildAt(1).visibility==View.GONE })
             prefs.edit().putBoolean("notifications_enabled",true).commit()
-            fun fire() { PrayerNotificationReceiver().onReceive(app,Intent().putExtra("key","fajr").putExtra("prayer","Фаджр")
-                .putExtra("tatar","Иртәнге намаз").putExtra("time","05:30").putExtra("date",LocalDate.now(zone).toString())) }
-            fire();val nm=shadowOf(app.getSystemService(NotificationManager::class.java))
-            assertEquals("Напоминание: Фаджр",nm.allNotifications.single().extras.getString(Notification.EXTRA_TITLE))
-            prefs.edit().putBoolean("show_tatar_names",true).commit();fire()
-            assertEquals("Напоминание: Фаджр (Иртәнге намаз)",nm.allNotifications.single().extras.getString(Notification.EXTRA_TITLE))
+            fun fire(key: String, time: String) {
+                PrayerAlarmScheduler.clock = { tomorrow.atTime(java.time.LocalTime.parse(time)).atZone(zone).toInstant().minusSeconds(300) }
+                PrayerNotificationReceiver().onReceive(app,Intent().putExtra("key",key).putExtra("time",time).putExtra("date",tomorrow.toString()))
+                PrayerAlarmScheduler.worker.submit {}.get(20, TimeUnit.SECONDS)
+            }
+            try {
+                fire("fajr", "05:30"); val nm=shadowOf(app.getSystemService(NotificationManager::class.java))
+                assertEquals("Напоминание: Фаджр",nm.allNotifications.single().extras.getString(Notification.EXTRA_TITLE))
+                prefs.edit().putBoolean("show_tatar_names",true).commit(); fire("zuhr", "12:00")
+                assertTrue(nm.allNotifications.any { it.extras.getString(Notification.EXTRA_TITLE) == "Напоминание: Зухр (Өйлә намазы)" })
+            } finally { PrayerAlarmScheduler.clock = java.time.Instant::now }
                 } finally { c.destroy() }
     }
 

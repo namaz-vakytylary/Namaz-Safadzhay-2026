@@ -54,7 +54,7 @@ class AutomaticCityTest {
         shadowOf(manager).setProviderEnabled(LocationManager.NETWORK_PROVIDER, true)
         shadowOf(manager).setProviderEnabled(LocationManager.GPS_PROVIDER, false)
         shadowOf(manager).setLastKnownLocation(LocationManager.NETWORK_PROVIDER, null)
-        TestNetwork.offline(app)
+        TestNetwork.offline(app); TestNetwork.published(app)
     }
 
     private fun fix(city: ScheduleCity = moscow, accuracyMeters: Float = 20f, ageSeconds: Long = 0L) =
@@ -377,4 +377,33 @@ class AutomaticCityTest {
             assertTrue(listeners().isEmpty())
         } finally { restored.pause().stop().destroy() }
     }
+    @Test fun silentNetworkFallsBackToGpsAndManualSelectionCancelsBoth() {
+        shadowOf(app).grantPermissions(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
+        shadowOf(manager).setProviderEnabled(LocationManager.GPS_PROVIDER, true)
+        withLocation {
+            it.resume()
+            assertNotNull(active(it))
+            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(8))
+            assertTrue(shadowOf(manager).getLocationRequests(LocationManager.GPS_PROVIDER).isNotEmpty())
+            val oldListener = active(it)
+            settings.selectManual(village); it.selectionChanged()
+            oldListener.onLocationChanged(fix(moscow))
+            assertEquals("Сафаджай", savedCity()); assertTrue(listeners().isEmpty())
+        }
+    }
+    @Test @Config(sdk = [33]) fun processDeathResetsSavedManualGuardButRetainsSavedCityUntilNewFix() {
+        installVerifiedTodaySchedules(); coarse()
+        val saved = Bundle().apply {
+            putString("city_session_process", "previous-process")
+            putBoolean("city_session_manual_override", true)
+            putBoolean("city_session_startup_checked", true)
+        }
+        shadowOf(manager).setLastKnownLocation(LocationManager.NETWORK_PROVIDER, fix(moscow, 3000f))
+        val c = Robolectric.buildActivity(MainActivity::class.java).create(saved).start().resume()
+        try {
+            assertFalse(ReflectionHelpers.getField<CitySelectionSettings>(c.get(), "citySelection").session.manualOverride)
+            assertEquals("Москва", ReflectionHelpers.getField<String>(c.get(), "selectedCity"))
+        } finally { c.pause().stop().destroy() }
+    }
+
 }

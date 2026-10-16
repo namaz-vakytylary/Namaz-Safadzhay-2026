@@ -46,7 +46,10 @@ internal class RuStoreAppUpdateSource(
         val installed = PackageInfoCompat.getLongVersionCode(activity.packageManager.getPackageInfo(activity.packageName, 0))
         if (info.packageName != activity.packageName || info.availableVersionCode <= installed ||
             info.updateAvailability !in listOf(UpdateAvailability.UPDATE_AVAILABLE, UpdateAvailability.DEVELOPER_TRIGGERED_UPDATE_IN_PROGRESS)) return null
-        return StoreAppUpdate(info.availableVersionCode, info.availableVersionName, info.whatsNew, stage(info.installStatus))
+        val next = StoreAppUpdate(info.availableVersionCode, info.availableVersionName, info.whatsNew, stage(info.installStatus))
+        val previous = current
+        return if (previous?.versionCode == next.versionCode && previous.stage == next.stage)
+            next.copy(downloadedBytes = previous.downloadedBytes, totalBytes = previous.totalBytes) else next
     }
     private fun listen() { if (!listening) { manager.registerListener(listener); listening = true } }
     override fun check(success: (StoreAppUpdate?) -> Unit, failure: () -> Unit) {

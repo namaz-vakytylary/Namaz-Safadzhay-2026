@@ -4,209 +4,141 @@ import android.content.Context
 import android.util.AtomicFile
 import org.json.JSONObject
 import java.io.File
-import java.net.HttpURLConnection
-import java.net.URL
+import java.io.InputStream
 import java.security.MessageDigest
 import java.time.LocalDate
 
-/**
- * Удалённые исламские праздники.
- *
- * Если загрузка или проверка не удалась, приложение продолжает
- * использовать встроенный HolidayCalendar.
- */
-internal class HolidayRepository(context: Context) {
-
+/** Verified private snapshot; legacy raw caches remain readable during migration. */
+internal class HolidayRepository(
+    context: Context,
+    private val downloadBytes: (String, Int) -> ByteArray = ::downloadHolidayFile,
+    private val currentYear: () -> Int = { LocalDate.now(java.time.ZoneId.of("Europe/Moscow")).year }
+) {
     private val filesDir = context.filesDir
+    private data class Entry(val json: JSONObject, val year: Int, val version: Int,
+        val path: String, val size: Int, val sha: String)
+    private data class Saved(val version: Int, val sha: String, val size: Int, val holidays: List<Holiday>)
 
-private fun fileFor(year: Int): AtomicFile =
-    AtomicFile(File(filesDir, "downloaded-holidays-$year.json"))
-
-    fun loadSaved(year: Int): List<Holiday>? {
-    return try {
-        val file = fileFor(year)
-
-        if (!file.baseFile.exists()) return null
-
-        val raw = file.openRead().bufferedReader().use { it.readText() }
-        parse(raw, year)
-    } catch (_: Exception) {
-        null
-    }
-}
-
-    fun download(year: Int): List<Holiday>? {
-    return try {
+    private fun fileFor(year: Int): AtomicFile {
         require(year in 2026..2100)
+        return AtomicFile(File(filesDir, "downloaded-holidays-$year.json"))
+    }
 
-        // 1. Скачиваем manifest.json
-        val manifestBytes = downloadBytes(
-            ScheduleRepository.BASE_URL + "manifest.json",
-            MAX_MANIFEST_SIZE
-        )
+    @Synchronized fun loadSaved(year: Int): List<Holiday>? = readSaved(year)?.holidays
 
-        val manifest = JSONObject(
-            manifestBytes.toString(Charsets.UTF_8)
-        )
+    private fun readSaved(year: Int): Saved? = try {
+        val bytes = fileFor(year).openRead().use { readBoundedBytes(it, MAX_SNAPSHOT_SIZE) }
+        val root = RemoteJson.objectFrom(bytes)
+        if (root.has("cacheSchemaVersion")) {
+            require(root.strictInt("cacheSchemaVersion") == 1)
+            val entry = parseEntry(root.getJSONObject("entry"))
+            require(entry.year == year)
+            val payload = root.strictString("payload").toByteArray(Charsets.UTF_8)
+            Saved(entry.version, entry.sha, entry.size, verified(entry, payload))
+        } else {
+            // Old releases saved no hash/version. Validate, retain offline, then upgrade
+            // on the first verified download. This cannot retroactively authenticate it.
+            Saved(0, sha256(bytes), bytes.size, parse(bytes.toString(Charsets.UTF_8), year))
+        }
+    } catch (_: Exception) { null }
 
-        require(manifest.getInt("schemaVersion") == 1)
+    @Synchronized fun download(year: Int): List<Holiday>? = downloadYears(setOf(year))[year]
 
-        val entries = manifest.getJSONArray("holidays")
-        require(entries.length() <= 100)
-
-        // 2. Находим праздники нужного года
-        var entry: JSONObject? = null
-
-        for (i in 0 until entries.length()) {
-            val candidate = entries.getJSONObject(i)
-
-            if (candidate.getInt("year") == year) {
-                entry = candidate
-                break
+    /** One manifest for current year and any published next-year entry. */
+    @Synchronized fun downloadYears(years: Set<Int>): Map<Int, List<Holiday>> = try {
+        require(years.all { it in 2026..2100 })
+        val manifestBytes = downloadBytes(ScheduleRepository.BASE_URL + "manifest.json", MAX_MANIFEST_SIZE)
+        require(manifestBytes.size <= MAX_MANIFEST_SIZE)
+        val manifest = RemoteJson.objectFrom(manifestBytes)
+        require(manifest.strictInt("schemaVersion") == 1)
+        val array = manifest.getJSONArray("holidays")
+        require(array.length() <= 100)
+        val entries = (0 until array.length()).map { parseEntry(array.getJSONObject(it)) }
+        require(entries.map { it.year }.distinct().size == entries.size)
+        val result = mutableMapOf<Int, List<Holiday>>()
+        entries.filter { it.year in years }.forEach { entry ->
+            val old = readSaved(entry.year)
+            require(old == null || entry.version >= old.version)
+            require(old == null || entry.version != old.version || entry.sha == old.sha)
+            if (old != null && entry.version == old.version) {
+                require(entry.size == old.size)
+                result[entry.year] = old.holidays
+            } else {
+                val bytes = downloadBytes(ScheduleRepository.BASE_URL + entry.path, entry.size)
+                val holidays = verified(entry, bytes)
+                val snapshot = JSONObject().put("cacheSchemaVersion", 1).put("entry", entry.json)
+                    .put("payload", bytes.toString(Charsets.UTF_8)).toString().toByteArray(Charsets.UTF_8)
+                require(snapshot.size <= MAX_SNAPSHOT_SIZE)
+                val file = fileFor(entry.year)
+                val stream = file.startWrite()
+                try { stream.write(snapshot); file.finishWrite(stream) }
+                catch (error: Exception) { file.failWrite(stream); throw error }
+                result[entry.year] = holidays
             }
         }
+        result
+    } catch (_: Exception) { emptyMap() }
 
-        val holidayEntry = entry ?: return null
-
-        val path = holidayEntry.getString("path")
-        val expectedSize = holidayEntry.getInt("bytes")
-        val expectedSha = holidayEntry.getString("sha256")
-
-        require(
-            path.matches(
-                Regex("holidays/[A-Za-z0-9_-]+\\.json")
-            )
-        )
-        require(expectedSize in 1..MAX_FILE_SIZE)
-        require(expectedSha.matches(Regex("[a-f0-9]{64}")))
-
-        // 3. Скачиваем файл праздников
-        val bytes = downloadBytes(
-            ScheduleRepository.BASE_URL + path,
-            expectedSize
-        )
-
-        require(bytes.size == expectedSize)
-
-        // 4. Проверяем SHA-256
-        val actualSha = MessageDigest
-            .getInstance("SHA-256")
-            .digest(bytes)
-            .joinToString("") {
-                "%02x".format(it.toInt() and 255)
-            }
-
-        require(actualSha == expectedSha)
-
-        // 5. Проверяем содержимое JSON
-        val raw = bytes.toString(Charsets.UTF_8)
-        val holidays = parse(raw, year)
-
-        // Только проверенный файл сохраняем
-save(year, raw)
-
-// После успешного получения текущего года удаляем старые локальные годы
-val currentYear = LocalDate.now(java.time.ZoneId.of("Europe/Moscow")).year
-if (year == currentYear) {
-    filesDir.listFiles()
-        ?.filter {
-            it.name.startsWith("downloaded-holidays-") &&
-            it.name.endsWith(".json") &&
-            it.name != "downloaded-holidays-$currentYear.json"
-        }
-        ?.forEach { it.delete() }
-}
-
-holidays
-    } catch (_: Exception) {
-        null
+    private fun parseEntry(obj: JSONObject): Entry {
+        val year = obj.strictInt("year")
+        val version = obj.strictInt("version")
+        val path = obj.strictString("path")
+        val size = obj.strictInt("bytes")
+        val sha = obj.strictString("sha256")
+        require(year in 2026..2100 && version > 0)
+        require(path.matches(Regex("holidays/[A-Za-z0-9_-]+\\.json")))
+        require(size in 1..MAX_FILE_SIZE && sha.matches(Regex("[a-f0-9]{64}")))
+        return Entry(obj, year, version, path, size, sha)
     }
-}
-private fun downloadBytes(url: String, maxSize: Int): ByteArray {
-    val connection = URL(url).openConnection() as HttpURLConnection
 
-    connection.connectTimeout = 8000
-    connection.readTimeout = 8000
-    connection.instanceFollowRedirects = false
-    connection.requestMethod = "GET"
-
-    try {
-        require(connection.responseCode == HttpURLConnection.HTTP_OK)
-
-        val bytes = connection.inputStream.use { input ->
-            input.readBytes()
-        }
-
-        require(bytes.isNotEmpty())
-        require(bytes.size <= maxSize)
-
-        return bytes
-    } finally {
-        connection.disconnect()
+    private fun verified(entry: Entry, bytes: ByteArray): List<Holiday> {
+        require(bytes.size == entry.size && sha256(bytes) == entry.sha)
+        RemoteJson.objectFrom(bytes)
+        return parse(bytes.toString(Charsets.UTF_8), entry.year)
     }
-}
-    
-    private fun save(year: Int, raw: String) {
-    val bytes = raw.toByteArray(Charsets.UTF_8)
-    require(bytes.size <= MAX_FILE_SIZE)
-
-    val file = fileFor(year)
-    val stream = file.startWrite()
-
-    try {
-        stream.write(bytes)
-        file.finishWrite(stream)
-    } catch (error: Exception) {
-        file.failWrite(stream)
-        throw error
-    }
-}
 
     internal fun parse(raw: String, expectedYear: Int): List<Holiday> {
-        val root = JSONObject(raw)
-
-        require(root.getInt("year") == expectedYear)
-
-        val source = root.getString("source")
+        require(expectedYear in 2026..2100)
+        val bytes = raw.toByteArray(Charsets.UTF_8)
+        require(bytes.size <= MAX_FILE_SIZE)
+        val root = RemoteJson.objectFrom(bytes)
+        require(root.strictInt("year") == expectedYear)
+        val source = root.strictString("source")
         require(source.length <= 200)
-
         val array = root.getJSONArray("holidays")
         require(array.length() <= MAX_HOLIDAYS)
-
-        val result = mutableListOf<Holiday>()
-
-        for (i in 0 until array.length()) {
+        val result = (0 until array.length()).map { i ->
             val item = array.getJSONObject(i)
-
-            val date = LocalDate.parse(item.getString("date"))
-            require(date.year == expectedYear)
-
-            val title = item.getString("title")
-            val description = item.getString("description")
-            val night = item.optBoolean("night", false)
-
-            require(title.isNotBlank() && title.length <= 100)
-            require(description.length <= 1000)
-
-            result += Holiday(
-                date = date,
-                title = title,
-                description = description,
-                sourceName = source,
-                night = night
-            )
+            val rawDate = item.strictString("date")
+            val date = LocalDate.parse(rawDate)
+            require(date.year == expectedYear && date.toString() == rawDate)
+            val title = item.strictString("title")
+            val description = item.strictString("description")
+            val night = if (item.has("night")) item.strictBoolean("night") else false
+            require(title.isNotBlank() && title.length <= 100 && description.length <= 1000)
+            val id = if (item.has("id")) item.strictString("id").also {
+                require(it.matches(Regex("[a-z][a-z0-9_]{0,63}")))
+            } else null
+            Holiday(date, title, description, source, night, id = id)
         }
-
-        require(
-            result.map { it.date to it.title }.distinct().size == result.size
-        )
-
+        require(result.map { it.date to it.title }.distinct().size == result.size)
+        val ids = result.mapNotNull { it.id }
+        require(ids.distinct().size == ids.size)
+        val start = result.singleOrNull { it.id == "ramadan_start" || (it.id == null && it.title == "Начало Рамадана") }
+        val end = result.singleOrNull { it.id == "eid_al_fitr" || (it.id == null && it.title == "Ураза-байрам") }
+        if (start != null && end != null) require(java.time.temporal.ChronoUnit.DAYS.between(start.date, end.date) in 29L..30L)
         return result.sortedBy { it.date }
     }
 
     companion object {
-    private const val MAX_FILE_SIZE = 64 * 1024
-    private const val MAX_MANIFEST_SIZE = 128 * 1024
-    private const val MAX_HOLIDAYS = 100
+        private const val MAX_FILE_SIZE = 64 * 1024
+        private const val MAX_SNAPSHOT_SIZE = 160 * 1024
+        private const val MAX_MANIFEST_SIZE = 128 * 1024
+        private const val MAX_HOLIDAYS = 100
+        private fun sha256(bytes: ByteArray) = MessageDigest.getInstance("SHA-256").digest(bytes)
+            .joinToString("") { "%02x".format(it.toInt() and 255) }
+    }
 }
-}
+
+internal fun readHolidayBytes(input: InputStream, maxSize: Int): ByteArray = readBoundedBytes(input, maxSize)
+private fun downloadHolidayFile(url: String, maxSize: Int): ByteArray = RemoteTransport.download(url, maxSize, 8000)

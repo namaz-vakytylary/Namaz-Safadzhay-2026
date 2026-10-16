@@ -14,15 +14,14 @@ s = (SRC / 'MainActivity.kt').read_text()
 fixture_path = ROOT / 'verification/original_timetables.json'
 assert hashlib.sha256(fixture_path.read_bytes()).hexdigest() == (ROOT / 'verification/timetables.sha256').read_text().strip(), 'Original fixture was changed'
 fixture = json.loads(fixture_path.read_text())
-for name, original in fixture.items():
-    block = s.split('private val '+name+' = listOf(', 1)[1].split('\n    )', 1)[0]
-    actual = re.findall(r'PrayerDay\("([^\"]+)", "([^\"]+)", "([^\"]+)", "([^\"]+)", "([^\"]+)", "([^\"]+)"\)', block)
-    assert [list(x) for x in actual] == original, name + ': original prayer times changed'
-    assert len(actual) == 153 and len({x[0] for x in actual}) == 153
-    for i, row in enumerate(actual):
-        assert dt.date.fromisoformat(row[0]) == dt.date(2026, 8, 1) + dt.timedelta(days=i)
-        for value in row[1:]: dt.time.fromisoformat(value)
-    print('PASS exact original timetable:', name, '153 days / 765 times')
+# Historical reference remains outside Android source sets. No prayer tables in APK.
+for source_set in ['main', 'debug', 'release']:
+    for path in (ROOT / 'app/src' / source_set).rglob('*'):
+        if path.suffix in ('.kt', '.json', '.csv', '.xml'):
+            content = path.read_text()
+            assert not re.search(r'PrayerDay\("\d{4}-\d{2}-\d{2}"', content), str(path)
+            assert 'safadzhayData = listOf' not in content and 'moscowData = listOf' not in content, str(path)
+print('PASS no embedded prayer schedules in Android source sets')
 manifest = ET.parse(ROOT / 'app/src/main/AndroidManifest.xml').getroot()
 ns = '{http://schemas.android.com/apk/res/android}'
 permissions = {x.get(ns+'name') for x in manifest.findall('uses-permission')}
@@ -35,7 +34,7 @@ app = manifest.find('application')
 assert app.get(ns+'allowBackup') == 'false'
 assert app.get(ns+'usesCleartextTraffic') == 'false'
 build = (ROOT / 'app/build.gradle.kts').read_text()
-for required in ['applicationId = "ru.namaz.safadzhay.test"','versionCode = 36','versionName = "1.2-test3.1"','isDebuggable = false']:
+for required in ['applicationId = "ru.namaz.safadzhay.test"','versionCode = 37','versionName = "1.4-test1"','isDebuggable = false']:
     assert required in build, required
 assert not (ROOT / 'app/namaz-test.jks').exists()
 tracked = subprocess.check_output(['git', 'ls-files', '-z'], cwd=ROOT).decode().split('\0')
