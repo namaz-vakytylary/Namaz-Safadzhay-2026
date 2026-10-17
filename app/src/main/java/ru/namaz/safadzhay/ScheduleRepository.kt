@@ -26,6 +26,11 @@ internal class ScheduleRepository(
 ) {
     private val prefs = context.getSharedPreferences("schedule_updates", Context.MODE_PRIVATE)
     private val file = AtomicFile(File(context.filesDir, "downloaded-schedules.json"))
+    enum class CacheState { NOT_LOADED, ABSENT, INVALID, VERIFIED }
+    data class CachedCity(val id: String, val from: String, val to: String, val days: Int)
+    data class CachedYear(val year: Int, val version: Int, val cities: List<CachedCity>)
+    data class CacheInfo(val state: CacheState, val years: List<CachedYear>, val lastSuccessMillis: Long)
+    @Volatile private var cacheState = CacheState.NOT_LOADED
     @Volatile private var bundles: Map<Int, Bundle> = if (loadImmediately) readSaved() else emptyMap()
     @Volatile var isLoaded: Boolean = loadImmediately
         private set
@@ -68,6 +73,14 @@ internal class ScheduleRepository(
         bundles[year]?.cities?.get(cityId).orEmpty()
     fun day(cityId: String, date: LocalDate): PrayerDay? =
         dataForYear(cityId, date.year).firstOrNull { it.date == date.toString() }
+
+    /** Facts from the last verified disk read/download. No network or cache mutation. */
+    @Synchronized fun cacheInfo(): CacheInfo = CacheInfo(cacheState,
+        bundles.toSortedMap().values.map { bundle ->
+            CachedYear(bundle.entry.year, bundle.entry.version, bundle.cities.toSortedMap().map { (id, days) ->
+                CachedCity(id, days.first().date, days.last().date, days.size)
+            })
+        }, lastSuccess())
 
     fun lastSuccess(): Long = prefs.getLong("last_success", 0)
     fun hasDownloads(): Boolean = bundles.isNotEmpty()
@@ -174,6 +187,7 @@ internal class ScheduleRepository(
             }
 
             bundles = next.toMap()
+            cacheState = CacheState.VERIFIED
             rememberRevisions(bundles)
 
         }
@@ -212,8 +226,13 @@ internal class ScheduleRepository(
             require(totalSize <= MAX_TOTAL_PAYLOAD)
             result[entry.year] = parseBundle(entry, item.strictString("payload").toByteArray(Charsets.UTF_8))
         }
+        cacheState = if (result.isEmpty()) CacheState.ABSENT else CacheState.VERIFIED
         result
-    } catch (_: Exception) { emptyMap() }
+    } catch (_: Exception) {
+        cacheState = if (file.baseFile.exists() || File(file.baseFile.path + ".bak").exists())
+            CacheState.INVALID else CacheState.ABSENT
+        emptyMap()
+    }
 
     companion object {
         @Volatile private var instance: ScheduleRepository? = null

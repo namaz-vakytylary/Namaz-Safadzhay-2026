@@ -16,6 +16,7 @@ internal object RamadanUiPreview {
         UiPreviewScene("off", "Текущее время устройства", null),
         UiPreviewScene("before", "09.08.2026 · обычный режим", start.minusDays(1).atTime(12, 0)),
         UiPreviewScene("suhoor", "10.08.2026 · до сухура", start.atTime(0, 30)),
+        UiPreviewScene("suhoor_end", "10.08.2026 · окончание сухура (Фаджр)", start.atStartOfDay()),
         UiPreviewScene("fast", "10.08.2026 · дневной пост", start.atTime(12, 0)),
         UiPreviewScene("iftar", "10.08.2026 · до ифтара", start.atTime(18, 0)),
         UiPreviewScene("after", "10.08.2026 · ифтар наступил", start.atTime(20, 25))
@@ -28,6 +29,18 @@ internal object RamadanUiPreview {
         context.getSharedPreferences("settings", Context.MODE_PRIVATE).edit().putString(KEY, scene.key).apply()
     }
     fun now(context: Context, realNow: LocalDateTime): LocalDateTime = selected(context).time ?: realNow
+    /** Uses existing verified times only; the override never reaches repositories/alarms. */
+    fun alignWithSchedule(context: Context, now: LocalDateTime, day: PrayerDay?): LocalDateTime {
+        if (day == null) return now
+        fun at(time: String) = now.toLocalDate().atTime(java.time.LocalTime.parse(time))
+        return when (selected(context).key) {
+            "suhoor" -> at(day.fajr).minusMinutes(5)
+            "suhoor_end" -> at(day.fajr)
+            "iftar" -> at(day.maghrib).minusMinutes(5)
+            "after" -> at(day.maghrib).plusMinutes(3)
+            else -> now
+        }
+    }
     fun ramadanDay(date: LocalDate): Int? {
         val day = ChronoUnit.DAYS.between(start, date)
         return if (day in 0..29) day.toInt() + 1 else null

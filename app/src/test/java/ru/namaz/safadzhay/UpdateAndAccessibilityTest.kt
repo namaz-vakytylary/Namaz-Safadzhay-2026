@@ -90,6 +90,10 @@ class UpdateAndAccessibilityTest {
             assertTrue(label.text.toString().contains("Подключитесь к интернету"))
             assertTrue(label.isClickable); assertEquals(Int.MAX_VALUE, label.maxLines)
             assertTrue(repo.days("moscow").isEmpty()); assertTrue(repo.days("safadzhay").isEmpty())
+            val retry = c.get().findViewById<android.view.View>(android.R.id.content).findViewWithTag<android.widget.TextView>("schedule_retry")
+            assertEquals(View.VISIBLE, retry.visibility)
+            assertEquals("Повторить", retry.text.toString())
+            assertTrue(retry.performClick())
             assertTrue(label.performClick())
         } finally { c.pause().stop().destroy(); RuntimeEnvironment.setFontScale(1f) }
     }

@@ -58,13 +58,13 @@ class ThemeAndRamadanTest {
         assertEquals(AppColors(dark).background,
             (ReflectionHelpers.getField<View>(a, "mainScroll").background as android.graphics.drawable.ColorDrawable).color)
     }
-    private fun screenshot(root: View, name: String) {
+    private fun screenshot(root: View, name: String, width: Int = 360, height: Int = 800) {
         repeat(8) {
-            root.measure(View.MeasureSpec.makeMeasureSpec(360, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(800, View.MeasureSpec.EXACTLY))
-            root.layout(0, 0, 360, 800)
+            root.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(height, View.MeasureSpec.EXACTLY))
+            root.layout(0, 0, width, height)
             org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle()
         }
-        val bitmap = Bitmap.createBitmap(360, 800, Bitmap.Config.ARGB_8888)
+        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
         root.draw(Canvas(bitmap))
         File("build/reports/theme-ui").apply { mkdirs() }.resolve("$name.png").outputStream().use {
             bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)
@@ -195,11 +195,11 @@ class ThemeAndRamadanTest {
         val c = start()
         try {
             val a = c.get()
-            for (key in listOf("before", "suhoor", "fast", "iftar", "after", "off")) {
+            for (key in listOf("before", "suhoor", "suhoor_end", "fast", "iftar", "after", "off")) {
                 invoke(a, "showSettingsDialog")
                 clickText(panel(a), "Проверка Рамадана")
                 val radios = walk(panel(a)).filterIsInstance<RadioButton>()
-                assertEquals(6, radios.size)
+                assertEquals(7, radios.size)
                 val scene = RamadanUiPreview.scenes.single { it.key == key }
                 radios.single { it.text.toString() == scene.title }.performClick()
                 assertEquals(key, RamadanUiPreview.selected(a).key)
@@ -244,6 +244,52 @@ class ThemeAndRamadanTest {
         assertNull(HolidayCalendar.ramadanDay(LocalDate.of(2026,2,19)))
         assertNull(HolidayCalendar.ramadanDay(LocalDate.of(2026,3,20)))
     }
+    @Test fun compactRamadanBoundaryScenesUseVerifiedTimesAndNeverAffectRealAlarms() {
+        if (!RamadanUiPreview.available) return
+        RuntimeEnvironment.setQualifiers("w320dp-h640dp-mdpi")
+        RuntimeEnvironment.setFontScale(1.5f)
+        val beforeCache = File(app.filesDir, "downloaded-schedules.json").readBytes()
+        try {
+            for (mode in listOf(ThemeMode.LIGHT, ThemeMode.DARK)) {
+                ThemeSettings.save(app, mode)
+                val c = start(); val a = c.get()
+                try {
+                    PrayerAlarmScheduler.worker.submit {}.get(30, java.util.concurrent.TimeUnit.SECONDS)
+                    val manager = app.getSystemService(android.app.AlarmManager::class.java)
+                    val before = org.robolectric.Shadows.shadowOf(manager).scheduledAlarms.toList()
+                    var checks = 0
+                    val checker = ScheduleUpdateChecker({ checks++; false }, java.util.concurrent.Executor { it.run() })
+                    checker.checkOnce {}
+                    ReflectionHelpers.setField(a, "scheduleUpdateChecker", checker)
+                    val day = ScheduleRepository.get(app).day("safadzhay", LocalDate.parse("2026-08-10"))!!
+                    for (key in listOf("before", "suhoor", "suhoor_end", "iftar", "after")) {
+                        RamadanUiPreview.select(app, RamadanUiPreview.scenes.single { it.key == key })
+                        val actual = ReflectionHelpers.callInstanceMethod<LocalDateTime>(a, "uiNow")
+                        val expected = when (key) {
+                            "suhoor" -> java.time.LocalTime.parse(day.fajr).minusMinutes(5)
+                            "suhoor_end" -> java.time.LocalTime.parse(day.fajr)
+                            "iftar" -> java.time.LocalTime.parse(day.maghrib).minusMinutes(5)
+                            "after" -> java.time.LocalTime.parse(day.maghrib).plusMinutes(3)
+                            else -> java.time.LocalTime.NOON
+                        }
+                        assertEquals(expected, actual.toLocalTime())
+                        ReflectionHelpers.setField(a, "selectedDate", actual.toLocalDate())
+                        invoke(a, "update")
+                        val title = ReflectionHelpers.getField<TextView>(a, "nextName").text.toString()
+                        if (key == "suhoor_end") {
+                            assertFalse(title, title.contains("До окончания сухура"))
+                            assertEquals(View.GONE, ReflectionHelpers.getField<View>(a, "ramadanCountdownBackground").visibility)
+                        }
+                        screenshot(a.findViewById(android.R.id.content), "compact-ramadan-$key-${mode.storedValue}", 320, 640)
+                        assertEquals(1, checks)
+                        assertEquals(before, org.robolectric.Shadows.shadowOf(manager).scheduledAlarms.toList())
+                        assertArrayEquals(beforeCache, File(app.filesDir, "downloaded-schedules.json").readBytes())
+                    }
+                } finally { c.pause().stop().destroy() }
+            }
+        } finally { RuntimeEnvironment.setFontScale(1f) }
+    }
+
     @Test fun ramadanLightDarkAndSystemScenes() {
         if (!RamadanUiPreview.available) return
         for ((mode, dark) in listOf(ThemeMode.LIGHT to false, ThemeMode.DARK to true, ThemeMode.SYSTEM to false, ThemeMode.SYSTEM to true)) {

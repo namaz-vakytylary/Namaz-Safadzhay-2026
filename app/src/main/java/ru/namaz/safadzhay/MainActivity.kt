@@ -81,7 +81,7 @@ private fun selectedNotificationSound(context: Context): Uri {
         ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
 }
 
-private fun notificationChannelId(context: Context): String {
+internal fun notificationChannelId(context: Context): String {
     val sound = selectedNotificationSound(context).toString()
     return "prayer_times_v3_${sound.hashCode().toUInt().toString(16)}"
 }
@@ -163,6 +163,8 @@ class MainActivity : Activity() {
     private var scheduleUpdateCompletionPending = false
     private var settingsPanelBack: () -> Unit = {}
 
+    private lateinit var scheduleRetry: TextView
+    private var scheduleProgressRequested = false
     private lateinit var countdown: TextView
     private lateinit var countdownLabel: TextView
     private lateinit var nextName: TextView
@@ -247,6 +249,7 @@ class MainActivity : Activity() {
             startupChecked = sameProcess && savedInstanceState?.getBoolean("city_session_startup_checked") == true,
             latestFixNanos = if (sameProcess) savedInstanceState?.getLong("city_session_latest_fix_nanos") ?: 0L else 0L
         )
+        if (sameProcess) TestGeoTrace.restore(citySession, savedInstanceState)
         citySelection = CitySelectionSettings(this, citySession)
         selectedCity = citySelection.savedCity()?.name ?: "Сафаджай"
         cityLocation = CityLocationController(this, citySelection,
@@ -287,6 +290,8 @@ if (needsNotificationPermission) {
             "sound" -> showSoundScreen()
             "calibration" -> showCalibration()
             "ramadan_preview" -> showRamadanPreviewSelector()
+            "test_diagnostics", "test_data", "test_alarms", "test_geo" ->
+                showTestDiagnostics(savedInstanceState!!.getString("panel_route")!!)
         }
         if (savedInstanceState?.getBoolean("show_about") == true) showAboutDialog()
         
@@ -331,6 +336,7 @@ private fun startScheduleUpdateCheck() {
         },
         onFinished = {
             handler.post {
+                scheduleProgressRequested = false
                 if (!scheduleUpdateCompletionPending) {
                     dismissScheduleUpdateDialog()
                 }
@@ -360,6 +366,9 @@ private fun startScheduleUpdateCheck() {
     private fun showScheduleUpdateDialog(year: Int, value: Int) {
     handler.post {
         if (isFinishing || isDestroyed) return@post
+        // This decision reads Activity/session state only on the UI thread.
+        if (!scheduleProgressRequested && scheduleUpdateDialog == null &&
+            scheduleRepository.day(selectedCityId(), LocalDate.now(zone)) != null) return@post
 
         val safeValue = value.coerceIn(0, 100)
 
@@ -887,6 +896,11 @@ headerBox.addView(
             leftMargin = dp(20); rightMargin = dp(20)
         })
         headerBox.addView(countdownCard, LinearLayout.LayoutParams(-1, dp(174)).apply { bottomMargin = dp(7) })
+        scheduleRetry = button("Повторить") { retryScheduleDownload() }.apply {
+            tag = "schedule_retry"; visibility = View.GONE
+            contentDescription = "Повторить загрузку расписания"
+        }
+        headerBox.addView(scheduleRetry, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(7) })
         prayerList = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         root.addView(prayerList, LinearLayout.LayoutParams(-1, -2))
         scroll.bind(root, modeRow, ramadanCard, countdownCard, ramadanCountdownBackground,
@@ -1217,6 +1231,7 @@ headerBox.addView(
         root.addView(screenRow("◐", "Тема приложения", ThemeSettings.read(this).title) {
             showThemeSelector()
         }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
+        if (TestDiagnosticsUi.available) TestDiagnosticsUi.addSettings(testDiagnosticsHost(), root)
         if (RamadanUiPreview.available) {
             root.addView(screenRow("☪", "Проверка Рамадана", "Только тестовый интерфейс") {
                 showRamadanPreviewSelector()
@@ -1247,6 +1262,17 @@ headerBox.addView(
             showAboutDialog()
         }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
         dialog.show()
+    }
+
+    private fun testDiagnosticsHost() = TestDiagnosticsHost(this, scheduleRepository, citySelection, cityLocation,
+        panel = { title, route, back -> panelRoute = route; fullScreenPanel(title, back) },
+        row = { icon, title, detail, click -> screenRow(icon, title, detail, click) },
+        isCurrent = { root -> settingsPanel?.window?.decorView?.findViewWithTag<View>(root.tag) === root },
+        open = { route -> showTestDiagnostics(route) }, settings = { showSettingsDialog() },
+        ramadan = { showRamadanPreviewSelector() })
+
+    private fun showTestDiagnostics(route: String = "test_diagnostics") {
+        if (TestDiagnosticsUi.available) TestDiagnosticsUi.show(testDiagnosticsHost(), route)
     }
 
     private fun showThemeSelector() {
@@ -1326,12 +1352,8 @@ headerBox.addView(
 
     private fun uiNow(): LocalDateTime {
         val now = RamadanUiPreview.now(this, LocalDateTime.now(zone))
-        // The two cities have different Maghrib times: preview the first three
-        // minutes of iftar using the existing timetable, never change its values.
-        if (RamadanUiPreview.available && RamadanUiPreview.selected(this).key == "after" && ::scheduleRepository.isInitialized) {
-            dayFor(now.toLocalDate())?.let { return dateTime(now.toLocalDate(), it.maghrib).plusMinutes(3) }
-        }
-        return now
+        return RamadanUiPreview.alignWithSchedule(this, now,
+            if (::scheduleRepository.isInitialized) dayFor(now.toLocalDate()) else null)
     }
 
     override fun onRetainNonConfigurationInstance(): Any = scheduleUpdateChecker
@@ -1777,6 +1799,12 @@ cell.addView(
         return date.atTime(p[0].toInt(), p[1].toInt())
     }
 
+    private fun retryScheduleDownload() {
+        scheduleProgressRequested = true
+        scheduleUpdateChecker.allowRetry()
+        startScheduleUpdateCheck()
+    }
+
     private fun update() {
         val now = uiNow().withNano(0)
         val todayDate = now.toLocalDate()
@@ -1798,11 +1826,12 @@ cell.addView(
         prayerList.visibility = View.VISIBLE
         if (!scheduleTabSelected) selectedDate = todayDate
         if (selectedDate == null) selectedDate = todayDate
-        if (lastDay != todayDate) {
+        val realToday = LocalDate.now(zone)
+        if (lastDay != realToday) {
             val previousDay = lastDay
-            lastDay = todayDate; schedulePrayerNotifications()
+            lastDay = realToday; schedulePrayerNotifications()
             if (previousDay != null) {
-                if (!scheduleTabSelected && previousDay.year != todayDate.year) {
+                if (!scheduleTabSelected && previousDay.year != realToday.year) {
                     calendarMonth = java.time.YearMonth.from(todayDate); lastCalendarRender = ""
                 }
                 scheduleUpdateChecker.allowRetry(); startScheduleUpdateCheck()
@@ -1828,6 +1857,7 @@ cell.addView(
         }
 
         val selectedDay = dayFor(selected)
+        scheduleRetry.visibility = if (selectedDay == null && scheduleRepository.isLoaded) View.VISIBLE else View.GONE
         if (selectedDay == null) {
             ramadanCountdownBackground.visibility = View.GONE
             nextName.text = "Расписание пока недоступно"
@@ -1839,7 +1869,7 @@ cell.addView(
                 else "Для этой даты расписание ещё не опубликовано или не загружено. Нажмите здесь, чтобы проверить."
             countdownLabel.isClickable = true
             countdownLabel.contentDescription = countdownLabel.text
-            countdownLabel.setOnClickListener { scheduleUpdateChecker.allowRetry(); startScheduleUpdateCheck() }
+            countdownLabel.setOnClickListener { retryScheduleDownload() }
             progress.progress = 0f
             countdownStart.text = ""
 
@@ -2211,6 +2241,7 @@ startScheduleUpdateCheck()
 
     override fun onSaveInstanceState(outState: Bundle) {
         appUpdateController?.saveState(outState)
+        TestGeoTrace.save(citySelection.session, outState)
         outState.putString("city_session_process", CitySelectionSession.processToken)
         outState.putBoolean("city_session_manual_override", citySelection.session.manualOverride)
         outState.putBoolean("city_session_startup_checked", citySelection.session.startupChecked)

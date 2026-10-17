@@ -46,6 +46,8 @@ internal class CityLocationController(
     }
     private val nextRefresh = Runnable { if (foreground) refresh() }
 
+    fun currentState(): CityLocationState = state
+
     private fun emit(value: CityLocationState) { state = value; onState(value) }
     private fun granted(permission: String) = activity.checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED
     private fun hasPermission() = granted(Manifest.permission.ACCESS_COARSE_LOCATION) || granted(Manifest.permission.ACCESS_FINE_LOCATION)
@@ -265,6 +267,7 @@ internal class CityLocationController(
         val now = clock()
         val accepted = settings.acceptAutomatic(city, now - (age(fix) * 1000).toLong(), now)
         if (!accepted) return false
+        TestGeoTrace.accepted(settings.session, city.id, fix.provider, settings.lastSuccess())
         settings.session.latestFixNanos = fix.elapsedRealtimeNanos
         settings.session.startupChecked = true
         stopAttempt()

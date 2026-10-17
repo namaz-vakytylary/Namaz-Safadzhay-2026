@@ -77,6 +77,42 @@ class AutomaticCityTest {
         try { block(location) } finally { location.pause(); activity.pause().stop().destroy() }
     }
 
+    @Test fun diagnosticSourceRecordsOnlyAcceptedNetworkOrGpsFixAndNoLateManualOverride() {
+        coarse()
+        withLocation { location ->
+            location.resume()
+            val callback = active(location)
+            callback.onLocationChanged(fix(moscow))
+            val accepted = TestGeoTrace.snapshot(settings.session)!!
+            assertEquals("moscow", accepted.cityId)
+            assertEquals("network", accepted.provider)
+            assertEquals(settings.lastSuccess(), accepted.timeMillis)
+            settings.selectManual(village); location.selectionChanged()
+            callback.onLocationChanged(fix(village))
+            assertEquals(accepted, TestGeoTrace.snapshot(settings.session))
+            assertEquals("Сафаджай", savedCity())
+        }
+        settings = CitySelectionSettings(app)
+        shadowOf(app).grantPermissions(Manifest.permission.ACCESS_FINE_LOCATION)
+        shadowOf(manager).setProviderEnabled(LocationManager.NETWORK_PROVIDER, false)
+        shadowOf(manager).setProviderEnabled(LocationManager.GPS_PROVIDER, true)
+        withLocation { location ->
+            location.resume()
+            active(location).onLocationChanged(fix(moscow).apply { provider = LocationManager.GPS_PROVIDER })
+            assertEquals("gps", TestGeoTrace.snapshot(settings.session)?.provider)
+        }
+    }
+
+    @Test fun diagnosticFixSurvivesSameProcessStateButNewSessionHasNoInventedSource() {
+        TestGeoTrace.accepted(settings.session, "moscow", "network", 1234)
+        val state = Bundle(); TestGeoTrace.save(settings.session, state)
+        val recreated = CitySelectionSession()
+        TestGeoTrace.restore(recreated, state)
+        assertEquals(TestGeoTrace.snapshot(settings.session), TestGeoTrace.snapshot(recreated))
+        assertNull(TestGeoTrace.snapshot(CitySelectionSession()))
+        assertFalse(state.keySet().any { it.contains("latitude") || it.contains("longitude") })
+    }
+
     @Test fun startupNearVillageSelectsVillage() {
         coarse(); shadowOf(manager).setLastKnownLocation(LocationManager.NETWORK_PROVIDER, fix(village, 3000f))
         withLocation { it.resume(); assertEquals("Сафаджай", savedCity()); assertEquals(listOf(village), cities) }

@@ -11,6 +11,7 @@ internal object RamadanUiPreview {
     fun selected(context: Context) = UiPreviewScene("off", "", null)
     fun select(context: Context, scene: UiPreviewScene) = Unit
     fun now(context: Context, realNow: LocalDateTime): LocalDateTime = realNow
+    fun alignWithSchedule(context: Context, now: LocalDateTime, day: PrayerDay?): LocalDateTime = now
     fun ramadanDay(date: LocalDate): Int? = null
     fun isArtificial(date: LocalDate): Boolean = false
 }

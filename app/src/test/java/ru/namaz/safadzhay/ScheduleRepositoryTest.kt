@@ -286,6 +286,11 @@ class ScheduleRepositoryTest {
         }
         assertArrayEquals(before, file.readBytes())
         assertTrue(calls.isEmpty())
+        val info = repo.cacheInfo()
+        assertEquals(ScheduleRepository.CacheState.VERIFIED, info.state)
+        assertEquals(listOf(2026), info.years.map { it.year })
+        assertEquals(setOf("moscow", "safadzhay"), info.years.single().cities.map { it.id }.toSet())
+        assertEquals(0L, info.lastSuccessMillis) // Never invent a legacy download timestamp.
     }
 
     @Test fun damagedCacheDoesNotEraseAcceptedRevisionFloor() {
@@ -426,6 +431,28 @@ val newYear = oldYear + 1
         assertTrue(progress.zipWithNext().all { (before, after) -> before <= after })
         assertArrayEquals(saved, File(context.filesDir, "downloaded-schedules.json").readBytes())
         assertNull(repository().day("moscow", LocalDate.of(2028, 1, 1)))
+    }
+
+    @Test fun cacheMetadataDistinguishesUnloadedAbsentAndRejectedFilesWithoutDeletion() {
+        val lazy = ScheduleRepository(context, loadImmediately = false)
+        assertEquals(ScheduleRepository.CacheState.NOT_LOADED, lazy.cacheInfo().state)
+        lazy.loadSavedIfNeeded()
+        assertEquals(ScheduleRepository.CacheState.ABSENT, lazy.cacheInfo().state)
+        val file = File(context.filesDir, "downloaded-schedules.json")
+        file.writeText("damaged")
+        val rejected = repository()
+        assertEquals(ScheduleRepository.CacheState.INVALID, rejected.cacheInfo().state)
+        assertTrue(rejected.cacheInfo().years.isEmpty())
+        assertEquals("damaged", file.readText())
+        publish(fixture(year = 2026))
+        assertTrue(rejected.sync(true).successful)
+        val info = rejected.cacheInfo()
+        assertEquals(ScheduleRepository.CacheState.VERIFIED, info.state)
+        assertEquals(now, info.lastSuccessMillis)
+        assertEquals("2026-01-01", info.years.single().cities.first().from)
+        responses.clear()
+        assertFalse(rejected.sync(true).successful)
+        assertEquals(info, rejected.cacheInfo())
     }
 
 }
