@@ -2,11 +2,11 @@ name: Build Namaz Vakytylary TEST offline schedules
 
 on:
   workflow_dispatch:
-  # Validate this guarded signing pipeline when its configuration changes.
+  # Validate TEST source changes through this guarded signing pipeline.
   # Only TEST artifacts are uploaded; there is no store/release publication.
   push:
     branches: [test/1.2-test3-security]
-    paths: ['.github/workflows/build-apk.yml']
+    paths: ['.github/workflows/build-apk.yml', 'app/**', 'scripts/**', 'gradle/**', '*.gradle.kts']
 permissions:
   contents: read
 

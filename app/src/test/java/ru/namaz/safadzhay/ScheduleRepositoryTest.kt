@@ -392,4 +392,40 @@ val newYear = oldYear + 1
         entry.put("cityIds", JSONArray().put("safadzhay"))
     }
 
+    @Test fun multiYearProgressIsMonotonicAndCompletesOnlyAfterDurableSave() {
+        publish(fixture(year = 2026), fixture(year = 2028))
+        val progress = mutableListOf<Int>()
+        val repo = repository()
+        var savedYearsAtCompletion = emptyList<Int>()
+        assertTrue(repo.sync(true) { _, percent ->
+            progress.add(percent)
+            if (percent == 100) {
+                val restarted = repository()
+                savedYearsAtCompletion = listOf(2026, 2028).filter {
+                    restarted.day("moscow", LocalDate.of(it, 1, 1)) != null
+                }
+            }
+        }.successful)
+        assertEquals(listOf(2026, 2028), savedYearsAtCompletion)
+        assertEquals(0, progress.first())
+        assertEquals(100, progress.last())
+        assertEquals(1, progress.count { it == 100 })
+        assertTrue(progress.zipWithNext().all { (before, after) -> before <= after })
+        assertTrue(progress.contains(68))
+        assertTrue(progress.contains(88))
+    }
+
+    @Test fun rejectedSecondYearNeverCompletesOrReplacesPreviousCache() {
+        publish(fixture(year = 2026)); assertTrue(repository().sync(true).successful)
+        val saved = File(context.filesDir, "downloaded-schedules.json").readBytes()
+        publish(fixture(year = 2026, version = 2), fixture(year = 2028))
+        responses["2028.json"] = responses.getValue("2028.json").clone().also { it[0] = 32 }
+        val progress = mutableListOf<Int>()
+        assertFalse(repository().sync(true) { _, percent -> progress.add(percent) }.successful)
+        assertFalse(progress.contains(100))
+        assertTrue(progress.zipWithNext().all { (before, after) -> before <= after })
+        assertArrayEquals(saved, File(context.filesDir, "downloaded-schedules.json").readBytes())
+        assertNull(repository().day("moscow", LocalDate.of(2028, 1, 1)))
+    }
+
 }

@@ -93,7 +93,7 @@ internal class ScheduleRepository(
         report(currentYear(), 12)
         val currentYear = currentYear()
         val next = bundles.toMutableMap()
-        val updatedYears = mutableListOf<Int>()
+        val pending = mutableListOf<Entry>()
         var changed = false
 
         entries.forEach { entry ->
@@ -120,19 +120,29 @@ internal class ScheduleRepository(
                 return@forEach
             }
 
-                        report(entry.year, 12)
+            pending.add(entry)
+            // Account for all replacements before allocating or downloading payloads.
+            next[entry.year] = Bundle(entry, "", emptyMap())
+            require(next.values.sumOf { it.entry.size.toLong() } <= MAX_TOTAL_PAYLOAD)
+        }
 
-            require(next.values.filter { it.entry.year != entry.year }.sumOf { it.entry.size.toLong() } + entry.size <= MAX_TOTAL_PAYLOAD)
+        // One transaction has one progress range, including all published future years.
+        // Keep at most MAX_TOTAL_PAYLOAD raw bytes until validation finishes.
+        val totalBytes = pending.sumOf { it.size.toLong() }
+        var receivedBytes = 0L
+        val downloaded = pending.map { entry ->
             val bytes = RemoteTransport.withProgress({ count ->
-                report(entry.year, 12 + (count.toLong() * 56 / entry.size).toInt().coerceIn(0, 56))
+                report(entry.year, 12 + ((receivedBytes + count.coerceIn(0, entry.size)) * 56 / totalBytes).toInt())
             }) { download(BASE_URL + entry.path, entry.size) }
-            report(entry.year, 68)
-
+            require(bytes.size == entry.size)
+            receivedBytes += bytes.size
+            report(entry.year, 12 + (receivedBytes * 56 / totalBytes).toInt())
+            entry to bytes
+        }
+        downloaded.forEachIndexed { index, (entry, bytes) ->
+            if (Thread.currentThread().isInterrupted) throw java.io.InterruptedIOException("Cancelled")
             next[entry.year] = parseBundle(entry, bytes)
-
-            report(entry.year, 88)
-
-            updatedYears.add(entry.year)
+            report(entry.year, 68 + ((index + 1) * 20 / downloaded.size))
             changed = true
         }
         if (Thread.currentThread().isInterrupted) throw java.io.InterruptedIOException("Cancelled")
@@ -166,9 +176,6 @@ internal class ScheduleRepository(
             bundles = next.toMap()
             rememberRevisions(bundles)
 
-            updatedYears.forEach {
-                report(it, 100)
-            }
         }
 
         check(prefs.edit().putLong("last_success", now).commit()) { "Cannot persist update timestamp" }

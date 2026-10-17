@@ -43,7 +43,8 @@ TEST с другим сертификатом, не удаляйте его ра
 `bash gradlew :app:testDebugUnitTest :app:testReleaseUnitTest :app:lintDebug :app:lintRelease :app:assembleDebug`
 
 Подписанный TEST: workflow Build Namaz Vakytylary TEST offline schedules
-запускается вручную либо при изменении самого workflow в TEST-ветке
+запускается вручную либо при изменении приложения, скриптов или сборочной
+конфигурации в TEST-ветке
 на разрешённой TEST-ветке, с уже существующими секретами/сертификатом.
 assembleRelease требует обе группы тестов, lint и проверку сертификата.
 Main, серверные данные и опубликованный APK не меняются.
