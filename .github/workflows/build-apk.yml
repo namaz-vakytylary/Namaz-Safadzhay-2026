@@ -138,7 +138,7 @@ jobs:
       - name: Upload RELEASE APK
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:
-          name: Namaz-Vakytylary-TEST-1.4-test2
+          name: Namaz-Vakytylary-TEST-1.4-test3
           path: app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
           retention-days: 30

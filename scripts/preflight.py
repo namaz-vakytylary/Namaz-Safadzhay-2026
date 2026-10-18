@@ -34,7 +34,7 @@ app = manifest.find('application')
 assert app.get(ns+'allowBackup') == 'false'
 assert app.get(ns+'usesCleartextTraffic') == 'false'
 build = (ROOT / 'app/build.gradle.kts').read_text()
-for required in ['applicationId = "ru.namaz.safadzhay.test"','versionCode = 38','versionName = "1.4-test2"','isDebuggable = false']:
+for required in ['applicationId = "ru.namaz.safadzhay.test"','versionCode = 39','versionName = "1.4-test3"','isDebuggable = false']:
     assert required in build, required
 assert not (ROOT / 'app/namaz-test.jks').exists()
 tracked = subprocess.check_output(['git', 'ls-files', '-z'], cwd=ROOT).decode().split('\0')

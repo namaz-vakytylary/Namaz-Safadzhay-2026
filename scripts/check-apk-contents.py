@@ -20,7 +20,7 @@ def check_public_certificate(name, content):
 def main():
     badging = Path('apk-badging.txt').read_text()
     assert "package: name='ru.namaz.safadzhay.test'" in badging
-    assert "versionCode='38'" in badging and "versionName='1.4-test2'" in badging
+    assert "versionCode='39'" in badging and "versionName='1.4-test3'" in badging
     with zipfile.ZipFile(sys.argv[1]) as apk:
         for item in apk.infolist():
             name = item.filename

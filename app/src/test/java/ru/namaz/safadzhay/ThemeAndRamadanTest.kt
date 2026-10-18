@@ -223,18 +223,37 @@ class ThemeAndRamadanTest {
         } finally { c.pause().stop().destroy() }
     }
 
+    @Test fun offPreviewDoesNotMarkOrdinaryCalendarDateAsRamadan() = assertInactivePreview("off")
+    @Test fun unknownPreviewFallsBackToRealCalendarWithoutArtificialRamadan() = assertInactivePreview("unknown_scene")
+
+    private fun assertInactivePreview(key: String) {
+        prefs.edit().putString("debug_ramadan_ui_scene", key).commit()
+        val date = LocalDate.parse("2026-08-10") // Existing isolated UI fixture, not a religious date.
+        assertNull(HolidayCalendar.ramadanDay(date))
+        val c = start()
+        try {
+            val a = c.get()
+            ReflectionHelpers.setField(a, "scheduleTabSelected", true)
+            ReflectionHelpers.setField(a, "selectedDate", date)
+            invoke(a, "update")
+            assertEquals("An inactive preview must not inject its artificial Ramadan", View.GONE,
+                ReflectionHelpers.getField<View>(a, "ramadanCard").visibility)
+            assertEquals(date, ReflectionHelpers.getField<LocalDate>(a, "selectedDate"))
+        } finally { c.pause().stop().destroy() }
+    }
+
     @Test fun previewBoundaryAndCalendarIsolation() {
         val before = LocalDate.of(2026,8,9); val start = before.plusDays(1)
         val realNow = LocalDateTime.of(2026,10,4,15,0)
         prefs.edit().putString("debug_ramadan_ui_scene", "iftar").commit()
-        assertNull(RamadanUiPreview.ramadanDay(before))
+        assertNull(RamadanUiPreview.ramadanDay(app, before))
         if (RamadanUiPreview.available) {
-            assertEquals(1, RamadanUiPreview.ramadanDay(start))
-            assertEquals(30, RamadanUiPreview.ramadanDay(start.plusDays(29)))
-            assertNull(RamadanUiPreview.ramadanDay(start.plusDays(30)))
+            assertEquals(1, RamadanUiPreview.ramadanDay(app, start))
+            assertEquals(30, RamadanUiPreview.ramadanDay(app, start.plusDays(29)))
+            assertNull(RamadanUiPreview.ramadanDay(app, start.plusDays(30)))
             assertEquals(start, RamadanUiPreview.now(app, realNow).toLocalDate())
         } else {
-            assertNull(RamadanUiPreview.ramadanDay(start))
+            assertNull(RamadanUiPreview.ramadanDay(app, start))
             assertEquals(realNow, RamadanUiPreview.now(app, realNow))
             assertTrue(RamadanUiPreview.scenes.isEmpty())
             assertNull(RamadanUiPreview.selected(app).time)

@@ -41,9 +41,11 @@ internal object RamadanUiPreview {
             else -> now
         }
     }
-    fun ramadanDay(date: LocalDate): Int? {
+    fun ramadanDay(context: Context, date: LocalDate): Int? {
+        // The fixture must also stop affecting manually browsed calendar dates.
+        if (selected(context).time == null) return null
         val day = ChronoUnit.DAYS.between(start, date)
         return if (day in 0..29) day.toInt() + 1 else null
     }
-    fun isArtificial(date: LocalDate): Boolean = ramadanDay(date) != null
+    fun isArtificial(context: Context, date: LocalDate): Boolean = ramadanDay(context, date) != null
 }

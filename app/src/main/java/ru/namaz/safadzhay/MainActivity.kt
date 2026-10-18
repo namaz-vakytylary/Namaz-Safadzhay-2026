@@ -1812,7 +1812,7 @@ cell.addView(
         countdownStart.visibility = View.VISIBLE
 
         val ramadanDate = if (scheduleTabSelected) selectedDate ?: todayDate else todayDate
-        val ramadanDay = RamadanUiPreview.ramadanDay(ramadanDate) ?: HolidayCalendar.ramadanDay(ramadanDate)
+        val ramadanDay = RamadanUiPreview.ramadanDay(this, ramadanDate) ?: HolidayCalendar.ramadanDay(ramadanDate)
         val ramadanDayText = ramadanCard.findViewWithTag<TextView>("ramadan_day")
         if (ramadanDay != null) {
             ramadanCard.visibility = View.VISIBLE
