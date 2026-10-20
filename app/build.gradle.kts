@@ -38,7 +38,7 @@ android {
     testOptions {
         unitTests.isIncludeAndroidResources = true
         unitTests.all {
-            javaLauncher.set(javaToolchains.launcherFor {
+            it.javaLauncher.set(javaToolchains.launcherFor {
                 languageVersion.set(JavaLanguageVersion.of(21))
             })
             it.jvmArgs("--add-opens=java.base/java.lang=ALL-UNNAMED", "--add-opens=java.base/java.util=ALL-UNNAMED", "--add-opens=java.base/java.io=ALL-UNNAMED", "--add-opens=java.base/jdk.internal.access=ALL-UNNAMED")
