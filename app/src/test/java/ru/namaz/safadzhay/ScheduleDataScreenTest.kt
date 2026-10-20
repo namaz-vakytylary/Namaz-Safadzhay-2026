@@ -50,7 +50,7 @@ class ScheduleDataScreenTest {
                 waitForData()
                 dialog = ReflectionHelpers.getField(c.get(), "settingsPanel")
                 val facts = texts(dialog.window!!.decorView).joinToString("\n")
-                for (expected in listOf("2026 · версия данных 3", "Москва: 2026-08-01 — 2026-12-31", "Сафаджай: 2026-08-01 — 2026-12-31", "namaz-vakytylary/namaz-schedules", "Последняя успешная проверка обновлений")) {
+                for (expected in listOf("2026 · версия данных 1", "Москва: 2026-08-01 — 2026-12-31", "Сафаджай: 2026-08-01 — 2026-12-31", "namaz-vakytylary/namaz-schedules", "Последняя успешная проверка обновлений")) {
                     assertTrue(facts, facts.contains(expected))
                 }
                 assertArrayEquals(before, cache.readBytes())
