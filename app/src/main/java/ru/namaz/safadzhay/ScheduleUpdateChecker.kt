@@ -26,14 +26,20 @@ internal class ScheduleUpdateChecker(
                 ?.let { manager.getNetworkCapabilities(it) }
                 ?.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) == true
 
-            ScheduleRepository
-                .get(app)
-                .sync(online, progress)
-                .changed
+            val changed = ScheduleRepository.get(app).sync(online, progress).changed
+            if (changed) PrayerAlarmScheduler.worker.execute { kotlin.runCatching { PrayerAlarmScheduler.rebuild(app) } }
+            changed
         }
     )
 
     private val started = AtomicBoolean(false)
+    @Volatile private var activeThread: Thread? = null
+    private var lastAttempt = Long.MIN_VALUE
+    fun cancel() { activeThread?.interrupt() }
+    fun detach() { onProgress = { _, _ -> }; onFinished = {}; onChanged = {} }
+    fun allowRetryIfDue() {
+        if (lastAttempt != Long.MIN_VALUE && android.os.SystemClock.elapsedRealtime() - lastAttempt >= 300_000) allowRetry()
+    }
 
     @Volatile
     private var onChanged: () -> Unit = {}
@@ -43,6 +49,9 @@ internal class ScheduleUpdateChecker(
 
     @Volatile
     private var onFinished: () -> Unit = {}
+
+    fun allowRetry() { if (!running.get()) started.set(false) }
+    private val running = AtomicBoolean(false)
 
     fun checkOnce(onChanged: () -> Unit) {
         checkOnce(
@@ -63,7 +72,10 @@ internal class ScheduleUpdateChecker(
 
         if (!started.compareAndSet(false, true)) return
 
+        running.set(true)
+        lastAttempt = android.os.SystemClock.elapsedRealtime()
         executor.execute {
+            activeThread = Thread.currentThread()
             try {
                 val changed = progressCheck?.invoke { year, value ->
                     this.onProgress(year, value)
@@ -79,6 +91,9 @@ internal class ScheduleUpdateChecker(
                     "Background check failed: ${error.javaClass.simpleName}"
                 )
             } finally {
+                activeThread = null
+                Thread.interrupted()
+                running.set(false)
                 this.onFinished()
             }
         }

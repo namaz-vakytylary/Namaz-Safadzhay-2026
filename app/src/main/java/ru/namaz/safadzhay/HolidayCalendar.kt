@@ -11,7 +11,8 @@ internal data class Holiday(
     val description: String,
     val sourceName: String,
     val night: Boolean = false,
-    val hijriDate: String = ""
+    val hijriDate: String = "",
+    val id: String? = null
 ) {
     val displayDate: String get() {
         val fmt = DateTimeFormatter.ofPattern("d MMMM yyyy", Locale("ru"))
@@ -27,7 +28,7 @@ internal object HolidayCalendar {
     @Volatile
 private var remoteByYear: Map<Int, List<Holiday>> = emptyMap()
 
-fun setRemote(year: Int, holidays: List<Holiday>?) {
+@Synchronized fun setRemote(year: Int, holidays: List<Holiday>?) {
     remoteByYear = if (holidays == null) {
         remoteByYear - year
     } else {
@@ -62,19 +63,19 @@ private fun rf(date: String, title: String, text: String, night: Boolean = false
     holidaysFor(date.year).firstOrNull { it.date == date }
 
     fun ramadanDay(date: LocalDate): Int? {
-        // Ramadan is activated only by validated remote events, never by built-in dates.
         val holidays = remoteByYear[date.year] ?: return null
 
         val start = holidays
-            .firstOrNull { it.title == "Начало Рамадана" }
+            .firstOrNull { it.id == "ramadan_start" || (it.id == null && it.title == "Начало Рамадана") }
             ?.date
             ?: return null
 
         val end = holidays
-            .firstOrNull { it.title == "Ураза-байрам" }
+            .firstOrNull { it.id == "eid_al_fitr" || (it.id == null && it.title == "Ураза-байрам") }
             ?.date
             ?: return null
 
+        if (java.time.temporal.ChronoUnit.DAYS.between(start, end) !in 29L..30L) return null
         if (date.isBefore(start) || !date.isBefore(end)) {
             return null
         }

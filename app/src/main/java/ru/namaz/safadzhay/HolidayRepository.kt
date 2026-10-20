@@ -17,7 +17,7 @@ internal class HolidayRepository(
     private val filesDir = context.filesDir
     private data class Entry(val json: JSONObject, val year: Int, val version: Int,
         val path: String, val size: Int, val sha: String)
-    private data class Saved(val version: Int, val sha: String, val holidays: List<Holiday>)
+    private data class Saved(val version: Int, val sha: String, val size: Int, val holidays: List<Holiday>)
 
     private fun fileFor(year: Int): AtomicFile {
         require(year in 2026..2100)
@@ -34,16 +34,19 @@ internal class HolidayRepository(
             val entry = parseEntry(root.getJSONObject("entry"))
             require(entry.year == year)
             val payload = root.strictString("payload").toByteArray(Charsets.UTF_8)
-            Saved(entry.version, entry.sha, verified(entry, payload))
+            Saved(entry.version, entry.sha, entry.size, verified(entry, payload))
         } else {
             // Old releases saved no hash/version. Validate, retain offline, then upgrade
             // on the first verified download. This cannot retroactively authenticate it.
-            Saved(0, sha256(bytes), parse(bytes.toString(Charsets.UTF_8), year))
+            Saved(0, sha256(bytes), bytes.size, parse(bytes.toString(Charsets.UTF_8), year))
         }
     } catch (_: Exception) { null }
 
-    @Synchronized fun download(year: Int): List<Holiday>? = try {
-        require(year in 2026..2100)
+    @Synchronized fun download(year: Int): List<Holiday>? = downloadYears(setOf(year))[year]
+
+    /** One manifest for current year and any published next-year entry. */
+    @Synchronized fun downloadYears(years: Set<Int>): Map<Int, List<Holiday>> = try {
+        require(years.all { it in 2026..2100 })
         val manifestBytes = downloadBytes(ScheduleRepository.BASE_URL + "manifest.json", MAX_MANIFEST_SIZE)
         require(manifestBytes.size <= MAX_MANIFEST_SIZE)
         val manifest = RemoteJson.objectFrom(manifestBytes)
@@ -52,29 +55,29 @@ internal class HolidayRepository(
         require(array.length() <= 100)
         val entries = (0 until array.length()).map { parseEntry(array.getJSONObject(it)) }
         require(entries.map { it.year }.distinct().size == entries.size)
-        val entry = entries.singleOrNull { it.year == year }
-        if (entry == null) null else {
-            val old = readSaved(year)
+        val result = mutableMapOf<Int, List<Holiday>>()
+        entries.filter { it.year in years }.forEach { entry ->
+            val old = readSaved(entry.year)
             require(old == null || entry.version >= old.version)
             require(old == null || entry.version != old.version || entry.sha == old.sha)
-            val bytes = downloadBytes(ScheduleRepository.BASE_URL + entry.path, entry.size)
-            val holidays = verified(entry, bytes)
-            val snapshot = JSONObject().put("cacheSchemaVersion", 1).put("entry", entry.json)
-                .put("payload", bytes.toString(Charsets.UTF_8)).toString().toByteArray(Charsets.UTF_8)
-            require(snapshot.size <= MAX_SNAPSHOT_SIZE)
-            val file = fileFor(year)
-            val stream = file.startWrite()
-            try { stream.write(snapshot); file.finishWrite(stream) }
-            catch (error: Exception) { file.failWrite(stream); throw error }
-            val nowYear = currentYear()
-            if (year == nowYear) filesDir.listFiles()?.filter {
-                val savedYear = Regex("downloaded-holidays-(\\d{4})\\.json")
-                    .matchEntire(it.name)?.groupValues?.get(1)?.toIntOrNull()
-                savedYear != null && savedYear < nowYear
-            }?.forEach { AtomicFile(it).delete() }
-            holidays
+            if (old != null && entry.version == old.version) {
+                require(entry.size == old.size)
+                result[entry.year] = old.holidays
+            } else {
+                val bytes = downloadBytes(ScheduleRepository.BASE_URL + entry.path, entry.size)
+                val holidays = verified(entry, bytes)
+                val snapshot = JSONObject().put("cacheSchemaVersion", 1).put("entry", entry.json)
+                    .put("payload", bytes.toString(Charsets.UTF_8)).toString().toByteArray(Charsets.UTF_8)
+                require(snapshot.size <= MAX_SNAPSHOT_SIZE)
+                val file = fileFor(entry.year)
+                val stream = file.startWrite()
+                try { stream.write(snapshot); file.finishWrite(stream) }
+                catch (error: Exception) { file.failWrite(stream); throw error }
+                result[entry.year] = holidays
+            }
         }
-    } catch (_: Exception) { null }
+        result
+    } catch (_: Exception) { emptyMap() }
 
     private fun parseEntry(obj: JSONObject): Entry {
         val year = obj.strictInt("year")
@@ -113,9 +116,17 @@ internal class HolidayRepository(
             val description = item.strictString("description")
             val night = if (item.has("night")) item.strictBoolean("night") else false
             require(title.isNotBlank() && title.length <= 100 && description.length <= 1000)
-            Holiday(date, title, description, source, night)
+            val id = if (item.has("id")) item.strictString("id").also {
+                require(it.matches(Regex("[a-z][a-z0-9_]{0,63}")))
+            } else null
+            Holiday(date, title, description, source, night, id = id)
         }
         require(result.map { it.date to it.title }.distinct().size == result.size)
+        val ids = result.mapNotNull { it.id }
+        require(ids.distinct().size == ids.size)
+        val start = result.singleOrNull { it.id == "ramadan_start" || (it.id == null && it.title == "Начало Рамадана") }
+        val end = result.singleOrNull { it.id == "eid_al_fitr" || (it.id == null && it.title == "Ураза-байрам") }
+        if (start != null && end != null) require(java.time.temporal.ChronoUnit.DAYS.between(start.date, end.date) in 29L..30L)
         return result.sortedBy { it.date }
     }
 

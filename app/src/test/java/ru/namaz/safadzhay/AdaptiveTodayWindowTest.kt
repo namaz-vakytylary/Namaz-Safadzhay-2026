@@ -57,7 +57,7 @@ class AdaptiveTodayWindowTest {
             for((theme,dark) in listOf(ThemeMode.LIGHT to true,ThemeMode.DARK to false,ThemeMode.SYSTEM to false,ThemeMode.SYSTEM to true))
                 for(tatar in listOf(false,true)) {
                     RuntimeEnvironment.setQualifiers("w360dp-h800dp-${if(dark) "night" else "notnight"}-${dpi}dpi")
-                    val app=RuntimeEnvironment.getApplication();TestNetwork.offline(app)
+                    val app=RuntimeEnvironment.getApplication();TestNetwork.offline(app); TestNetwork.published(app); TestNetwork.published(app)
                     RuntimeEnvironment.setFontScale(font)
                     app.getSharedPreferences("settings",0).edit().clear().putBoolean("notifications_enabled",false).putBoolean("show_tatar_names",tatar).commit()
                     ThemeSettings.save(app,theme)
@@ -115,7 +115,7 @@ class AdaptiveTodayWindowTest {
     }
 
     @Test fun overflowToFitStopsExistingScrollAndFitToOverflowRestoresIt() {
-        val app=RuntimeEnvironment.getApplication();TestNetwork.offline(app)
+        val app=RuntimeEnvironment.getApplication();TestNetwork.offline(app); TestNetwork.published(app); TestNetwork.published(app)
         app.getSharedPreferences("settings",0).edit().clear().putBoolean("notifications_enabled",false).commit()
         val controller=Robolectric.buildActivity(MainActivity::class.java).create().start().resume().visible()
         try {

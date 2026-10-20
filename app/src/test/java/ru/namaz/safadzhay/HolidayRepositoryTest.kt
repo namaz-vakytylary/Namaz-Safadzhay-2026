@@ -115,13 +115,13 @@ class HolidayRepositoryTest {
         assertTrue(file(2026).exists())
     }
 
-    @Test fun currentYearCleanupRemovesOnlyPastYearsAndPreservesFutureCache() {
+    @Test fun currentYearUpdatePreservesAllPreviouslyDownloadedYears() {
         file(2026).writeText(fixture(2026).toString())
         file(2028).writeText(fixture(2028).toString())
         year = 2027
         assertNull(repository().download(2027)); assertTrue(file(2026).exists())
         publish(2027); assertNotNull(repository().download(2027))
-        assertFalse(file(2026).exists()); assertTrue(file(2028).exists())
+        assertTrue(file(2026).exists()); assertTrue(file(2028).exists())
         assertNotNull(repository().loadSaved(2027))
     }
 
@@ -177,6 +177,27 @@ class HolidayRepositoryTest {
             val body = fixture(2026); body.getJSONArray("holidays").getJSONObject(0).put(key, value)
             publish(body = body); assertNull(repository().download(2026))
         }
+    }
+
+    @Test fun stableIdentifiersSurviveRenamingAndInvalidRamadanPeriodIsRejected() {
+        fun body(end: String): JSONObject = JSONObject().put("year", 2026).put("source", "test").put("holidays", JSONArray()
+            .put(JSONObject().put("id", "ramadan_start").put("date", "2026-02-19").put("title", "Первый день поста").put("description", ""))
+            .put(JSONObject().put("id", "eid_al_fitr").put("date", end).put("title", "Праздник разговения").put("description", "")))
+        publish(body = body("2026-03-20"))
+        val holidays = repository().download(2026)!!
+        HolidayCalendar.setRemote(2026, holidays)
+        assertEquals(1, HolidayCalendar.ramadanDay(LocalDate.of(2026, 2, 19)))
+        assertEquals(29, HolidayCalendar.ramadanDay(LocalDate.of(2026, 3, 19)))
+        assertNull(HolidayCalendar.ramadanDay(LocalDate.of(2026, 3, 20)))
+        val before = file(2026).readBytes()
+        val invalid = publish(body = body("2026-03-25")).put("version", 2); manifest(invalid)
+        assertNull(repository().download(2026)); assertArrayEquals(before, file(2026).readBytes())
+    }
+
+    @Test fun unchangedHolidayRevisionDoesNotRequestPayload() {
+        publish(); assertNotNull(repository().download(2026))
+        responses.remove("holidays/2026.json")
+        assertNotNull(repository().download(2026))
     }
 
 }

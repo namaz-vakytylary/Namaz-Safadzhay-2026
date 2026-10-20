@@ -35,7 +35,7 @@ class ThemeAndRamadanTest {
 
     @Before fun setup() {
         prefs.edit().clear().putBoolean("notifications_enabled", false).commit()
-        TestNetwork.offline(app)
+        TestNetwork.offline(app); TestNetwork.published(app)
         HolidayCalendar.setRemote(LocalDate.now(java.time.ZoneId.of("Europe/Moscow")).year, null)
         app.filesDir.listFiles()?.filter { it.name.startsWith("downloaded-holidays-") }?.forEach { it.delete() }
     }
@@ -218,7 +218,7 @@ class ThemeAndRamadanTest {
         val body = org.json.JSONObject().put("year", today.year).put("source", "Unit test")
             .put("holidays", org.json.JSONArray()
                 .put(org.json.JSONObject().put("date", today.toString()).put("title", "Начало Рамадана").put("description", ""))
-                .put(org.json.JSONObject().put("date", today.plusDays(1).toString()).put("title", "Ураза-байрам").put("description", "")))
+                .put(org.json.JSONObject().put("date", today.plusDays(29).toString()).put("title", "Ураза-байрам").put("description", "")))
         val bytes = body.toString().toByteArray()
         val hash = java.security.MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it.toInt() and 255) }
         val manifest = org.json.JSONObject().put("schemaVersion", 1).put("holidays", org.json.JSONArray()
@@ -247,7 +247,8 @@ class ThemeAndRamadanTest {
                         val times = offsets.map { java.time.LocalTime.ofSecondOfDay((minute + it) * 60L).toString() }
                         val day = PrayerDay(today.toString(), times[0], times[1], times[2], times[3], times[4])
                         HolidayCalendar.setRemote(today.year, validatedEvents)
-                        ReflectionHelpers.setField(a, "safadzhayData", listOf(day))
+                        TestNetwork.installDay(app, day)
+                        ReflectionHelpers.setField(a, "scheduleRepository", ScheduleRepository.get(app))
                         ReflectionHelpers.setField(a, "lastPrayerRender", "")
                         invoke(a, "update")
                         assertTheme(a, dark)

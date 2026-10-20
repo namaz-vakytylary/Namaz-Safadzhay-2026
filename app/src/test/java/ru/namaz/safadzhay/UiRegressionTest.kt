@@ -22,7 +22,7 @@ class UiRegressionTest {
     private fun checkScale(scale: Float) {
         RuntimeEnvironment.setFontScale(scale)
         val app = RuntimeEnvironment.getApplication()
-        TestNetwork.offline(app)
+        TestNetwork.offline(app); TestNetwork.published(app); TestNetwork.published(app)
         val c = Robolectric.buildActivity(MainActivity::class.java).create().start().resume().visible()
         val errors = mutableListOf<String>()
         fun inspect(root: View, screen: String) {

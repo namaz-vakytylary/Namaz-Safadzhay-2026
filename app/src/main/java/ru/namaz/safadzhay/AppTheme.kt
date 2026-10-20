@@ -47,7 +47,7 @@ internal class AppColors(val isDark: Boolean) {
     val onSurface = tone("#FFFFFF", "#172B23")
     val secondaryText = tone("#ADCBBD", "#56675F")
     val tabSelected = tone("#20C27F", "#007C4D")
-    val onPrimary = Color.WHITE
+    val onPrimary = tone("#012619", "#FFFFFF")
     val tabInactiveText = tone("#BCCCC5", "#56675F")
     val onAction = tone("#012619", "#FFFFFF")
     val onSaveAction = tone("#012D1D", "#FFFFFF")

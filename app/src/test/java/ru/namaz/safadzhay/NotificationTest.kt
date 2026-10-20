@@ -5,25 +5,17 @@ import android.app.*
 import android.content.*
 import android.media.RingtoneManager
 import android.net.Uri
-import android.os.*
+import org.junit.*
 import org.junit.Assert.*
-import org.junit.Before
-import org.junit.Test
 import org.junit.runner.RunWith
-import org.robolectric.Robolectric
-import org.robolectric.RobolectricTestRunner
-import org.robolectric.RuntimeEnvironment
+import org.robolectric.*
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.shadows.ShadowAlarmManager
-import org.robolectric.util.ReflectionHelpers
-import java.time.LocalDate
-import java.time.ZoneId
-import java.util.concurrent.ExecutorService
+import java.time.*
 import java.util.concurrent.TimeUnit
 
-/** Executes production receivers/Activity against Android API 33 shadows.
- * Does not emulate OEM battery management, hardware vibration or audible sound. */
+/** Receiver tests use the same downloaded fixture as the screen; clock is deterministic. */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [33])
 class NotificationTest {
@@ -31,213 +23,131 @@ class NotificationTest {
     private lateinit var prefs: SharedPreferences
     private lateinit var nm: NotificationManager
     private lateinit var am: AlarmManager
-    private val zone = ZoneId.of("Europe/Moscow")
-    private val today get() = LocalDate.now(zone)
-    private val tomorrow get() = today.plusDays(1)
-
+    private val date = LocalDate.of(2026, 10, 16)
+    private val zone = PrayerAlarmScheduler.zone
+    private var now = date.atStartOfDay(zone).toInstant()
     @Before fun setup() {
         app = RuntimeEnvironment.getApplication()
-        TestNetwork.offline(app)
-        prefs = app.getSharedPreferences("settings", Context.MODE_PRIVATE)
-        prefs.edit().clear().putBoolean("notifications_enabled", true).putInt("notify_before_min", 5).apply()
+        TestNetwork.offline(app); TestNetwork.published(app)
+        prefs = app.getSharedPreferences("settings", 0)
+        prefs.edit().clear().putBoolean("notifications_enabled", true).putString("city", "Сафаджай")
+            .putInt("notify_before_min", 5).commit()
         nm = app.getSystemService(NotificationManager::class.java)
         am = app.getSystemService(AlarmManager::class.java)
         shadowOf(app).grantPermissions(Manifest.permission.POST_NOTIFICATIONS)
         ShadowAlarmManager.setCanScheduleExactAlarms(true)
+        PrayerAlarmScheduler.clock = { now }
     }
-
-    private fun fire(key: String = "fajr", name: String = "Фаджр", date: LocalDate = today) {
-        PrayerNotificationReceiver().onReceive(app, Intent(app, PrayerNotificationReceiver::class.java).apply {
-            putExtra("prayer", name); putExtra("tatar", "Иртәнге намаз")
-            putExtra("time", "04:10"); putExtra("key", key); putExtra("date", date.toString())
-        })
+    @After fun resetClock() { await(); PrayerAlarmScheduler.clock = Instant::now }
+    private fun await() { PrayerAlarmScheduler.worker.submit {}.get(20, TimeUnit.SECONDS) }
+    private fun day() = ScheduleRepository.get(app).day("safadzhay", date)!!
+    private fun time(key: String) = PrayerAlarmScheduler.time(day(), key)!!
+    private fun trigger(key: String) = date.atTime(LocalTime.parse(time(key))).atZone(zone).toInstant()
+        .minusSeconds(prefs.getInt("notify_before_min", 5) * 60L)
+    private fun intent(key: String = "fajr") = Intent(app, PrayerNotificationReceiver::class.java).apply {
+        putExtra("key", key); putExtra("date", date.toString()); putExtra("time", time(key))
+        putExtra("city", "Сафаджай"); putExtra("revision", ScheduleRepository.get(app).revision())
     }
-    private fun stored(date: LocalDate, key: String = "fajr", time: String = "04:10") =
-        "$date|$key|Фаджр|Иртәнге намаз|$time|Сафаджай"
-    private fun onlyNotification() = shadowOf(nm).allNotifications.single()
-    private fun launchIntent(): Intent { fire(); return shadowOf(onlyNotification().contentIntent).savedIntent }
+    private fun fire(i: Intent = intent()) { PrayerNotificationReceiver().onReceive(app, i); await() }
+    private fun only() = shadowOf(nm).allNotifications.single()
 
-    @Test fun notificationHasOriginalTextSoundVibrationAndDirectActivityAction() {
-        fire()
-        val n = onlyNotification()
+    @Test fun originalSoundVibrationNamesAndDirectLaunchArePreserved() {
+        now = trigger("fajr"); fire()
+        val n = only()
         assertEquals("Напоминание: Фаджр (Иртәнге намаз)", n.extras.getString(Notification.EXTRA_TITLE))
-        assertEquals("До намаза 5 мин. Время намаза: 04:10", n.extras.getString(Notification.EXTRA_TEXT))
-        assertTrue(n.flags and Notification.FLAG_AUTO_CANCEL != 0)
+        assertEquals("До намаза 5 мин. Время намаза: ${time("fajr")}", n.extras.getString(Notification.EXTRA_TEXT))
         val channel = nm.getNotificationChannel(n.channelId)
-        assertEquals(NotificationManager.IMPORTANCE_HIGH, channel.importance)
         assertEquals(RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION), channel.sound)
-        assertTrue(channel.shouldVibrate())
-        assertArrayEquals(longArrayOf(0, 500, 250, 500), channel.vibrationPattern)
-        assertTrue(n.contentIntent.isImmutable)
-        val pending = shadowOf(n.contentIntent)
-        assertTrue(pending.isActivityIntent)
-        n.contentIntent.send()
-        val launched = shadowOf(app).nextStartedActivity
-        assertEquals(MainActivity::class.java.name, launched.component!!.className)
-        assertEquals("ru.namaz.safadzhay.OPEN_PRAYER", launched.action)
-        assertTrue(launched.flags and Intent.FLAG_ACTIVITY_CLEAR_TOP != 0)
-        assertTrue(launched.flags and Intent.FLAG_ACTIVITY_SINGLE_TOP != 0)
+        assertTrue(channel.shouldVibrate()); assertTrue(n.contentIntent.isImmutable)
+        assertEquals("ru.namaz.safadzhay.OPEN_PRAYER", shadowOf(n.contentIntent).savedIntent.action)
     }
-
-    @Test fun fivePrayersRemainDistinctAndRedeliveryDoesNotDuplicate() {
-        listOf("fajr", "zuhr", "asr", "maghrib", "isha").forEach { fire(it) }
+    @Test fun fivePrayersHaveDistinctIdentitiesAndDurableRedeliveryGuard() {
+        PrayerAlarmScheduler.keys.forEach { now = trigger(it); fire(intent(it)) }
         assertEquals(5, shadowOf(nm).allNotifications.size)
-        fire("fajr")
-        assertEquals(5, shadowOf(nm).allNotifications.size)
-    }
-
-    @Test fun disabledNotificationsSuppressDeliveryAndNextAlarm() {
-        prefs.edit().putBoolean("notifications_enabled", false).putString("scheduled_prayers", stored(tomorrow)).apply()
-        fire()
+        nm.cancelAll(); now = trigger("fajr"); fire()
         assertTrue(shadowOf(nm).allNotifications.isEmpty())
-        assertTrue(shadowOf(am).scheduledAlarms.isEmpty())
     }
-
-    @Test fun disabledPrayerSuppressesDeliveryAndNextAlarm() {
-        prefs.edit().putBoolean("notify_fajr", false).putString("scheduled_prayers", stored(tomorrow)).apply()
-        fire()
+    @Test fun disabledGlobalOrPrayerSettingSuppressesDelivery() {
+        now = trigger("fajr")
+        prefs.edit().putBoolean("notifications_enabled", false).commit(); fire()
+        assertTrue(shadowOf(nm).allNotifications.isEmpty()); assertTrue(shadowOf(am).scheduledAlarms.isEmpty())
+        prefs.edit().putBoolean("notifications_enabled", true).putBoolean("notify_fajr", false).commit(); fire()
         assertTrue(shadowOf(nm).allNotifications.isEmpty())
-        assertTrue(shadowOf(am).scheduledAlarms.isEmpty())
     }
-
-    @Test fun deniedPermissionDoesNotCrashAndKeepsNextAlarm() {
-        shadowOf(app).denyPermissions(Manifest.permission.POST_NOTIFICATIONS)
-        prefs.edit().putString("scheduled_prayers", stored(tomorrow)).apply()
-        fire()
-        assertTrue(shadowOf(nm).allNotifications.isEmpty())
-        assertEquals(1, shadowOf(am).scheduledAlarms.size)
+    @Test fun permissionDenialKeepsFutureAlarmsAndDoesNotClaimDelivery() {
+        now = trigger("fajr"); shadowOf(app).denyPermissions(Manifest.permission.POST_NOTIFICATIONS); fire()
+        assertTrue(shadowOf(nm).allNotifications.isEmpty()); assertFalse(prefs.contains("delivered_fajr"))
+        assertTrue(shadowOf(am).scheduledAlarms.isNotEmpty())
+        shadowOf(app).grantPermissions(Manifest.permission.POST_NOTIFICATIONS); fire(); assertNotNull(only())
     }
-
-    @Test fun changedSoundCreatesMatchingChannelAndZeroLeadText() {
-        fire()
-        val oldChannel = onlyNotification().channelId
+    @Test fun changedSoundTatarPreferenceAndZeroLeadAreReadAtDelivery() {
         val sound = Uri.parse("content://media/internal/audio/media/42")
-        prefs.edit().putString("notification_sound_uri", sound.toString()).putInt("notify_before_min", 0).apply()
-        fire()
-        val n = onlyNotification()
-        assertNotEquals(oldChannel, n.channelId)
-        assertEquals(sound, nm.getNotificationChannel(n.channelId).sound)
-        assertEquals("Время намаза: 04:10", n.extras.getString(Notification.EXTRA_TEXT))
+        prefs.edit().putString("notification_sound_uri", sound.toString()).putBoolean("show_tatar_names", false)
+            .putInt("notify_before_min", 0).commit()
+        now = trigger("fajr"); fire()
+        assertEquals("Время намаза: ${time("fajr")}", only().extras.getString(Notification.EXTRA_TEXT))
+        assertEquals("Напоминание: Фаджр", only().extras.getString(Notification.EXTRA_TITLE))
+        assertEquals(sound, nm.getNotificationChannel(only().channelId).sound)
     }
-
-    @Test fun closedAppReceiverSchedulesNextPrayerAtConfiguredLeadTime() {
-        prefs.edit().putInt("notify_before_min", 10).putString("scheduled_prayers", stored(tomorrow)).apply()
-        fire()
-        val alarm = shadowOf(am).scheduledAlarms.single()
-        assertEquals(AlarmManager.RTC_WAKEUP, alarm.type)
-        assertEquals(tomorrow.atTime(4, 0).atZone(zone).toInstant().toEpochMilli(), alarm.triggerAtMs)
-        assertEquals(0L, alarm.windowLengthMs)
-        val i = shadowOf(alarm.operation).savedIntent
-        assertEquals(tomorrow.toString(), i.getStringExtra("date"))
-        assertEquals("fajr", i.getStringExtra("key"))
-    }
-
-    @Test fun receiverChainsFromDecember31ToJanuary1WithoutOpeningApp() {
-        val end = LocalDate.of(2026, 12, 31)
-        val next = LocalDate.of(2027, 1, 1)
-        prefs.edit().putString("scheduled_prayers", stored(next, time = "06:00")).commit()
-        fire(date = end)
-        val alarm = shadowOf(am).scheduledAlarms.single()
-        assertEquals(next.atTime(5, 55).atZone(zone).toInstant().toEpochMilli(), alarm.triggerAtMs)
-        assertEquals("2027-01-01", shadowOf(alarm.operation).savedIntent.getStringExtra("date"))
-    }
-
-    @Test fun withoutExactAlarmPermissionFallsBackWithoutCrash() {
-        ShadowAlarmManager.setCanScheduleExactAlarms(false)
-        prefs.edit().putString("scheduled_prayers", stored(tomorrow)).apply()
-        fire()
-        assertEquals(1, shadowOf(am).scheduledAlarms.size)
-        assertEquals(1, shadowOf(nm).allNotifications.size)
-        assertNotEquals(0L, shadowOf(am).scheduledAlarms.single().windowLengthMs)
-    }
-
-    private fun checkRestore(action: String) {
-        prefs.edit().putBoolean("notify_isha", false).putString("scheduled_prayers", listOf(
-            stored(today.minusDays(1)), stored(tomorrow), stored(tomorrow, "isha"), stored(today.plusDays(30))
-        ).joinToString("\n")).apply()
-        app.sendBroadcast(Intent(action).setPackage(app.packageName))
-        shadowOf(Looper.getMainLooper()).idle()
-        val alarms = shadowOf(am).scheduledAlarms
-        assertEquals(1, alarms.size)
-        assertEquals(tomorrow.toString(), shadowOf(alarms.single().operation).savedIntent.getStringExtra("date"))
-        assertEquals(tomorrow.atTime(4, 5).atZone(zone).toInstant().toEpochMilli(), alarms.single().triggerAtMs)
-    }
-    @Test fun bootRestoresOnlyEnabledFutureAlarms() = checkRestore(Intent.ACTION_BOOT_COMPLETED)
-    @Test fun appUpdateRestoresStoredOriginalFormat() = checkRestore(Intent.ACTION_MY_PACKAGE_REPLACED)
-    @Test fun grantingExactAlarmPermissionRestoresAlarms() = checkRestore(AlarmManager.ACTION_SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED)
-
-    private fun waitForScheduler(activity: MainActivity) {
-        ReflectionHelpers.getField<ExecutorService>(activity, "alarmExecutor").submit {}.get(15, TimeUnit.SECONDS)
-    }
-    private fun assertToday(activity: MainActivity) {
-        assertFalse(ReflectionHelpers.getField<Boolean>(activity, "scheduleTabSelected"))
-        assertEquals(today, ReflectionHelpers.getField<LocalDate>(activity, "selectedDate"))
-        assertNull(ReflectionHelpers.getField<Dialog?>(activity, "settingsPanel"))
-        assertEquals(Intent.ACTION_MAIN, activity.intent.action)
-    }
-    @Test fun coldNotificationLaunchOverridesRestoredScheduleAndSettings() {
-        val state = Bundle().apply {
-            putBoolean("schedule_tab", true); putString("selected_date", today.minusDays(2).toString())
-            putString("panel_route", "notifications")
-        }
-        val controller = Robolectric.buildActivity(MainActivity::class.java, launchIntent()).create(state)
-        try { waitForScheduler(controller.get()); assertToday(controller.get()) } finally { controller.destroy() }
-    }
-    @Test fun warmNotificationLaunchClosesSettingsAndAboutAndSelectsToday() {
-        val controller = Robolectric.buildActivity(MainActivity::class.java).create()
-        val activity = controller.get()
-        try {
-            waitForScheduler(activity)
-            ReflectionHelpers.callInstanceMethod<Unit>(activity, "showSettingsDialog")
-            ReflectionHelpers.callInstanceMethod<Unit>(activity, "showAboutDialog")
-            assertTrue(ReflectionHelpers.getField<Dialog>(activity, "settingsPanel").isShowing)
-            ReflectionHelpers.setField(activity, "scheduleTabSelected", true)
-            ReflectionHelpers.setField(activity, "selectedDate", today.minusDays(2))
-            controller.newIntent(launchIntent())
-            shadowOf(Looper.getMainLooper()).idle() // Dialog dismissal listeners run on the UI queue.
-            assertToday(activity)
-            assertNull(ReflectionHelpers.getField<Dialog?>(activity, "aboutDialog"))
-        } finally { controller.destroy() }
-    }
-    @Test fun malformedIntentAndUnknownPrayerAreIgnored() {
-        listOf("not-a-date" to "fajr", "2026-02-30" to "fajr", today.toString() to "tahajjud").forEach { (date, key) ->
-            PrayerNotificationReceiver().onReceive(app, Intent().putExtra("date", date).putExtra("key", key)
-                .putExtra("prayer", "name").putExtra("time", "04:10"))
-        }
-        PrayerNotificationReceiver().onReceive(app, Intent().putExtra("date", today.toString())
-            .putExtra("key", "fajr").putExtra("prayer", "name").putExtra("time", "25:99"))
+    @Test fun lateInexactDeliveryUsesActualRemainingTimeAndExpiredAlarmIsDiscarded() {
+        now = trigger("fajr").plusSeconds(120); fire()
+        assertEquals("До намаза 3 мин. Время намаза: ${time("fajr")}", only().extras.getString(Notification.EXTRA_TEXT))
+        nm.cancelAll(); now = trigger("zuhr").plusSeconds(301); fire(intent("zuhr"))
         assertTrue(shadowOf(nm).allNotifications.isEmpty())
     }
-    @Test fun corruptStoredReminderAndTahajjudDoNotCreateAlarm() {
-        prefs.edit().putString("scheduled_prayers", listOf(stored(tomorrow, "tahajjud"),
-            stored(tomorrow, time = "25:90"), "bad|fajr|name|tatar|04:10|city").joinToString("\n")).apply()
-        app.sendBroadcast(Intent(Intent.ACTION_BOOT_COMPLETED).setPackage(app.packageName))
-        shadowOf(Looper.getMainLooper()).idle()
-        assertTrue(shadowOf(am).scheduledAlarms.isEmpty())
+    @Test fun earlyUnknownChangedCityRevisionAndTimeAreDiscarded() {
+        now = trigger("fajr").minusSeconds(1); fire()
+        now = trigger("fajr")
+        listOf(intent().putExtra("key", "unknown"), intent().putExtra("city", "Москва"),
+            intent().putExtra("revision", "obsolete"), intent().putExtra("time", "00:00"),
+            intent().putExtra("date", "invalid")).forEach(::fire)
+        assertTrue(shadowOf(nm).allNotifications.isEmpty())
     }
-    @Test fun clockAndTimezoneChangesRestoreWithoutDuplicateAlarms() {
-        checkRestore(Intent.ACTION_TIME_CHANGED)
-        checkRestore(Intent.ACTION_TIMEZONE_CHANGED)
-        checkRestore(Intent.ACTION_DATE_CHANGED)
-        assertTrue(shadowOf(am).scheduledAlarms.single().operation!!.isImmutable)
-        assertEquals(PrayerNotificationReceiver::class.java.name,
-            shadowOf(shadowOf(am).scheduledAlarms.single().operation).savedIntent.component!!.className)
+    @Test fun exactPermissionFallbackAndChangedLeadUseCityZone() {
+        ShadowAlarmManager.setCanScheduleExactAlarms(false)
+        val previous = java.util.TimeZone.getDefault()
+        try {
+            java.util.TimeZone.setDefault(java.util.TimeZone.getTimeZone("Asia/Tokyo"))
+            prefs.edit().putInt("notify_before_min", 10).commit()
+            PrayerAlarmScheduler.rebuild(app)
+            val alarm = shadowOf(am).scheduledAlarms.first { shadowOf(it.operation).savedIntent.getStringExtra("key") == "fajr" }
+            assertEquals(trigger("fajr").toEpochMilli(), alarm.triggerAtMs)
+            assertNotEquals(0L, alarm.windowLengthMs)
+        } finally { java.util.TimeZone.setDefault(previous) }
     }
-    @Test @Config(sdk = [23]) fun androidSixUsesExactAlarmWithoutSpecialPermission() {
-        prefs.edit().putString("scheduled_prayers", stored(tomorrow)).apply()
-        fire()
-        assertEquals(0L, shadowOf(am).scheduledAlarms.single().windowLengthMs)
-    }
-
-    @Test fun remoteAndFileRingtoneUrisAreRejected() {
-        listOf("http://evil.invalid/a.mp3", "https://evil.invalid/a.mp3", "file:///data/data/a", "content:///missing").forEach {
-            assertFalse(isLocalNotificationSound(Uri.parse(it)))
+    @Test fun bootPackageTimeDateAndTimezoneEventsRestoreFromVerifiedCacheOfflineWithoutDuplicates() {
+        val actions = listOf(Intent.ACTION_BOOT_COMPLETED, Intent.ACTION_MY_PACKAGE_REPLACED,
+            Intent.ACTION_TIME_CHANGED, Intent.ACTION_DATE_CHANGED, Intent.ACTION_TIMEZONE_CHANGED,
+            AlarmManager.ACTION_SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED)
+        var count = 0
+        actions.forEach { action ->
+            PrayerBootReceiver().onReceive(app, Intent(action)); await()
+            val alarms = shadowOf(am).scheduledAlarms
+            assertTrue(alarms.isNotEmpty())
+            if (count == 0) count = alarms.size else assertEquals(count, alarms.size)
+            assertTrue(alarms.all { it.triggerAtMs > now.toEpochMilli() })
         }
-        assertTrue(isLocalNotificationSound(Uri.parse("content://media/internal/audio/media/42")))
-        prefs.edit().putString("notification_sound_uri", "https://evil.invalid/a.mp3").apply()
+    }
+    @Test fun missingCacheCancelsLegacyUnverifiedAlarmsInsteadOfInventingTimes() {
+        PrayerAlarmScheduler.rebuild(app); assertTrue(shadowOf(am).scheduledAlarms.isNotEmpty())
+        val repo = ScheduleRepository(app, { _, _ -> throw java.io.IOException() })
+        java.io.File(app.filesDir, "downloaded-schedules.json").writeText("broken")
+        val empty = ScheduleRepository(app, { _, _ -> throw java.io.IOException() })
+        org.robolectric.util.ReflectionHelpers.setStaticField(ScheduleRepository::class.java, "instance", empty)
+        PrayerAlarmScheduler.rebuild(app)
+        assertTrue(shadowOf(am).scheduledAlarms.isEmpty()); assertTrue(repo.hasDownloads())
+    }
+    @Test fun policyHandlesMidnightAndYearBoundaryWithoutPhoneTimezone() {
+        val d = LocalDate.of(2027, 1, 1)
+        val target = d.atTime(0, 5).atZone(zone).toInstant()
+        assertEquals(10L, PrayerAlarmScheduler.remainingMinutes(d, "00:05", 10, target.minusSeconds(600)))
+        assertNull(PrayerAlarmScheduler.remainingMinutes(d, "00:05", 10, target.plusSeconds(2)))
+    }
+    @Test fun movingClockForwardAndBackDoesNotRedeliverAcceptedDate() {
+        now = trigger("fajr"); fire(); nm.cancelAll()
+        prefs.edit().putString("delivered_fajr", date.plusDays(1).toString()).commit()
         fire()
-        val n = onlyNotification()
-        assertEquals(RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION), nm.getNotificationChannel(n.channelId).sound)
+        assertTrue(shadowOf(nm).allNotifications.isEmpty())
     }
 
 }

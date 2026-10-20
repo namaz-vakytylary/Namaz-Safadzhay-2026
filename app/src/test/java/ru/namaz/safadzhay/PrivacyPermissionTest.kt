@@ -49,7 +49,7 @@ class PrivacyPermissionTest {
 
     @Test fun offlineColdStartDoesNotRequestLocationOrLoseSettings() {
         val app = RuntimeEnvironment.getApplication()
-        TestNetwork.offline(app)
+        TestNetwork.offline(app); TestNetwork.published(app)
         val prefs = app.getSharedPreferences("settings", Context.MODE_PRIVATE)
         prefs.edit().putBoolean("notifications_enabled", false).putString("city", "Москва")
             .putBoolean("show_tatar_names", false).apply()

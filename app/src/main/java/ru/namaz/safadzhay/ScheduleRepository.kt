@@ -21,39 +21,66 @@ internal class ScheduleRepository(
     private val clock: () -> Long = System::currentTimeMillis,
    private val currentYear: () -> Int = {
     LocalDate.now(java.time.ZoneId.of("Europe/Moscow")).year
-}
+},
+    private val loadImmediately: Boolean = true
 ) {
     private val prefs = context.getSharedPreferences("schedule_updates", Context.MODE_PRIVATE)
     private val file = AtomicFile(File(context.filesDir, "downloaded-schedules.json"))
-    @Volatile private var bundles: Map<Int, Bundle> = readSaved()
+    enum class CacheState { NOT_LOADED, ABSENT, INVALID, VERIFIED }
+    data class CachedCity(val id: String, val from: String, val to: String, val days: Int)
+    data class CachedYear(val year: Int, val version: Int, val cities: List<CachedCity>)
+    data class CacheInfo(val state: CacheState, val years: List<CachedYear>, val lastSuccessMillis: Long)
+    @Volatile private var cacheState = CacheState.NOT_LOADED
+    @Volatile private var bundles: Map<Int, Bundle> = if (loadImmediately) readSaved() else emptyMap()
+    @Volatile var isLoaded: Boolean = loadImmediately
+        private set
 
-    data class Result(val changed: Boolean)
+    init { if (loadImmediately) runCatching { rememberRevisions(bundles) } }
+
+    /** Production calls this only from the common update/alarm workers. */
+    fun loadSavedIfNeeded(): Boolean {
+        if (isLoaded) return false
+        return synchronized(this) {
+            if (isLoaded) false else {
+                bundles = readSaved()
+                runCatching { rememberRevisions(bundles) }
+                isLoaded = true
+                bundles.isNotEmpty()
+            }
+        }
+    }
+
+    private fun rememberRevisions(values: Map<Int, Bundle>) {
+        val edit = prefs.edit()
+        values.values.forEach { bundle ->
+            val key = "accepted_${bundle.entry.year}"
+            if (bundle.entry.version >= prefs.getInt(key, 0)) {
+                edit.putInt(key, bundle.entry.version).putString("${key}_sha", bundle.entry.sha)
+            }
+        }
+        check(edit.commit()) { "Cannot persist revision history" }
+    }
+
+    data class Result(val changed: Boolean, val successful: Boolean = true)
     data class Entry(val json: JSONObject, val year: Int, val version: Int, val path: String,
         val cities: Set<String>, val from: LocalDate, val to: LocalDate, val size: Int, val sha: String)
     data class Bundle(val entry: Entry, val raw: String, val cities: Map<String, List<PrayerDay>>)
 
-    fun merged(cityId: String, builtIn: List<PrayerDay>): List<PrayerDay> {
-        val result = builtIn.associateBy { it.date }.toMutableMap()
-        bundles.toSortedMap().values.forEach { bundle ->
-            bundle.cities[cityId]?.forEach { result[it.date] = it }
-        }
-        return result.values.sortedBy { it.date }
-    }
-    fun dataForYear(
-    cityId: String,
-    year: Int,
-    builtIn: List<PrayerDay>
-): List<PrayerDay> {
-    val downloaded = bundles[year]?.cities?.get(cityId)
+    /** Both UI and reminders use only the same validated downloaded snapshot. */
+    fun days(cityId: String): List<PrayerDay> = bundles.toSortedMap().values
+        .flatMap { it.cities[cityId].orEmpty() }
+    fun dataForYear(cityId: String, year: Int): List<PrayerDay> =
+        bundles[year]?.cities?.get(cityId).orEmpty()
+    fun day(cityId: String, date: LocalDate): PrayerDay? =
+        dataForYear(cityId, date.year).firstOrNull { it.date == date.toString() }
 
-    if (!downloaded.isNullOrEmpty()) {
-        return downloaded.sortedBy { it.date }
-    }
-
-    return builtIn
-        .filter { LocalDate.parse(it.date).year == year }
-        .sortedBy { it.date }
-    }
+    /** Facts from the last verified disk read/download. No network or cache mutation. */
+    @Synchronized fun cacheInfo(): CacheInfo = CacheInfo(cacheState,
+        bundles.toSortedMap().values.map { bundle ->
+            CachedYear(bundle.entry.year, bundle.entry.version, bundle.cities.toSortedMap().map { (id, days) ->
+                CachedCity(id, days.first().date, days.last().date, days.size)
+            })
+        }, lastSuccess())
 
     fun lastSuccess(): Long = prefs.getLong("last_success", 0)
     fun hasDownloads(): Boolean = bundles.isNotEmpty()
@@ -68,21 +95,35 @@ internal class ScheduleRepository(
         runCatching { onProgress(year, progress) }
     }
 
-    if (!online) return Result(false)
+    val loadedSaved = loadSavedIfNeeded()
+    if (!online) return Result(loadedSaved, successful = false)
     val now = clock()
+    val beforeRevision = revision()
 
     return try {
+        report(currentYear(), 0)
         val entries = parseManifest(download(BASE_URL + "manifest.json", MAX_MANIFEST))
+        report(currentYear(), 12)
         val currentYear = currentYear()
         val next = bundles.toMutableMap()
-        val updatedYears = mutableListOf<Int>()
+        val pending = mutableListOf<Entry>()
         var changed = false
 
         entries.forEach { entry ->
             if (entry.year < currentYear) return@forEach
             
             val old = bundles[entry.year]
+            val floor = prefs.getInt("accepted_${entry.year}", 0)
+            require(entry.version >= floor) { "Schedule rollback" }
+            require(entry.version != floor || entry.sha == prefs.getString("accepted_${entry.year}_sha", null)) {
+                "Changed data at accepted revision"
+            }
 
+            if (old != null) {
+                require(entry.cities.containsAll(old.entry.cities) && !entry.from.isAfter(old.entry.from) && !entry.to.isBefore(old.entry.to)) {
+                    "An update must preserve previously downloaded city/date coverage"
+                }
+            }
             if (old != null && entry.version < old.entry.version) return@forEach
 
             if (old != null && entry.version == old.entry.version) {
@@ -92,28 +133,32 @@ internal class ScheduleRepository(
                 return@forEach
             }
 
-                        report(entry.year, 12)
+            pending.add(entry)
+            // Account for all replacements before allocating or downloading payloads.
+            next[entry.year] = Bundle(entry, "", emptyMap())
+            require(next.values.sumOf { it.entry.size.toLong() } <= MAX_TOTAL_PAYLOAD)
+        }
 
-            require(next.values.filter { it.entry.year != entry.year }.sumOf { it.entry.size.toLong() } + entry.size <= MAX_TOTAL_PAYLOAD)
-            val bytes = download(BASE_URL + entry.path, entry.size)
-            report(entry.year, 68)
-
+        // One transaction has one progress range, including all published future years.
+        // Keep at most MAX_TOTAL_PAYLOAD raw bytes until validation finishes.
+        val totalBytes = pending.sumOf { it.size.toLong() }
+        var receivedBytes = 0L
+        val downloaded = pending.map { entry ->
+            val bytes = RemoteTransport.withProgress({ count ->
+                report(entry.year, 12 + ((receivedBytes + count.coerceIn(0, entry.size)) * 56 / totalBytes).toInt())
+            }) { download(BASE_URL + entry.path, entry.size) }
+            require(bytes.size == entry.size)
+            receivedBytes += bytes.size
+            report(entry.year, 12 + (receivedBytes * 56 / totalBytes).toInt())
+            entry to bytes
+        }
+        downloaded.forEachIndexed { index, (entry, bytes) ->
+            if (Thread.currentThread().isInterrupted) throw java.io.InterruptedIOException("Cancelled")
             next[entry.year] = parseBundle(entry, bytes)
-
-            report(entry.year, 88)
-
-            updatedYears.add(entry.year)
+            report(entry.year, 68 + ((index + 1) * 20 / downloaded.size))
             changed = true
         }
-        if (next.containsKey(currentYear)) {
-    val oldYears = next.keys.filter { it < currentYear }
-
-    if (oldYears.isNotEmpty()) {
-        oldYears.forEach { next.remove(it) }
-        changed = true
-    }
-}
-
+        if (Thread.currentThread().isInterrupted) throw java.io.InterruptedIOException("Cancelled")
         if (changed) {
             val snapshot = JSONObject().put("schemaVersion", 1)
             val saved = org.json.JSONArray()
@@ -142,24 +187,23 @@ internal class ScheduleRepository(
             }
 
             bundles = next.toMap()
+            cacheState = CacheState.VERIFIED
+            rememberRevisions(bundles)
 
-            updatedYears.forEach {
-                report(it, 100)
-            }
         }
 
-        prefs.edit()
-            .putLong("last_success", now)
-            .commit()
+        check(prefs.edit().putLong("last_success", now).commit()) { "Cannot persist update timestamp" }
 
-        Result(changed)
+        report(currentYear(), 100)
+        Result(changed || loadedSaved)
 
     } catch (error: Exception) {
         android.util.Log.w(
             "ScheduleRepository",
             "Schedule update rejected: ${error.javaClass.simpleName}"
         )
-        Result(false)
+        // If the payload was committed but metadata failed, still refresh UI/alarms.
+        Result(loadedSaved || revision() != beforeRevision, successful = false)
     }
 }
 
@@ -175,17 +219,25 @@ internal class ScheduleRepository(
             val item = array.getJSONObject(i)
             val entry = parseEntry(item.getJSONObject("entry"))
             require(!result.containsKey(entry.year))
+            val floor = prefs.getInt("accepted_${entry.year}", 0)
+            require(entry.version >= floor)
+            require(entry.version != floor || entry.sha == prefs.getString("accepted_${entry.year}_sha", null))
             totalSize += entry.size
             require(totalSize <= MAX_TOTAL_PAYLOAD)
             result[entry.year] = parseBundle(entry, item.strictString("payload").toByteArray(Charsets.UTF_8))
         }
+        cacheState = if (result.isEmpty()) CacheState.ABSENT else CacheState.VERIFIED
         result
-    } catch (_: Exception) { emptyMap() }
+    } catch (_: Exception) {
+        cacheState = if (file.baseFile.exists() || File(file.baseFile.path + ".bak").exists())
+            CacheState.INVALID else CacheState.ABSENT
+        emptyMap()
+    }
 
     companion object {
         @Volatile private var instance: ScheduleRepository? = null
         fun get(context: Context): ScheduleRepository = instance ?: synchronized(this) {
-            instance ?: ScheduleRepository(context.applicationContext).also { instance = it }
+            instance ?: ScheduleRepository(context.applicationContext, loadImmediately = false).also { instance = it }
         }
         const val BASE_URL = "https://namaz-vakytylary.github.io/namaz-schedules/"
         private const val MAX_MANIFEST = 128 * 1024

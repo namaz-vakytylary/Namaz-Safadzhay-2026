@@ -38,7 +38,7 @@ class TodayLayoutTest {
         for ((mode, dark) in listOf(ThemeMode.LIGHT to true, ThemeMode.DARK to false, ThemeMode.SYSTEM to false, ThemeMode.SYSTEM to true)) {
             RuntimeEnvironment.setQualifiers("w360dp-h800dp-${if (dark) "night" else "notnight"}-mdpi")
             val app = RuntimeEnvironment.getApplication()
-            TestNetwork.offline(app)
+            TestNetwork.offline(app); TestNetwork.published(app); TestNetwork.published(app)
             for (tatar in listOf(false, true)) {
                 app.getSharedPreferences("settings",0).edit().clear().putBoolean("notifications_enabled",false)
                     .putBoolean("show_tatar_names",tatar).commit()
@@ -121,7 +121,7 @@ class TodayLayoutTest {
     @Test fun accessibilityKeepsTextReadableInsteadOfCroppingToForceFit() {
         for (scale in listOf(1.3f,1.5f,2f)) {
             RuntimeEnvironment.setQualifiers("w360dp-h800dp-mdpi")
-            val app=RuntimeEnvironment.getApplication(); TestNetwork.offline(app)
+            val app=RuntimeEnvironment.getApplication(); TestNetwork.offline(app); TestNetwork.published(app); TestNetwork.published(app)
             RuntimeEnvironment.setFontScale(scale)
             app.getSharedPreferences("settings",0).edit().clear().putBoolean("notifications_enabled",false).commit()
             val c=Robolectric.buildActivity(MainActivity::class.java).create().start().resume().visible()

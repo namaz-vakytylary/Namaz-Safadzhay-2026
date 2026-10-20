@@ -14,15 +14,19 @@ s = (SRC / 'MainActivity.kt').read_text()
 fixture_path = ROOT / 'verification/original_timetables.json'
 assert hashlib.sha256(fixture_path.read_bytes()).hexdigest() == (ROOT / 'verification/timetables.sha256').read_text().strip(), 'Original fixture was changed'
 fixture = json.loads(fixture_path.read_text())
+# Preserve the historical oracle, but never package prayer tables in the app.
 for name, original in fixture.items():
-    block = s.split('private val '+name+' = listOf(', 1)[1].split('\n    )', 1)[0]
-    actual = re.findall(r'PrayerDay\("([^\"]+)", "([^\"]+)", "([^\"]+)", "([^\"]+)", "([^\"]+)", "([^\"]+)"\)', block)
-    assert [list(x) for x in actual] == original, name + ': original prayer times changed'
-    assert len(actual) == 153 and len({x[0] for x in actual}) == 153
-    for i, row in enumerate(actual):
+    assert len(original) == 153 and len({row[0] for row in original}) == 153
+    for i, row in enumerate(original):
         assert dt.date.fromisoformat(row[0]) == dt.date(2026, 8, 1) + dt.timedelta(days=i)
         for value in row[1:]: dt.time.fromisoformat(value)
-    print('PASS exact original timetable:', name, '153 days / 765 times')
+for source_set in ['main', 'debug', 'release']:
+    for path in (ROOT / 'app/src' / source_set).rglob('*'):
+        if path.suffix in {'.kt', '.java', '.json', '.csv', '.xml'}:
+            content = path.read_text()
+            assert not re.search(r'PrayerDay\("\d{4}-\d{2}-\d{2}"', content), str(path)
+            assert 'safadzhayData = listOf' not in content and 'moscowData = listOf' not in content, str(path)
+print('PASS unchanged historical oracle; no embedded prayer schedules in runtime source sets')
 manifest = ET.parse(ROOT / 'app/src/main/AndroidManifest.xml').getroot()
 ns = '{http://schemas.android.com/apk/res/android}'
 permissions = {x.get(ns+'name') for x in manifest.findall('uses-permission')}

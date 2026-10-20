@@ -2,9 +2,9 @@ name: Repository checks
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, candidate/stable-1.4]
   push:
-    branches: [main]
+    branches: [main, candidate/stable-1.4]
   workflow_dispatch:
 
 permissions:
@@ -34,9 +34,9 @@ jobs:
           python3 scripts/preflight.py
           python3 -m unittest discover -s scripts -p 'test_*.py'
       - name: Unit tests
-        run: bash ./gradlew --no-daemon :app:testReleaseUnitTest
+        run: bash ./gradlew --no-daemon :app:testDebugUnitTest :app:testReleaseUnitTest
       - name: Android lint
-        run: bash ./gradlew --no-daemon :app:lintRelease
+        run: bash ./gradlew --no-daemon :app:lintDebug :app:lintRelease
       - name: Audit merged release manifest
         run: python3 scripts/audit-merged-manifest.py
 
@@ -46,8 +46,8 @@ jobs:
         with:
           name: repository-checks-${{ github.run_id }}
           path: |
-            app/build/reports/tests/testReleaseUnitTest
-            app/build/test-results/testReleaseUnitTest
-            app/build/reports/lint-results-release.html
+            app/build/reports/tests/
+            app/build/test-results/
+            app/build/reports/lint-results-*.html
           if-no-files-found: ignore
           retention-days: 14

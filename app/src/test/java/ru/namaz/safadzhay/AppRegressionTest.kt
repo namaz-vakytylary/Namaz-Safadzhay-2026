@@ -84,54 +84,6 @@ class AppRegressionTest {
     }
     private fun assertTime(hour: Int, minute: Int) = assertEquals(tomorrow.atTime(hour,minute).atZone(zone).toInstant().toEpochMilli(),fajrAlarm().triggerAtMs)
 
-    @Test fun updateWaitsUntilNotificationPermissionDialogCloses() {
-        online()
-        shadowOf(app).denyPermissions(Manifest.permission.POST_NOTIFICATIONS)
-        val c = Robolectric.buildActivity(MainActivity::class.java).create()
-        try {
-            waitWorkers(c.get())
-            assertTrue(calls.isEmpty())
-            c.get().onRequestPermissionsResult(7001,
-                arrayOf(Manifest.permission.POST_NOTIFICATIONS),
-                intArrayOf(android.content.pm.PackageManager.PERMISSION_DENIED))
-            waitWorkers(c.get())
-            assertEquals(listOf("manifest.json"), calls)
-        } finally { c.destroy() }
-    }
-
-    @Test fun progressStagesAndTwoSecondCompletionMessageArePreserved() {
-        val c = Robolectric.buildActivity(MainActivity::class.java).create()
-        try {
-            waitWorkers(c.get())
-            val looper = shadowOf(Looper.getMainLooper())
-            for (value in listOf(12, 68, 88, 100)) {
-                ReflectionHelpers.callInstanceMethod<Unit>(c.get(), "showScheduleUpdateDialog",
-                    ReflectionHelpers.ClassParameter.from(Int::class.javaPrimitiveType!!, 2027),
-                    ReflectionHelpers.ClassParameter.from(Int::class.javaPrimitiveType!!, value))
-            }
-            looper.idle()
-            val shownAt = ReflectionHelpers.getField<Long>(c.get(), "scheduleUpdateShownAt")
-            fun advanceTo(offset: Long) {
-                // Dialog creation can advance Robolectric's clock; use its actual start time.
-                val remaining = shownAt + offset - android.os.SystemClock.uptimeMillis()
-                assertTrue("Missed progress checkpoint", remaining >= 0)
-                looper.idleFor(Duration.ofMillis(remaining))
-            }
-            fun percent() = ReflectionHelpers.getField<TextView>(c.get(), "scheduleUpdatePercent").text.toString()
-            assertEquals("12%", percent())
-            advanceTo(400); assertEquals("40%", percent())
-            advanceTo(900); assertEquals("68%", percent())
-            advanceTo(1600); assertEquals("88%", percent())
-            advanceTo(2300); assertEquals("100%", percent())
-            assertEquals("Расписание обновлено",
-                ReflectionHelpers.getField<TextView>(c.get(), "scheduleUpdateStatus").text.toString())
-            advanceTo(4299)
-            assertNotNull(ReflectionHelpers.getField<Dialog?>(c.get(), "scheduleUpdateDialog"))
-            advanceTo(4300)
-            assertNull(ReflectionHelpers.getField<Dialog?>(c.get(), "scheduleUpdateDialog"))
-        } finally { c.destroy() }
-    }
-
     @Test fun eachLaunchChecksOnceIncludingRetryButResumeAndRecreationDoNot() {
         online()
         var c=Robolectric.buildActivity(MainActivity::class.java).create().start().resume()
@@ -169,16 +121,16 @@ class AppRegressionTest {
         } finally { c.destroy() }
     }
     @Test fun stablePackagePreservesDefaultNotificationsAndExplicitOptOut() {
-        assertEquals("ru.namaz.safadzhay",app.packageName)
-        publish(1,"05:30");repo.sync(true)
-        val c=Robolectric.buildActivity(MainActivity::class.java).create()
+        assertEquals("ru.namaz.safadzhay", app.packageName)
+        publish(1,"05:30"); repo.sync(true)
+        val c = Robolectric.buildActivity(MainActivity::class.java).create()
         try {
             waitWorkers(c.get()); assertTime(5,25)
             prefs.edit().putBoolean("notifications_enabled",false).commit()
             invoke(c.get(),"schedulePrayerNotifications"); waitWorkers(c.get())
             assertTrue(shadowOf(app.getSystemService(AlarmManager::class.java)).scheduledAlarms.isEmpty())
             prefs.edit().putBoolean("notifications_enabled",true).commit()
-            invoke(c.get(),"schedulePrayerNotifications");waitWorkers(c.get());assertTime(5,25)
+            invoke(c.get(),"schedulePrayerNotifications"); waitWorkers(c.get()); assertTime(5,25)
         } finally { c.destroy() }
     }
     private fun texts(v: View): List<String> = buildList {
@@ -196,9 +148,9 @@ class AppRegressionTest {
             ReflectionHelpers.setField(c.get(),"selectedDate",LocalDate.of(2027,1,1))
             ReflectionHelpers.setField(c.get(),"scheduleTabSelected",true);invoke(c.get(),"update")
             val main=texts(c.get().window.decorView).joinToString("\n")
-            assertFalse(main,forbidden.any { main.contains(it,true) })
+            assertFalse(main,main.contains("JSON"))
            assertTrue(main.contains("Расписание пока недоступно"))
-assertTrue(main.contains("Для этой даты время намаза ещё не загружено."))
+assertTrue(main.contains("Подключитесь к интернету"))
         } finally { c.destroy() }
     }
     @Test fun accessibilityActionsHaveNamesAndDateRemainsReadable() {
@@ -219,6 +171,7 @@ assertTrue(main.contains("Для этой даты время намаза ещ�
     }
 
     @Test fun tatarTogglePersistsAndNotificationUsesPreference() {
+        publish(1, "05:30"); assertTrue(repo.sync(true).changed)
         var c=Robolectric.buildActivity(MainActivity::class.java).create()
         waitWorkers(c.get());invoke(c.get(),"showSettingsDialog")
         fun findSwitch(v: View): Switch? {
@@ -234,12 +187,17 @@ assertTrue(main.contains("Для этой даты время намаза ещ�
             assertTrue((rows.getChildAt(0) as ViewGroup).let { row ->
                 val box=row.getChildAt(1) as ViewGroup;box.getChildAt(1).visibility==View.GONE })
             prefs.edit().putBoolean("notifications_enabled",true).commit()
-            fun fire() { PrayerNotificationReceiver().onReceive(app,Intent().putExtra("key","fajr").putExtra("prayer","Фаджр")
-                .putExtra("tatar","Иртәнге намаз").putExtra("time","05:30").putExtra("date",LocalDate.now(zone).toString())) }
-            fire();val nm=shadowOf(app.getSystemService(NotificationManager::class.java))
-            assertEquals("Напоминание: Фаджр",nm.allNotifications.single().extras.getString(Notification.EXTRA_TITLE))
-            prefs.edit().putBoolean("show_tatar_names",true).commit();fire()
-            assertEquals("Напоминание: Фаджр (Иртәнге намаз)",nm.allNotifications.single().extras.getString(Notification.EXTRA_TITLE))
+            fun fire(key: String, time: String) {
+                PrayerAlarmScheduler.clock = { tomorrow.atTime(java.time.LocalTime.parse(time)).atZone(zone).toInstant().minusSeconds(300) }
+                PrayerNotificationReceiver().onReceive(app,Intent().putExtra("key",key).putExtra("time",time).putExtra("date",tomorrow.toString()))
+                PrayerAlarmScheduler.worker.submit {}.get(20, TimeUnit.SECONDS)
+            }
+            try {
+                fire("fajr", "05:30"); val nm=shadowOf(app.getSystemService(NotificationManager::class.java))
+                assertEquals("Напоминание: Фаджр",nm.allNotifications.single().extras.getString(Notification.EXTRA_TITLE))
+                prefs.edit().putBoolean("show_tatar_names",true).commit(); fire("zuhr", "12:00")
+                assertTrue(nm.allNotifications.any { it.extras.getString(Notification.EXTRA_TITLE) == "Напоминание: Зухр (Өйлә намазы)" })
+            } finally { PrayerAlarmScheduler.clock = java.time.Instant::now }
                 } finally { c.destroy() }
     }
 

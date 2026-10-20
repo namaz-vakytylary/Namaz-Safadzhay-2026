@@ -2,41 +2,9 @@ package ru.namaz.safadzhay
 
 import org.junit.Assert.*
 import org.junit.Test
-import org.junit.Before
-import org.junit.After
 import java.time.LocalDate
 
 class CalendarTest {
-    @Before fun downloadedEvents() {
-        HolidayCalendar.setRemote(2026, listOf(
-            Holiday(LocalDate.of(2026, 2, 19), "Начало Рамадана", "", "Unit test"),
-            Holiday(LocalDate.of(2026, 3, 20), "Ураза-байрам", "", "Unit test")
-        ))
-    }
-    @After fun clearEvents() = HolidayCalendar.setRemote(2026, null)
-
-    @Test fun august10IsAnOrdinaryDayWithoutRamadanOverride() {
-        HolidayCalendar.setRemote(2026, null)
-        assertNull(HolidayCalendar.ramadanDay(LocalDate.of(2026, 8, 10)))
-        assertTrue(HolidayCalendar.labels(LocalDate.of(2026, 8, 10)).isEmpty())
-    }
-
-    @Test fun remoteRamadanStartsOnFirstDayAndEndsBeforeEid() {
-        assertNull(HolidayCalendar.ramadanDay(LocalDate.of(2026, 2, 18)))
-        assertEquals(1, HolidayCalendar.ramadanDay(LocalDate.of(2026, 2, 19)))
-        assertEquals(2, HolidayCalendar.ramadanDay(LocalDate.of(2026, 2, 20)))
-        assertEquals(29, HolidayCalendar.ramadanDay(LocalDate.of(2026, 3, 19)))
-        assertNull(HolidayCalendar.ramadanDay(LocalDate.of(2026, 3, 20)))
-    }
-
-    @Test fun holidayRemainsInCalendarWhenFridayBannerEnds() {
-        val date = LocalDate.of(2026, 3, 20)
-        val asr = java.time.LocalTime.of(15, 30)
-        assertTrue(HolidayCalendar.bannerLabels(date, date.atTime(asr), asr).isEmpty())
-        assertEquals("Ураза-байрам", HolidayCalendar.holidayFor(date)?.title)
-        assertEquals(listOf("Джума-намаз", "Ураза-байрам"), HolidayCalendar.labels(date))
-    }
-
     @Test fun fridayBannerStartsAtMidnightAndEndsExactlyAtSelectedAsr() {
         val date = LocalDate.of(2026, 9, 18)
         val asr = java.time.LocalTime.of(15, 30)
@@ -91,7 +59,10 @@ class CalendarTest {
     )
 }
     @Test fun fridayAndHolidayAreBothPresentInOneDay() {
-        assertEquals(listOf("Джума-намаз", "Ураза-байрам"), HolidayCalendar.labels(LocalDate.of(2026, 3, 20)))
+        val date = LocalDate.of(2026, 3, 20)
+        HolidayCalendar.setRemote(2026, listOf(Holiday(date, "Ураза-байрам", "", "test")))
+        try { assertEquals(listOf("Джума-намаз", "Ураза-байрам"), HolidayCalendar.labels(date)) }
+        finally { HolidayCalendar.setRemote(2026, null) }
     }
     @Test fun ordinaryDayHasNoBannerContent() {
         assertTrue(HolidayCalendar.labels(LocalDate.of(2026, 9, 8)).isEmpty())
