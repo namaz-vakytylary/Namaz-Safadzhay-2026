@@ -61,12 +61,14 @@ class UpdateAndAccessibilityTest {
             val parent = FrameLayout(c.get())
             val button = View(c.get()).apply { setOnClickListener {} }
             parent.addView(button, FrameLayout.LayoutParams(32, 32).apply { leftMargin = 200 })
-            c.get().setContentView(parent)
+            c.get().setContentView(parent, android.view.ViewGroup.LayoutParams(120, 60))
             parent.measure(View.MeasureSpec.makeMeasureSpec(120, View.MeasureSpec.EXACTLY),
                 View.MeasureSpec.makeMeasureSpec(60, View.MeasureSpec.EXACTLY))
             parent.layout(0, 0, 120, 60)
             TouchTargets.expand(button)
             shadowOf(Looper.getMainLooper()).idle()
+            assertEquals(120, parent.width)
+            assertTrue(button.left > parent.width)
             assertNull(parent.touchDelegate)
         } finally { c.pause().stop().destroy() }
     }
