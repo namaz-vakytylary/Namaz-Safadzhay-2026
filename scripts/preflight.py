@@ -77,4 +77,4 @@ assert "if: github.ref == 'refs/heads/main'" in workflow
 assert hashlib.sha256((ROOT/'gradle/wrapper/gradle-wrapper.jar').read_bytes()).hexdigest() == '2db75c40782f5e8ba1fc278a5574bab070adccb2d21ca5a6e5ed840888448046'
 assert 'distributionSha256Sum=31c55713e40233a8303827ceb42ca48a47267a0ad4bab9177123121e71524c26' in (ROOT/'gradle/wrapper/gradle-wrapper.properties').read_text()
 subprocess.run(['bash','-n',str(ROOT/'gradlew')],check=True)
-print('PASS stable 1.3/33 identity, notification defaults, real Ramadan dates, original Ramadan images, data, permissions, XML, shell syntax and manual CI gates')
+print('PASS stable 1.3/33 identity, notification defaults, real Ramadan dates, approved Ramadan images, data, permissions, XML, shell syntax and manual CI gates')

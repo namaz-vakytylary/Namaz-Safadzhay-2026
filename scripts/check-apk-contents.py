@@ -4,6 +4,7 @@ import json
 import re
 import sys
 import zipfile
+from apk_policy import check_runtime_entry
 
 badging = Path('apk-badging.txt').read_text()
 package, code, version = re.search(
@@ -25,6 +26,7 @@ with zipfile.ZipFile(sys.argv[1]) as apk:
         # Certificates in META-INF are public. Private key markers must never be present.
         if not item.is_dir():
             data = apk.read(item)
+            check_runtime_entry(item.filename, data)
             for marker in ['RamadanUiPreview', 'UiPreviewScene', 'TEST_RAMADAN',
                            'debug_ramadan_ui_scene', 'Тест UI', 'Проверка Рамадана']:
                 assert marker.encode('utf-8') not in data, 'Packaged manual Ramadan preview'

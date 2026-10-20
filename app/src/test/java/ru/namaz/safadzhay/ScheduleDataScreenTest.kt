@@ -33,7 +33,7 @@ class ScheduleDataScreenTest {
         shadowOf(Looper.getMainLooper()).idle()
     }
     @Test fun ordinarySettingsExposeRealCacheFactsInBothThemesWithoutTestToolsOrRewritingCache() {
-        val app = RuntimeEnvironment.getApplication<Application>()
+        val app = RuntimeEnvironment.getApplication()
         TestNetwork.offline(app); TestNetwork.published(app)
         val cache = File(app.filesDir, "downloaded-schedules.json")
         val before = cache.readBytes()

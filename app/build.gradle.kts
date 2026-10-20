@@ -1,3 +1,6 @@
+import java.security.KeyStore
+import java.security.MessageDigest
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -35,6 +38,9 @@ android {
     testOptions {
         unitTests.isIncludeAndroidResources = true
         unitTests.all {
+            javaLauncher.set(javaToolchains.launcherFor {
+                languageVersion.set(JavaLanguageVersion.of(21))
+            })
             it.jvmArgs("--add-opens=java.base/java.lang=ALL-UNNAMED", "--add-opens=java.base/java.util=ALL-UNNAMED", "--add-opens=java.base/java.io=ALL-UNNAMED", "--add-opens=java.base/jdk.internal.access=ALL-UNNAMED")
             // Forward optional build-host proxy settings to Robolectric's SDK downloader.
             listOf("http.proxyHost", "http.proxyPort", "https.proxyHost", "https.proxyPort").forEach { key ->
@@ -57,7 +63,7 @@ kotlin {
 
 dependencies {
     testImplementation("junit:junit:4.13.2")
-    testImplementation("org.robolectric:robolectric:4.16")
+    testImplementation("org.robolectric:robolectric:4.17")
     implementation("androidx.core:core-ktx:1.15.0")
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.2")
 }
@@ -71,6 +77,17 @@ val verifyReleaseSigning by tasks.registering {
         if (missing.isNotEmpty()) {
             throw GradleException("Release signing is not configured; missing: " + missing.joinToString())
         }
+        val keystore = KeyStore.getInstance(
+            file(providers.environmentVariable("NAMAZ_KEYSTORE_PATH").get()),
+            providers.environmentVariable("NAMAZ_STORE_PASSWORD").get().toCharArray())
+        val certificate = keystore.getCertificate(providers.environmentVariable("NAMAZ_KEY_ALIAS").get())
+            ?: throw GradleException("Signing certificate is missing")
+        val fingerprint = MessageDigest.getInstance("SHA-256").digest(certificate.encoded)
+            .joinToString("") { "%02x".format(it.toInt() and 255) }
+        val expected = rootProject.file("verification/release-certificate.sha256").readText().trim()
+        check(fingerprint == expected) { "Unexpected stable signing certificate" }
+        check(android.defaultConfig.applicationId == "ru.namaz.safadzhay") { "Unexpected production application ID" }
+
     }
 }
 // AGP omits validateSigningRelease entirely if the signing inputs are absent.
@@ -78,3 +95,9 @@ val verifyReleaseSigning by tasks.registering {
 tasks.matching { it.name in setOf("validateSigningRelease", "packageRelease") }.configureEach {
     dependsOn(verifyReleaseSigning)
 }
+
+// Direct release packaging must enforce the same quality checks as CI.
+val verifyReleaseQuality by tasks.registering {
+    dependsOn("testDebugUnitTest", "testReleaseUnitTest", "lintDebug", "lintRelease")
+}
+tasks.matching { it.name == "packageRelease" }.configureEach { dependsOn(verifyReleaseQuality) }

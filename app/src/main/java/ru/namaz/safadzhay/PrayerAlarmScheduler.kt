@@ -28,7 +28,6 @@ internal object PrayerAlarmScheduler {
 
     @Synchronized fun rebuild(context: Context) {
         val app = context.applicationContext
-        try {
         val prefs = app.getSharedPreferences("settings", Context.MODE_PRIVATE)
         val city = prefs.getString("city", "Сафаджай") ?: "Сафаджай"
         val cityId = if (city == "Москва") "moscow" else "safadzhay"
@@ -68,19 +67,14 @@ internal object PrayerAlarmScheduler {
             }
             val pending = PendingIntent.getBroadcast(app, requestCode(date, key), intent,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-            var exact = false
             try {
                 if (Build.VERSION.SDK_INT < 31 || manager.canScheduleExactAlarms()) {
                     manager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, trigger.toEpochMilli(), pending)
-                    exact = true
                 } else manager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, trigger.toEpochMilli(), pending)
             } catch (_: SecurityException) {
                 // Exact access can be revoked between the check and the binder call.
                 manager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, trigger.toEpochMilli(), pending)
             }
-        }
-        } catch (error: Exception) {
-            throw error
         }
     }
 
