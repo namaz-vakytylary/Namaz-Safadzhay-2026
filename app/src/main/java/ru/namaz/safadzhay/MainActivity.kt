@@ -1931,6 +1931,7 @@ cell.addView(
                     .toFloat()
 
             countdown.text = String.format(
+                java.util.Locale.getDefault(),
                 "%02d:%02d:%02d",
                 left / 3600,
                 (left % 3600) / 60,
@@ -2030,6 +2031,7 @@ cell.addView(
                         .toFloat()
 
                 countdown.text = String.format(
+                    java.util.Locale.getDefault(),
                     "%02d:%02d:%02d",
                     left / 3600,
                     (left % 3600) / 60,

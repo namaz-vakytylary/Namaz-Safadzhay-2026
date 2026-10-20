@@ -15,7 +15,8 @@ internal object TouchTargets {
             val wanted = (48 * view.resources.displayMetrics.density).toInt()
             val dx = ((wanted - bounds.width()) / 2).coerceAtLeast(0)
             val dy = ((wanted - bounds.height()) / 2).coerceAtLeast(0)
-            val expanded = Rect(bounds).apply { inset(-dx, -dy); intersect(0, 0, parent.width, parent.height) }
+            val expanded = Rect(bounds).apply { inset(-dx, -dy) }
+            if (!expanded.intersect(0, 0, parent.width, parent.height)) return@post
             for (i in 0 until parent.childCount) {
                 val other = parent.getChildAt(i)
                 if (other === view || !other.isClickable || other.visibility != View.VISIBLE) continue
