@@ -97,6 +97,17 @@ class TodayLayoutTest {
         val footer: TextView=field(a,"countdownStart")
         val image: ImageView=field(a,"ramadanCountdownBackground")
         image.visibility=if(state in listOf("suhoor","iftar","after")) View.VISIBLE else View.GONE
+        // Reproduce the production overlay styling as well as its geometry.
+        // Otherwise light-theme screenshots incorrectly retain ordinary dark text.
+        val colors: AppColors = field(a,"palette")
+        val artwork = image.visibility == View.VISIBLE
+        title.setTextColor(if (artwork) colors.onRamadanImage else colors.onBackground)
+        title.setShadowLayer(if (artwork) 4f else 0f, 0f, if (artwork) 2f else 0f,
+            if (artwork) android.graphics.Color.BLACK else android.graphics.Color.TRANSPARENT)
+        timer.setTextColor(if (artwork) colors.onRamadanImage else colors.primary)
+        footer.setTextColor(if (artwork) colors.onRamadanImage else colors.onBackground)
+        footer.setShadowLayer(if (artwork) 3f else 0f, 0f, if (artwork) 1f else 0f,
+            if (artwork) android.graphics.Color.BLACK else android.graphics.Color.TRANSPARENT)
         title.text=when(state) {
             "suhoor"->"До окончания сухура"; "iftar"->"До ифтара"; "after"->"Время ифтара наступило"
             else-> {
@@ -115,7 +126,10 @@ class TodayLayoutTest {
             image.setImageResource(when(state) { "suhoor"->R.drawable.ramadan_suhoor; "iftar"->R.drawable.ramadan_iftar; else->R.drawable.ramadan_iftar_started })
             image.scaleType=if(state=="after") ImageView.ScaleType.CENTER_CROP else ImageView.ScaleType.FIT_CENTER
         }
-        field<CardProgressIndicator>(a,"progress").goldMode=state=="after"
+        field<CardProgressIndicator>(a,"progress").apply {
+            goldMode=state=="after"
+            progress=if(state=="after") 1f else 0.5f
+        }
     }
 
     @Test fun accessibilityKeepsTextReadableInsteadOfCroppingToForceFit() {
