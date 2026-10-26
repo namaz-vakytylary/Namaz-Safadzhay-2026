@@ -25,13 +25,13 @@ The artificial Ramadan preview, diagnostic tools and app-update implementation r
 - Main's privacy, remote Ramadan, security tests and guarded stable-signing workflow are retained.
 - Additional tests cover API 23/30 exact alarms and legacy defaults, modern exact-access fallback, production data-card content and API 36/37 compatibility.
 - Robolectric 4.17 supports API 23–37; tests use Java 21, while Android source/bytecode remains Java/Kotlin target 17. These are framework-model tests, not physical-device delivery proof.
-- `compileSdk`/`targetSdk` remain 35 pending review of the newer target behavior and toolchain migration. Tests on Android 16/17 do not by themselves raise the app's target SDK.
+- After owner approval to continue, `compileSdk`/`targetSdk` are 37, AGP is 9.1.1 and Gradle is 9.3.1; Kotlin uses AGP's built-in support. Android source/bytecode remains target 17 and minSdk remains 23. See `android-17-candidate.md` for the migration and device test scope.
 - Production APK 1.3→candidate installation migration, real Doze/OEM delivery, TalkBack and actual-device Android 16/17 tests still require an explicitly authorized candidate APK and available devices.
 - No release APK, PR, merge or publication is part of this preparation.
 
 ## Next release decisions
 
-Choose the exact target SDK/toolchain after compatibility review, confirm release version metadata, authorize a candidate APK for migration tests, review the final diff and verification results, then separately authorize any PR/merge/publication.
+Complete target-37 compatibility checks, confirm release version metadata, authorize a candidate APK for migration tests, review the final diff and verification results, then separately authorize any PR/merge/publication.
 
 Official compatibility references:
 

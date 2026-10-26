@@ -8,6 +8,10 @@ path = ROOT / 'app/build/intermediates/merged_manifests/release/processReleaseMa
 root = ET.parse(path).getroot()
 A = '{http://schemas.android.com/apk/res/android}'
 assert root.get('package') == 'ru.namaz.safadzhay'
+sdk = root.find('uses-sdk')
+assert sdk is not None
+assert sdk.get(A + 'minSdkVersion') == '23'
+assert sdk.get(A + 'targetSdkVersion') == '37'
 app = root.find('application')
 assert app.get(A + 'debuggable', 'false') == 'false'
 assert app.get(A + 'testOnly', 'false') == 'false'

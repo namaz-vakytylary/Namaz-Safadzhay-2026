@@ -2,14 +2,14 @@
 set -euo pipefail
 APK="${1:-app/build/outputs/apk/release/app-release.apk}"
 : "${ANDROID_HOME:?Set ANDROID_HOME to the Android SDK directory}"
-TOOLS="$ANDROID_HOME/build-tools/35.0.0"
+TOOLS="$ANDROID_HOME/build-tools/36.0.0"
 "$TOOLS/aapt" dump badging "$APK" > apk-badging.txt
 grep -q "package: name='ru.namaz.safadzhay'" apk-badging.txt
 grep -Fq "versionName='1.3'" apk-badging.txt
 grep -Fq "versionCode='33'" apk-badging.txt
 grep -Fxq "application-label:'Намаз Вакытлары'" apk-badging.txt
 grep -Fxq "sdkVersion:'23'" apk-badging.txt
-grep -Fxq "targetSdkVersion:'35'" apk-badging.txt
+grep -Fxq "targetSdkVersion:'37'" apk-badging.txt
 grep -q "launchable-activity: name='ru.namaz.safadzhay.MainActivity'" apk-badging.txt
 grep -q "uses-permission: name='android.permission.INTERNET'" apk-badging.txt
 grep -q "uses-permission: name='android.permission.ACCESS_NETWORK_STATE'" apk-badging.txt

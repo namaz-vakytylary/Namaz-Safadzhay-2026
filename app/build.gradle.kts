@@ -3,17 +3,16 @@ import java.security.MessageDigest
 
 plugins {
     id("com.android.application")
-    id("org.jetbrains.kotlin.android")
 }
 
 android {
     namespace = "ru.namaz.safadzhay"
-    compileSdk = 35
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "ru.namaz.safadzhay"
         minSdk = 23
-        targetSdk = 35
+        targetSdk = 37
         versionCode = 33
         versionName = "1.3"
     }
@@ -55,10 +54,6 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
         isCoreLibraryDesugaringEnabled = true
     }
-}
-
-kotlin {
-    jvmToolchain(17)
 }
 
 dependencies {

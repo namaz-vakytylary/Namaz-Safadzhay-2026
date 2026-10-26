@@ -73,8 +73,15 @@ for marker in ['python3 scripts/preflight.py',':app:testReleaseUnitTest',':app:l
 assert workflow.index('python3 scripts/preflight.py') < workflow.index(':app:testReleaseUnitTest') < workflow.index(':app:lintRelease') < workflow.index(':app:assembleRelease')
 assert '  workflow_dispatch:' in workflow and not re.search(r'^\s*(push|pull_request|schedule):', workflow, re.M)
 assert "if: github.ref == 'refs/heads/main'" in workflow
-# Published Gradle 8.10.2 checksums: services.gradle.org/distributions/.
+# The existing verified 8.10.2 bootstrap JAR can launch Gradle 9.3.1.
+# Pin the new distribution separately (https://gradle.org/release-checksums/).
 assert hashlib.sha256((ROOT/'gradle/wrapper/gradle-wrapper.jar').read_bytes()).hexdigest() == '2db75c40782f5e8ba1fc278a5574bab070adccb2d21ca5a6e5ed840888448046'
-assert 'distributionSha256Sum=31c55713e40233a8303827ceb42ca48a47267a0ad4bab9177123121e71524c26' in (ROOT/'gradle/wrapper/gradle-wrapper.properties').read_text()
+wrapper = (ROOT/'gradle/wrapper/gradle-wrapper.properties').read_text()
+assert 'distributionUrl=https\\://services.gradle.org/distributions/gradle-9.3.1-bin.zip' in wrapper
+assert 'distributionSha256Sum=b266d5ff6b90eada6dc3b20cb090e3731302e553a27c5d3e4df1f0d76beaff06' in wrapper
+for required in ['minSdk = 23', 'compileSdk = 37', 'targetSdk = 37']:
+    assert required in build, required
+assert 'org.jetbrains.kotlin.android' not in build
+assert 'id("com.android.application") version "9.1.1"' in (ROOT/'build.gradle.kts').read_text()
 subprocess.run(['bash','-n',str(ROOT/'gradlew')],check=True)
 print('PASS stable 1.3/33 identity, notification defaults, real Ramadan dates, approved Ramadan images, data, permissions, XML, shell syntax and manual CI gates')

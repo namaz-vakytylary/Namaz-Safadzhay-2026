@@ -999,8 +999,10 @@ headerBox.addView(
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(18), dp(10), dp(18), dp(24)) }
         scroll.addView(root, ViewGroup.LayoutParams(-1, -1))
         ViewCompat.setOnApplyWindowInsetsListener(scroll) { _, insets ->
-            val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
-            root.setPadding(dp(18), bars.top + dp(10), dp(18), bars.bottom + dp(24)); insets
+            val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout())
+            val gestures = insets.getInsets(WindowInsetsCompat.Type.mandatorySystemGestures())
+            root.setPadding(bars.left + dp(18), bars.top + dp(10), bars.right + dp(18),
+                maxOf(bars.bottom, gestures.bottom) + dp(24)); insets
         }
         val bar = android.widget.FrameLayout(this)
         val back = text("‹", 38f, palette.onSurface, false).apply { setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, 38f); contentDescription = "Назад"; isFocusable = true; gravity = Gravity.CENTER; setOnClickListener { onBack() } }
