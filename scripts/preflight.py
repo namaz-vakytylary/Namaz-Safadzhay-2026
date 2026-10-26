@@ -7,6 +7,7 @@ import json
 import re
 import subprocess
 import xml.etree.ElementTree as ET
+from candidate_apk import request
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / 'app/src/main/java/ru/namaz/safadzhay'
@@ -39,7 +40,9 @@ app = manifest.find('application')
 assert app.get(ns+'allowBackup') == 'false'
 assert app.get(ns+'usesCleartextTraffic') == 'false'
 build = (ROOT / 'app/build.gradle.kts').read_text()
-for required in ['namespace = "ru.namaz.safadzhay"', 'applicationId = "ru.namaz.safadzhay"','versionCode = 33','versionName = "1.3"','isDebuggable = false']:
+candidate = request()
+for required in ['namespace = "ru.namaz.safadzhay"', 'applicationId = "ru.namaz.safadzhay"',
+                 f'versionCode = {candidate["versionCode"]}', f'versionName = "{candidate["versionName"]}"', 'isDebuggable = false']:
     assert required in build, required
 assert not any((ROOT / 'app').glob('*.jks'))
 tracked = subprocess.check_output(['git', 'ls-files', '-z'], cwd=ROOT).decode().split('\0')
@@ -59,7 +62,7 @@ assert not re.search(r'LocalDate\.(?:of\(2026,\s*8,\s*10\)|parse\("2026-08-10"\)
 for name, expected in json.loads((ROOT/'verification/ramadan-resources.sha256.json').read_text()).items():
     assert hashlib.sha256((ROOT/'app/src/main/res/drawable'/name).read_bytes()).hexdigest() == expected, name
 baseline = json.loads((ROOT/'verification/stable-baseline.json').read_text())
-assert 33 > baseline['versionCode']
+assert candidate['versionCode'] > candidate['upgradeFromVersionCode'] >= baseline['versionCode']
 assert baseline['certificateSha256'] == (ROOT/'verification/release-certificate.sha256').read_text().strip()
 resources = {p.stem for p in (ROOT/'app/src/main/res').rglob('*') if p.is_file()}
 for code in SRC.glob('*.kt'):
@@ -85,4 +88,4 @@ assert 'org.jetbrains.kotlin.android' not in build
 assert 'id("com.android.application") version "9.1.1"' in (ROOT/'build.gradle.kts').read_text()
 assert 'android.onlyEnableUnitTestForTheTestedBuildType=false' in (ROOT/'gradle.properties').read_text()
 subprocess.run(['bash','-n',str(ROOT/'gradlew')],check=True)
-print('PASS stable 1.3/33 identity, notification defaults, real Ramadan dates, approved Ramadan images, data, permissions, XML, shell syntax and manual CI gates')
+print('PASS candidate 1.4-rc1/40 identity, notification defaults, real Ramadan dates, approved Ramadan images, data, permissions, XML, shell syntax and guarded CI gates')

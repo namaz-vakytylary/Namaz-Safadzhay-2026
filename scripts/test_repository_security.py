@@ -86,6 +86,23 @@ class RepositorySecurityTests(unittest.TestCase):
         self.assertIn('unnecessary token write permission', errors)
         self.assertIn('checkout credentials retained', errors)
 
+    def test_candidate_workflow_has_narrow_guarded_signing_scope(self):
+        path = '.github/workflows/build-candidate-apk.yml'
+        content = (Path(__file__).resolve().parents[1] / path).read_text()
+        self.assertEqual([], security.workflow_errors(path, content))
+        unsafe = [
+            content.replace('branches: [candidate/stable-1.4]', 'branches: [main]'),
+            content.replace('  push:\n', '  pull_request:\n'),
+            content.replace('    needs: verify\n', ''),
+            content.replace('    environment: stable-signing\n', ''),
+            content.replace('          ref: ${{ github.sha }}\n', ''),
+            content.replace('secrets.NAMAZ_TEST_KEY_PASSWORD', 'secrets.UNAPPROVED_SECRET'),
+            content.replace('  verify:\n', '  verify:\n    env:\n      KEY: ${{ secrets.NAMAZ_TEST_KEY_PASSWORD }}\n'),
+        ]
+        for index, altered in enumerate(unsafe):
+            with self.subTest(case=index):
+                self.assertTrue(security.workflow_errors(path, altered))
+
 
 if __name__ == '__main__':
     unittest.main()

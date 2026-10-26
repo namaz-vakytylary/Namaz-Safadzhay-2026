@@ -87,8 +87,35 @@ def workflow_errors(path, content):
         errors.append('privileged pull request trigger')
     if re.search(r'^\s*(?:contents|actions|packages|pull-requests|issues|id-token):\s*write\s*$', content, re.M):
         errors.append('unnecessary token write permission')
-    if re.search(r'\bsecrets\s*(?:\.|\[)', content) and path != '.github/workflows/build-apk.yml':
+    candidate_workflow = path == '.github/workflows/build-candidate-apk.yml'
+    if re.search(r'\bsecrets\s*(?:\.|\[)', content) and path != '.github/workflows/build-apk.yml' and not candidate_workflow:
         errors.append('signing secrets outside stable workflow')
+    if candidate_workflow:
+        # A narrow extra signing path for the owner's approved private candidate.
+        # It must not turn a PR/check workflow into a privileged build.
+        trigger = re.search(r'^on:\n(.*?)^permissions:\n', content, re.M | re.S)
+        expected_trigger = ('  push:\n    branches: [candidate/stable-1.4]\n'
+                            '    paths: [verification/candidate-apk-request.json]\n\n')
+        if trigger is None or trigger.group(1) != expected_trigger:
+            errors.append('candidate trigger must be the approved branch and request path only')
+        guard = "if: github.event_name == 'push' && github.ref == 'refs/heads/candidate/stable-1.4'"
+        if content.count(guard) != 2 or '    needs: verify\n' not in content:
+            errors.append('candidate jobs require branch guards and successful verification')
+        if content.count('    environment: stable-signing\n') != 1:
+            errors.append('candidate signing must retain the protected environment')
+        verification = re.search(r'^  verify:\n(.*?)^  package:\n', content, re.M | re.S)
+        if verification is None or re.search(r'\bsecrets\s*(?:\.|\[)', verification.group(1)):
+            errors.append('candidate verification must be secret-free')
+        expected_secrets = {'NAMAZ_TEST_KEYSTORE_BASE64', 'NAMAZ_TEST_STORE_PASSWORD',
+                            'NAMAZ_TEST_KEY_ALIAS', 'NAMAZ_TEST_KEY_PASSWORD'}
+        if set(re.findall(r'secrets\.([A-Z_][A-Z0-9_]*)', content)) != expected_secrets:
+            errors.append('candidate must use only the existing signing inputs')
+        if content.count('          ref: ${{ github.sha }}\n') != 2:
+            errors.append('candidate checkout must pin the exact event commit')
+        for marker in ['python3 scripts/candidate_apk.py', 'python3 scripts/restore-signing.py',
+                       ':app:assembleRelease', 'app-release.apk candidate', 'if: always()']:
+            if marker not in content:
+                errors.append('candidate signing or verification gate missing')
     if 'security-events: write' in content and path != '.github/workflows/codeql.yml':
         errors.append('code scanning permission outside CodeQL')
     return errors

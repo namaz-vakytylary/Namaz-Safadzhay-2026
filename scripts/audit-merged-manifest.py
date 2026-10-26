@@ -2,12 +2,16 @@
 """Fail on unintended release components, flags or permissions after manifest merge."""
 from pathlib import Path
 import xml.etree.ElementTree as ET
+from candidate_apk import request
 
 ROOT = Path(__file__).resolve().parents[1]
 path = ROOT / 'app/build/intermediates/merged_manifests/release/processReleaseManifest/AndroidManifest.xml'
 root = ET.parse(path).getroot()
 A = '{http://schemas.android.com/apk/res/android}'
 assert root.get('package') == 'ru.namaz.safadzhay'
+candidate = request()
+assert root.get(A + 'versionCode') == str(candidate['versionCode'])
+assert root.get(A + 'versionName') == candidate['versionName']
 sdk = root.find('uses-sdk')
 assert sdk is not None
 assert sdk.get(A + 'minSdkVersion') == '23'

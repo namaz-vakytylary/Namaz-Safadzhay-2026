@@ -1,0 +1,139 @@
+name: Build private Namaz Vakytylary 1.4-rc1 candidate
+
+on:
+  push:
+    branches: [candidate/stable-1.4]
+    paths: [verification/candidate-apk-request.json]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: private-candidate-apk
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/candidate/stable-1.4'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Validate approved request, source and repository
+        run: |
+          python3 scripts/candidate_apk.py
+          python3 scripts/repository-security.py
+          python3 scripts/preflight.py
+          python3 -m unittest discover -s scripts -p 'test_*.py'
+      - name: Audit release gates without packaging
+        run: |
+          bash ./gradlew --no-daemon --console=plain :app:packageRelease --dry-run > release-task-graph.txt
+          python3 scripts/audit-release-task-graph.py release-task-graph.txt
+      - name: Debug and Release tests and lint
+        run: bash ./gradlew --no-daemon :app:testDebugUnitTest :app:testReleaseUnitTest :app:lintDebug :app:lintRelease
+      - name: Audit merged release manifest
+        run: python3 scripts/audit-merged-manifest.py
+      - name: Verification reports
+        if: always()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: candidate-checks-${{ github.run_id }}
+          path: |
+            app/build/reports/tests/
+            app/build/test-results/
+            app/build/reports/lint-results-*.html
+            release-task-graph.txt
+          if-no-files-found: ignore
+          retention-days: 14
+
+  package:
+    needs: verify
+    if: github.event_name == 'push' && github.ref == 'refs/heads/candidate/stable-1.4'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: stable-signing
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Recheck approved candidate context
+        run: |
+          python3 scripts/candidate_apk.py
+          python3 scripts/repository-security.py
+          python3 scripts/preflight.py
+      - name: Build candidate with the unchanged protected signing certificate
+        env:
+          NAMAZ_KEYSTORE_BASE64: ${{ secrets.NAMAZ_TEST_KEYSTORE_BASE64 }}
+          NAMAZ_KEYSTORE_PATH: ${{ runner.temp }}/namaz-signing/candidate.jks
+          NAMAZ_STORE_PASSWORD: ${{ secrets.NAMAZ_TEST_STORE_PASSWORD }}
+          NAMAZ_KEY_ALIAS: ${{ secrets.NAMAZ_TEST_KEY_ALIAS }}
+          NAMAZ_KEY_PASSWORD: ${{ secrets.NAMAZ_TEST_KEY_PASSWORD }}
+        run: |
+          python3 scripts/restore-signing.py
+          bash ./gradlew --no-daemon :app:assembleRelease
+      - name: Remove temporary signing key
+        if: always()
+        env:
+          NAMAZ_KEYSTORE_PATH: ${{ runner.temp }}/namaz-signing/candidate.jks
+        run: |
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          Path(os.environ['NAMAZ_KEYSTORE_PATH']).unlink(missing_ok=True)
+          PY
+      - name: Verify candidate identity, certificate, contents and merged manifest
+        run: |
+          python3 scripts/audit-merged-manifest.py
+          bash scripts/verify-apk.sh app/build/outputs/apk/release/app-release.apk candidate
+      - name: Prepare private candidate artifact
+        run: |
+          mkdir -p dist
+          cp app/build/outputs/apk/release/app-release.apk dist/Namaz_Vakytylary_1.4-rc1_candidate_vc40.apk
+          cp docs/candidate-apk-checklist.md dist/README.md
+          python3 - <<'PY'
+          import hashlib, json, os
+          from pathlib import Path
+          apk = Path('dist/Namaz_Vakytylary_1.4-rc1_candidate_vc40.apk')
+          digest = hashlib.sha256(apk.read_bytes()).hexdigest()
+          apk.with_suffix('.apk.sha256').write_text(digest + '  ' + apk.name + '\n')
+          data = json.loads(Path('verification/candidate-apk-request.json').read_text())
+          data.update(sourceCommit=os.environ['GITHUB_SHA'], workflowRun=os.environ['GITHUB_RUN_ID'],
+                      apkSha256=digest, certificateSha256=Path('verification/release-certificate.sha256').read_text().strip())
+          Path('dist/candidate-build.json').write_text(json.dumps(data, ensure_ascii=False, indent=2) + '\n')
+          PY
+      - name: Packaging verification reports
+        if: always()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: candidate-package-verification-${{ github.run_id }}
+          path: |
+            app/build/reports/tests/
+            app/build/test-results/
+            app/build/reports/lint-results-*.html
+            apk-badging.txt
+            apk-manifest.txt
+            apk-signing.txt
+            apk.sha256
+          if-no-files-found: ignore
+          retention-days: 14
+      - name: Upload private test candidate only
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: Namaz-Vakytylary-1.4-rc1-CANDIDATE-vc40-${{ github.run_id }}
+          path: dist/
+          if-no-files-found: error
+          retention-days: 14

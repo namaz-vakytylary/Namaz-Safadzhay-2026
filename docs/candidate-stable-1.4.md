@@ -16,7 +16,7 @@ Branch: `candidate/stable-1.4`. Neither original branch is modified.
 - Validated Ramadan boundaries with optional stable IDs, future published-year support and smaller approved iftar image.
 - Normal settings card **Данные расписаний**, without diagnostic traces or artificial clocks.
 
-The artificial Ramadan preview, diagnostic tools and app-update implementation remain in TEST. No new RuStore SDK or Tink dependency is added to production. Mandatory Ed25519 is not activated. Source schedules, signing keys/certificate, application ID and version metadata remain unchanged.
+The artificial Ramadan preview, diagnostic tools and app-update implementation remain in TEST. No new RuStore SDK or Tink dependency is added to production. Mandatory Ed25519 is not activated. Source schedules, signing keys/certificate and application ID remain unchanged. The owner separately approved candidate version `1.4-rc1` / `40` and its protected APK build.
 
 ## Checks and limitations
 
@@ -27,7 +27,7 @@ The artificial Ramadan preview, diagnostic tools and app-update implementation r
 - Robolectric 4.17 supports API 23–37; tests use Java 21, while Android source/bytecode remains Java/Kotlin target 17. These are framework-model tests, not physical-device delivery proof.
 - After owner approval to continue, `compileSdk`/`targetSdk` are 37, AGP is 9.1.1 and Gradle is 9.3.1; Kotlin uses AGP's built-in support. Android source/bytecode remains target 17 and minSdk remains 23. See `android-17-candidate.md` for the migration and device test scope.
 - Production APK 1.3→candidate installation migration, real Doze/OEM delivery, TalkBack and actual-device Android 16/17 tests still require an explicitly authorized candidate APK and available devices.
-- No release APK, PR, merge or publication is part of this preparation.
+- The separately approved candidate APK uses the existing certificate, guarded candidate-only workflow and a versioned build request. No PR, merge or publication is part of this preparation. See `candidate-apk-checklist.md` before installing it over 1.3.
 
 ## Next release decisions
 

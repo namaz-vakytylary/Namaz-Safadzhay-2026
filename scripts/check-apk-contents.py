@@ -5,6 +5,7 @@ import re
 import sys
 import zipfile
 from apk_policy import check_runtime_entry
+from candidate_apk import check_identity
 
 badging = Path('apk-badging.txt').read_text()
 package, code, version = re.search(
@@ -12,7 +13,9 @@ package, code, version = re.search(
     badging, re.M).groups()
 baseline = json.loads(Path('verification/stable-baseline.json').read_text())
 assert package == baseline['applicationId']
-assert version == '1.3' and int(code) == 33 and int(code) > baseline['versionCode']
+assert sys.argv[2:] in ([], ['--candidate']), 'Unknown APK verification mode'
+check_identity(package, code, version, candidate=sys.argv[2:] == ['--candidate'])
+assert int(code) > baseline['versionCode']
 for label in re.findall(r"^application-label[^:]*:'(.*)'$", badging, re.M):
     assert label == 'Намаз Вакытлары', 'Unexpected user-facing label'
 manifest = Path('apk-manifest.txt').read_text()

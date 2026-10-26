@@ -1,0 +1,13 @@
+{
+  "requestId": "2026-10-26-1.4-rc1-40",
+  "branch": "candidate/stable-1.4",
+  "applicationId": "ru.namaz.safadzhay",
+  "versionName": "1.4-rc1",
+  "versionCode": 40,
+  "minSdk": 23,
+  "targetSdk": 37,
+  "upgradeFromVersionCode": 33,
+  "baseCommit": "b1f0eeec54808b98c4da154da1a2724c5fc09127",
+  "purpose": "private-migration-test",
+  "publish": false
+}
