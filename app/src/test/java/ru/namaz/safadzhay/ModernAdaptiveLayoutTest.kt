@@ -63,7 +63,7 @@ class ModernAdaptiveLayoutTest {
                             helper.renderContent(a, state, true)
                             helper.measure(a, width, height)
                             val description = "API=${Build.VERSION.SDK_INT}, $mode/$font/$state/${width}x$height"
-                            val prayers: LinearLayout = field(a, "prayerContainer")
+                            val prayers: LinearLayout = field(a, "prayerList")
                             assertEquals(description, 5, prayers.childCount)
                             helper.assertTextFits(a, description)
                             val root = scroll.getChildAt(0)
