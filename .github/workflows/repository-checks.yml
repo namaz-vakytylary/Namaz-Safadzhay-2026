@@ -33,6 +33,10 @@ jobs:
           python3 scripts/repository-security.py
           python3 scripts/preflight.py
           python3 -m unittest discover -s scripts -p 'test_*.py'
+      - name: Audit release task graph without packaging
+        run: |
+          bash ./gradlew --no-daemon --console=plain :app:packageRelease --dry-run > release-task-graph.txt
+          python3 scripts/audit-release-task-graph.py release-task-graph.txt
       - name: Unit tests
         run: bash ./gradlew --no-daemon :app:testDebugUnitTest :app:testReleaseUnitTest
       - name: Android lint
@@ -50,5 +54,6 @@ jobs:
             app/build/test-results/
             app/build/reports/lint-results-*.html
             app/build/reports/today-layout/modern-*
+            release-task-graph.txt
           if-no-files-found: ignore
           retention-days: 14

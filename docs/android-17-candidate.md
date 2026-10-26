@@ -14,6 +14,9 @@ application identity/version, signing certificate and publication remain outside
 - Gradle distribution is pinned to the official SHA-256. The existing, independently
   pinned 8.10.2 bootstrap JAR is retained; it launches the pinned 9.3.1 distribution.
 - No new runtime dependencies, permissions, foreground services or R8 enablement.
+- Explicitly retain both Debug and Release unit-test components, since AGP 9 otherwise
+  enables only the tested build type. CI audits the real release task graph in dry-run
+  mode to ensure signing, both unit-test variants and lint still precede packaging.
 - Preflight, the merged-manifest audit and the APK verification script require the
   new target SDK. APK tools use AGP's default Build Tools 36.0.0.
 

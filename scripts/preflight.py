@@ -83,5 +83,6 @@ for required in ['minSdk = 23', 'compileSdk = 37', 'targetSdk = 37']:
     assert required in build, required
 assert 'org.jetbrains.kotlin.android' not in build
 assert 'id("com.android.application") version "9.1.1"' in (ROOT/'build.gradle.kts').read_text()
+assert 'android.onlyEnableUnitTestForTheTestedBuildType=false' in (ROOT/'gradle.properties').read_text()
 subprocess.run(['bash','-n',str(ROOT/'gradlew')],check=True)
 print('PASS stable 1.3/33 identity, notification defaults, real Ramadan dates, approved Ramadan images, data, permissions, XML, shell syntax and manual CI gates')
